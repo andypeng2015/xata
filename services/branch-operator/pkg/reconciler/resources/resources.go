@@ -237,9 +237,19 @@ func Secret(name, namespace, username, password string) *v1.Secret {
 // PoolerSpec defines the PoolerSpec for a CNPG PgBouncer connection pooler.
 // It creates a PgBouncer instance in transaction mode with max_client_conn
 // set to the maximum. When hibernated, instances is set to 0.
-func PoolerSpec(clusterName string, instances int32, hibernated bool, poolMode apiv1.PgBouncerPoolMode, maxClientConn string, podLabels map[string]string, imagePullSecrets []string) apiv1.PoolerSpec {
+// When defaultPoolSize is non-empty, it is set verbatim on PgBouncer.
+func PoolerSpec(clusterName string, instances int32, hibernated bool, poolMode apiv1.PgBouncerPoolMode, maxClientConn, defaultPoolSize string, podLabels map[string]string, imagePullSecrets []string) apiv1.PoolerSpec {
 	if hibernated {
 		instances = 0
+	}
+
+	params := map[string]string{
+		"max_client_conn":         maxClientConn,
+		"max_prepared_statements": "1000",
+		"query_wait_timeout":      "120",
+	}
+	if defaultPoolSize != "" {
+		params["default_pool_size"] = defaultPoolSize
 	}
 
 	spec := apiv1.PoolerSpec{
@@ -249,10 +259,8 @@ func PoolerSpec(clusterName string, instances int32, hibernated bool, poolMode a
 		Type:      apiv1.PoolerTypeRW,
 		Instances: new(instances),
 		PgBouncer: &apiv1.PgBouncerSpec{
-			PoolMode: poolMode,
-			Parameters: map[string]string{
-				"max_client_conn": maxClientConn,
-			},
+			PoolMode:   poolMode,
+			Parameters: params,
 		},
 		ServiceTemplate: &apiv1.ServiceTemplateSpec{
 			ObjectMeta: apiv1.Metadata{

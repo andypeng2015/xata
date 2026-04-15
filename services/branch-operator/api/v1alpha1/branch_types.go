@@ -250,6 +250,13 @@ type PoolerSpec struct {
 	// +optional
 	// +kubebuilder:default:="100"
 	MaxClientConn string `json:"maxClientConn,omitempty"`
+
+	// DefaultPoolSize overrides the PgBouncer default_pool_size parameter.
+	// When empty, default_pool_size is derived as floor(0.9 * max_connections)
+	// from the branch's Postgres configuration.
+	// +optional
+	// +kubebuilder:validation:Pattern="^[1-9][0-9]*$"
+	DefaultPoolSize string `json:"defaultPoolSize,omitempty"`
 }
 
 // PoolMode is the PgBouncer pool mode

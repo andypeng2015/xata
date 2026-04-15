@@ -9,9 +9,10 @@ import (
 // PoolerSpecApplyConfiguration represents a declarative configuration of the PoolerSpec type for use
 // with apply.
 type PoolerSpecApplyConfiguration struct {
-	Instances     *int32                `json:"instances,omitempty"`
-	Mode          *apiv1alpha1.PoolMode `json:"mode,omitempty"`
-	MaxClientConn *string               `json:"maxClientConn,omitempty"`
+	Instances       *int32                `json:"instances,omitempty"`
+	Mode            *apiv1alpha1.PoolMode `json:"mode,omitempty"`
+	MaxClientConn   *string               `json:"maxClientConn,omitempty"`
+	DefaultPoolSize *string               `json:"defaultPoolSize,omitempty"`
 }
 
 // PoolerSpecApplyConfiguration constructs a declarative configuration of the PoolerSpec type for use with
@@ -41,5 +42,13 @@ func (b *PoolerSpecApplyConfiguration) WithMode(value apiv1alpha1.PoolMode) *Poo
 // If called multiple times, the MaxClientConn field is set to the value of the last call.
 func (b *PoolerSpecApplyConfiguration) WithMaxClientConn(value string) *PoolerSpecApplyConfiguration {
 	b.MaxClientConn = &value
+	return b
+}
+
+// WithDefaultPoolSize sets the DefaultPoolSize field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DefaultPoolSize field is set to the value of the last call.
+func (b *PoolerSpecApplyConfiguration) WithDefaultPoolSize(value string) *PoolerSpecApplyConfiguration {
+	b.DefaultPoolSize = &value
 	return b
 }

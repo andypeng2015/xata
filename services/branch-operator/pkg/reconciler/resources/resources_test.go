@@ -500,6 +500,7 @@ func TestPoolerSpec(t *testing.T) {
 		hibernated       bool
 		poolMode         apiv1.PgBouncerPoolMode
 		maxClientConn    string
+		defaultPoolSize  string
 		podLabels        map[string]string
 		imagePullSecrets []string
 		want             apiv1.PoolerSpec
@@ -519,7 +520,9 @@ func TestPoolerSpec(t *testing.T) {
 				PgBouncer: &apiv1.PgBouncerSpec{
 					PoolMode: apiv1.PgBouncerPoolModeSession,
 					Parameters: map[string]string{
-						"max_client_conn": "100",
+						"max_client_conn":         "100",
+						"max_prepared_statements": "1000",
+						"query_wait_timeout":      "120",
 					},
 				},
 				ServiceTemplate: &apiv1.ServiceTemplateSpec{
@@ -560,7 +563,9 @@ func TestPoolerSpec(t *testing.T) {
 				PgBouncer: &apiv1.PgBouncerSpec{
 					PoolMode: apiv1.PgBouncerPoolModeSession,
 					Parameters: map[string]string{
-						"max_client_conn": "100",
+						"max_client_conn":         "100",
+						"max_prepared_statements": "1000",
+						"query_wait_timeout":      "120",
 					},
 				},
 				ServiceTemplate: &apiv1.ServiceTemplateSpec{
@@ -605,7 +610,9 @@ func TestPoolerSpec(t *testing.T) {
 				PgBouncer: &apiv1.PgBouncerSpec{
 					PoolMode: apiv1.PgBouncerPoolModeSession,
 					Parameters: map[string]string{
-						"max_client_conn": "100",
+						"max_client_conn":         "100",
+						"max_prepared_statements": "1000",
+						"query_wait_timeout":      "120",
 					},
 				},
 				ServiceTemplate: &apiv1.ServiceTemplateSpec{
@@ -653,7 +660,9 @@ func TestPoolerSpec(t *testing.T) {
 				PgBouncer: &apiv1.PgBouncerSpec{
 					PoolMode: apiv1.PgBouncerPoolModeSession,
 					Parameters: map[string]string{
-						"max_client_conn": "100",
+						"max_client_conn":         "100",
+						"max_prepared_statements": "1000",
+						"query_wait_timeout":      "120",
 					},
 				},
 				ServiceTemplate: &apiv1.ServiceTemplateSpec{
@@ -683,11 +692,56 @@ func TestPoolerSpec(t *testing.T) {
 				},
 			},
 		},
+		"with default_pool_size override": {
+			clusterName:     "test-branch-5",
+			instances:       1,
+			hibernated:      false,
+			poolMode:        apiv1.PgBouncerPoolModeTransaction,
+			maxClientConn:   "10000",
+			defaultPoolSize: "180",
+			want: apiv1.PoolerSpec{
+				Cluster: apiv1.LocalObjectReference{
+					Name: "test-branch-5",
+				},
+				Type:      apiv1.PoolerTypeRW,
+				Instances: new(int32(1)),
+				PgBouncer: &apiv1.PgBouncerSpec{
+					PoolMode: apiv1.PgBouncerPoolModeTransaction,
+					Parameters: map[string]string{
+						"max_client_conn":         "10000",
+						"max_prepared_statements": "1000",
+						"query_wait_timeout":      "120",
+						"default_pool_size":       "180",
+					},
+				},
+				ServiceTemplate: &apiv1.ServiceTemplateSpec{
+					ObjectMeta: apiv1.Metadata{
+						Annotations: resources.InheritedAnnotations,
+					},
+				},
+				Template: &apiv1.PodTemplateSpec{
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{
+							{
+								Name: "pgbouncer",
+								Ports: []v1.ContainerPort{
+									{
+										Name:          resources.PoolerMetricsPortName,
+										ContainerPort: resources.PoolerMetricsPort,
+										Protocol:      v1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
-			got := resources.PoolerSpec(tc.clusterName, tc.instances, tc.hibernated, tc.poolMode, tc.maxClientConn, tc.podLabels, tc.imagePullSecrets)
+			got := resources.PoolerSpec(tc.clusterName, tc.instances, tc.hibernated, tc.poolMode, tc.maxClientConn, tc.defaultPoolSize, tc.podLabels, tc.imagePullSecrets)
 
 			require.Equal(t, tc.want, got)
 		})

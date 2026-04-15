@@ -299,6 +299,13 @@ spec:
                   Pooler configures a PgBouncer connection pooler for the branch.
                   When nil, no pooler is created.
                 properties:
+                  defaultPoolSize:
+                    description: |-
+                      DefaultPoolSize overrides the PgBouncer default_pool_size parameter.
+                      When empty, default_pool_size is derived as floor(0.9 * max_connections)
+                      from the branch's Postgres configuration.
+                    pattern: ^[1-9][0-9]*$
+                    type: string
                   instances:
                     default: 1
                     description: Instances is the number of PgBouncer instances
