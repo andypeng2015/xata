@@ -25,6 +25,10 @@ spec:
         spec:
           serviceAccountName: {{ .Chart.Name }}-resource-cleanup
           restartPolicy: Never
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           containers:
             - name: resource-cleanup
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
