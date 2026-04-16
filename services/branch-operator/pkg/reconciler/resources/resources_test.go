@@ -771,6 +771,16 @@ func TestPoolerSpec(t *testing.T) {
 										Protocol:      v1.ProtocolTCP,
 									},
 								},
+								Resources: v1.ResourceRequirements{
+									Requests: v1.ResourceList{
+										v1.ResourceCPU:    resource.MustParse("200m"),
+										v1.ResourceMemory: resource.MustParse("100Mi"),
+									},
+									Limits: v1.ResourceList{
+										v1.ResourceCPU:    resource.MustParse("500m"),
+										v1.ResourceMemory: resource.MustParse("100Mi"),
+									},
+								},
 							},
 						},
 					},
