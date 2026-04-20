@@ -4,24 +4,15 @@ import (
 	"testing"
 	"time"
 
-	machineryapi "github.com/cloudnative-pg/machinery/pkg/api"
 	"github.com/stretchr/testify/require"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
-	apiv1ac "github.com/xataio/xata-cnpg/pkg/client/applyconfiguration/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/utils/ptr"
 
-	"xata/internal/postgresversions"
 	"xata/services/branch-operator/api/v1alpha1"
 	"xata/services/branch-operator/pkg/reconciler/resources"
-)
-
-const (
-	testBranchName = "test-branch"
-	testImage      = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.7"
 )
 
 func TestClusterSpec(t *testing.T) {
@@ -30,76 +21,70 @@ func TestClusterSpec(t *testing.T) {
 	testCases := []struct {
 		name        string
 		cfgModifier func(*resources.ClusterConfig)
-		expected    *apiv1ac.ClusterSpecApplyConfiguration
+		expected    apiv1.ClusterSpec
 	}{
 		{
 			name:        "basic - minimal configuration",
 			cfgModifier: nil,
-			expected:    baseExpectedSpec(),
+			expected:    NewClusterSpecBuilder().Build(),
 		},
 		{
 			name: "instances - number of instances set",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.Instances = 3
 			},
-			expected: baseExpectedSpec().
+			expected: NewClusterSpecBuilder().
 				WithInstances(3).
-				WithEnablePDB(true),
+				WithEnablePDB(true).
+				Build(),
 		},
 		{
 			name: "enforce zone - pod anti-affinity enabled",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.EnforceZone = true
 			},
-			expected: baseExpectedSpec().
-				WithAffinity(apiv1ac.AffinityConfiguration().
-					WithTopologyKey("topology.kubernetes.io/zone").
-					WithPodAntiAffinityType("preferred")),
+			expected: NewClusterSpecBuilder().
+				WithAffinity(apiv1.AffinityConfiguration{
+					TopologyKey:         "topology.kubernetes.io/zone",
+					PodAntiAffinityType: "preferred",
+				}).
+				Build(),
 		},
 		{
 			name: "storage size - storage size is set",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.Storage.Size = "100Gi"
 			},
-			expected: baseExpectedSpec().
-				WithStorageConfiguration(apiv1ac.StorageConfiguration().
-					WithSize("100Gi")),
+			expected: NewClusterSpecBuilder().
+				WithStorageSize("100Gi").
+				Build(),
 		},
 		{
 			name: "storage class - storage class is set",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.Storage.StorageClass = new("some-new-storage-class")
 			},
-			expected: baseExpectedSpec().
-				WithStorageConfiguration(apiv1ac.StorageConfiguration().
-					WithSize("10Gi").
-					WithStorageClass("some-new-storage-class")),
+			expected: NewClusterSpecBuilder().
+				WithStorageClass(new("some-new-storage-class")).
+				Build(),
 		},
 		{
 			name: "volume snapshot class - volume snapshot class is set",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.Storage.VolumeSnapshotClass = new("some-other-snapshot-class")
 			},
-			expected: baseExpectedSpec().
-				WithBackup(apiv1ac.BackupConfiguration().
-					WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
-						WithClassName("some-other-snapshot-class").
-						WithOnline(true).
-						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
-							WithImmediateCheckpoint(true)))),
+			expected: NewClusterSpecBuilder().
+				WithVolumeSnapshotClass("some-other-snapshot-class").
+				Build(),
 		},
 		{
 			name: "postgres image - postgres image is set",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.Image = "ghcr.io/some/postgres:latest"
 			},
-			expected: func() *apiv1ac.ClusterSpecApplyConfiguration {
-				majorVersion := postgresversions.ExtractMajorVersionFromImage("ghcr.io/some/postgres:latest")
-				return baseExpectedSpec().
-					WithImageName("ghcr.io/some/postgres:latest").
-					WithBootstrap(apiv1ac.BootstrapConfiguration().
-						WithInitDB(resources.BootstrapInitDB(testBranchName, majorVersion)))
-			}(),
+			expected: NewClusterSpecBuilder().
+				WithPostgresImage("ghcr.io/some/postgres:latest").
+				Build(),
 		},
 		{
 			name: "resources - cpu and memory specified",
@@ -115,7 +100,7 @@ func TestClusterSpec(t *testing.T) {
 					},
 				}
 			},
-			expected: baseExpectedSpec().
+			expected: NewClusterSpecBuilder().
 				WithResources(corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -125,7 +110,8 @@ func TestClusterSpec(t *testing.T) {
 						corev1.ResourceCPU:    resource.MustParse("2000m"),
 						corev1.ResourceMemory: resource.MustParse("4Gi"),
 					},
-				}),
+				}).
+				Build(),
 		},
 		{
 			name: "labels - custom labels in inherited metadata",
@@ -134,10 +120,9 @@ func TestClusterSpec(t *testing.T) {
 					Labels: map[string]string{"app": "my-app"},
 				}
 			},
-			expected: baseExpectedSpec().
-				WithInheritedMetadata(apiv1ac.EmbeddedObjectMetadata().
-					WithAnnotations(resources.InheritedAnnotations).
-					WithLabels(map[string]string{"app": "my-app"})),
+			expected: NewClusterSpecBuilder().
+				WithLabels(map[string]string{"app": "my-app"}).
+				Build(),
 		},
 		{
 			name: "backup configuration - barman plugin enabled when backup schedule is configured",
@@ -149,17 +134,9 @@ func TestClusterSpec(t *testing.T) {
 					},
 				}
 			},
-			expected: baseExpectedSpecWithPlugins(
-				apiv1ac.PluginConfiguration().
-					WithName("cnpg-i-scale-to-zero.xata.io"),
-				apiv1ac.PluginConfiguration().
-					WithName("barman-cloud.cloudnative-pg.io").
-					WithEnabled(true).
-					WithIsWALArchiver(true).
-					WithParameters(map[string]string{
-						"barmanObjectName": testBranchName,
-					}),
-			),
+			expected: NewClusterSpecBuilder().
+				WithBarmanPluginEnabled(true).
+				Build(),
 		},
 		{
 			name: "backup configuration - barman plugin enabled when WAL archiving is enabled",
@@ -169,17 +146,9 @@ func TestClusterSpec(t *testing.T) {
 					WALArchiving: v1alpha1.WALArchivingModeEnabled,
 				}
 			},
-			expected: baseExpectedSpecWithPlugins(
-				apiv1ac.PluginConfiguration().
-					WithName("cnpg-i-scale-to-zero.xata.io"),
-				apiv1ac.PluginConfiguration().
-					WithName("barman-cloud.cloudnative-pg.io").
-					WithEnabled(true).
-					WithIsWALArchiver(true).
-					WithParameters(map[string]string{
-						"barmanObjectName": testBranchName,
-					}),
-			),
+			expected: NewClusterSpecBuilder().
+				WithBarmanPluginEnabled(true).
+				Build(),
 		},
 		{
 			name: "backup configuration - barman plugin disabled when no WAL archiving or backup schedule configured",
@@ -188,7 +157,9 @@ func TestClusterSpec(t *testing.T) {
 					Retention: "30d",
 				}
 			},
-			expected: baseExpectedSpec(),
+			expected: NewClusterSpecBuilder().
+				WithBarmanPluginEnabled(false).
+				Build(),
 		},
 		{
 			name: "backup configuration - serverName set when different from branch name",
@@ -199,18 +170,10 @@ func TestClusterSpec(t *testing.T) {
 					ServerName:   "custom-server",
 				}
 			},
-			expected: baseExpectedSpecWithPlugins(
-				apiv1ac.PluginConfiguration().
-					WithName("cnpg-i-scale-to-zero.xata.io"),
-				apiv1ac.PluginConfiguration().
-					WithName("barman-cloud.cloudnative-pg.io").
-					WithEnabled(true).
-					WithIsWALArchiver(true).
-					WithParameters(map[string]string{
-						"barmanObjectName": testBranchName,
-						"serverName":       "custom-server",
-					}),
-			),
+			expected: NewClusterSpecBuilder().
+				WithBarmanPluginEnabled(true).
+				WithBarmanServerName("custom-server").
+				Build(),
 		},
 		{
 			name: "backup configuration - serverName omitted when matching branch name",
@@ -218,20 +181,12 @@ func TestClusterSpec(t *testing.T) {
 				cfg.BackupSpec = &v1alpha1.BackupSpec{
 					Retention:    "30d",
 					WALArchiving: v1alpha1.WALArchivingModeEnabled,
-					ServerName:   testBranchName,
+					ServerName:   "test-branch",
 				}
 			},
-			expected: baseExpectedSpecWithPlugins(
-				apiv1ac.PluginConfiguration().
-					WithName("cnpg-i-scale-to-zero.xata.io"),
-				apiv1ac.PluginConfiguration().
-					WithName("barman-cloud.cloudnative-pg.io").
-					WithEnabled(true).
-					WithIsWALArchiver(true).
-					WithParameters(map[string]string{
-						"barmanObjectName": testBranchName,
-					}),
-			),
+			expected: NewClusterSpecBuilder().
+				WithBarmanPluginEnabled(true).
+				Build(),
 		},
 		{
 			name: "node selector - scheduling constraints applied",
@@ -242,11 +197,11 @@ func TestClusterSpec(t *testing.T) {
 					},
 				}
 			},
-			expected: baseExpectedSpec().
-				WithAffinity(apiv1ac.AffinityConfiguration().
-					WithNodeSelector(map[string]string{
-						"node.kubernetes.io/instance-type": "m5.2xlarge",
-					})),
+			expected: NewClusterSpecBuilder().
+				WithNodeSelector(map[string]string{
+					"node.kubernetes.io/instance-type": "m5.2xlarge",
+				}).
+				Build(),
 		},
 		{
 			name: "tolerations - pod tolerations for tainted nodes",
@@ -260,25 +215,28 @@ func TestClusterSpec(t *testing.T) {
 					},
 				}
 			},
-			expected: baseExpectedSpec().
-				WithAffinity(apiv1ac.AffinityConfiguration().
-					WithTolerations(corev1.Toleration{
+			expected: NewClusterSpecBuilder().
+				WithTolerations([]corev1.Toleration{
+					{
 						Key:      "dedicated",
 						Operator: corev1.TolerationOpEqual,
 						Value:    "database",
 						Effect:   corev1.TaintEffectNoSchedule,
-					})),
+					},
+				}).
+				Build(),
 		},
 		{
 			name: "image pull secrets - multiple secrets configured for private registries",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.ImagePullSecrets = []string{"ghcr-secret", "ecr-secret"}
 			},
-			expected: baseExpectedSpec().
-				WithImagePullSecrets(
-					corev1ac.LocalObjectReference().WithName("ghcr-secret"),
-					corev1ac.LocalObjectReference().WithName("ecr-secret"),
-				),
+			expected: NewClusterSpecBuilder().
+				WithImagePullSecrets([]apiv1.LocalObjectReference{
+					{Name: "ghcr-secret"},
+					{Name: "ecr-secret"},
+				}).
+				Build(),
 		},
 		{
 			name: "postgres configuration - postgres parameters and shared libraries are set",
@@ -290,10 +248,10 @@ func TestClusterSpec(t *testing.T) {
 					SharedPreloadLibraries: []string{"pg_stat_statements"},
 				}
 			},
-			expected: baseExpectedSpec().
-				WithPostgresConfiguration(apiv1ac.PostgresConfiguration().
-					WithParameters(map[string]string{"max_connections": "200"}).
-					WithAdditionalLibraries("pg_stat_statements")),
+			expected: NewClusterSpecBuilder().
+				WithSharedPreloadLibraries([]string{"pg_stat_statements"}).
+				WithPostgresParameters(map[string]string{"max_connections": "200"}).
+				Build(),
 		},
 		{
 			name: "recovery - recovery from volume snapshot",
@@ -303,9 +261,27 @@ func TestClusterSpec(t *testing.T) {
 					Name: "some-parent-cluster",
 				}
 			},
-			expected: baseExpectedSpec().
-				WithBootstrap(apiv1ac.BootstrapConfiguration().
-					WithRecovery(resources.VolumeSnapshotBootstrapRecovery(testBranchName, "some-parent-cluster"))),
+			expected: NewClusterSpecBuilder().
+				WithBootstrapConfig(&apiv1.BootstrapConfiguration{
+					Recovery: &apiv1.BootstrapRecovery{
+						Database: "xata",
+						Owner:    "xata",
+						Secret: &apiv1.LocalObjectReference{
+							Name: "test-branch-app",
+						},
+						VolumeSnapshots: &apiv1.DataSource{
+							Storage: corev1.TypedLocalObjectReference{
+								Name:     "some-parent-cluster-test-branch",
+								APIGroup: new("snapshot.storage.k8s.io"),
+								Kind:     "VolumeSnapshot",
+							},
+						},
+						RecoveryTarget: &apiv1.RecoveryTarget{
+							TargetImmediate: new(true),
+						},
+					},
+				}).
+				Build(),
 		},
 		{
 			name: "recovery - recovery from object store (PITR) without timestamp",
@@ -315,18 +291,30 @@ func TestClusterSpec(t *testing.T) {
 					Name: "source-cluster",
 				}
 			},
-			expected: baseExpectedSpec().
-				WithBootstrap(apiv1ac.BootstrapConfiguration().
-					WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, &v1alpha1.RestoreSpec{
-						Type: v1alpha1.RestoreTypeObjectStore,
-						Name: "source-cluster",
-					}))).
-				WithExternalClusters(resources.ExternalClusters(resources.ClusterConfig{
-					RestoreSpec: &v1alpha1.RestoreSpec{
-						Type: v1alpha1.RestoreTypeObjectStore,
-						Name: "source-cluster",
+			expected: NewClusterSpecBuilder().
+				WithBootstrapConfig(&apiv1.BootstrapConfiguration{
+					Recovery: &apiv1.BootstrapRecovery{
+						Database: "xata",
+						Owner:    "xata",
+						Secret: &apiv1.LocalObjectReference{
+							Name: "test-branch-app",
+						},
+						Source: "source-cluster",
 					},
-				})...),
+				}).
+				WithExternalClusters([]apiv1.ExternalCluster{
+					{
+						Name: "source-cluster",
+						PluginConfiguration: &apiv1.PluginConfiguration{
+							Name: "barman-cloud.cloudnative-pg.io",
+							Parameters: map[string]string{
+								"barmanObjectName": "source-cluster",
+								"serverName":       "source-cluster",
+							},
+						},
+					},
+				}).
+				Build(),
 		},
 		{
 			name: "recovery - recovery from object store (PITR) with timestamp",
@@ -338,20 +326,33 @@ func TestClusterSpec(t *testing.T) {
 					Timestamp: &timestamp,
 				}
 			},
-			expected: func() *apiv1ac.ClusterSpecApplyConfiguration {
-				timestamp := metav1.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC)
-				restoreSpec := &v1alpha1.RestoreSpec{
-					Type:      v1alpha1.RestoreTypeObjectStore,
-					Name:      "source-cluster",
-					Timestamp: &timestamp,
-				}
-				return baseExpectedSpec().
-					WithBootstrap(apiv1ac.BootstrapConfiguration().
-						WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, restoreSpec))).
-					WithExternalClusters(resources.ExternalClusters(resources.ClusterConfig{
-						RestoreSpec: restoreSpec,
-					})...)
-			}(),
+			expected: NewClusterSpecBuilder().
+				WithBootstrapConfig(&apiv1.BootstrapConfiguration{
+					Recovery: &apiv1.BootstrapRecovery{
+						Database: "xata",
+						Owner:    "xata",
+						Secret: &apiv1.LocalObjectReference{
+							Name: "test-branch-app",
+						},
+						Source: "source-cluster",
+						RecoveryTarget: &apiv1.RecoveryTarget{
+							TargetTime: "2025-01-15 10:30:00.000000",
+						},
+					},
+				}).
+				WithExternalClusters([]apiv1.ExternalCluster{
+					{
+						Name: "source-cluster",
+						PluginConfiguration: &apiv1.PluginConfiguration{
+							Name: "barman-cloud.cloudnative-pg.io",
+							Parameters: map[string]string{
+								"barmanObjectName": "source-cluster",
+								"serverName":       "source-cluster",
+							},
+						},
+					},
+				}).
+				Build(),
 		},
 		{
 			name: "recovery - object store with custom serverName",
@@ -362,27 +363,39 @@ func TestClusterSpec(t *testing.T) {
 					ServerName: "some-other-servername",
 				}
 			},
-			expected: func() *apiv1ac.ClusterSpecApplyConfiguration {
-				restoreSpec := &v1alpha1.RestoreSpec{
-					Type:       v1alpha1.RestoreTypeObjectStore,
-					Name:       "source-cluster",
-					ServerName: "some-other-servername",
-				}
-				return baseExpectedSpec().
-					WithBootstrap(apiv1ac.BootstrapConfiguration().
-						WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, restoreSpec))).
-					WithExternalClusters(resources.ExternalClusters(resources.ClusterConfig{
-						RestoreSpec: restoreSpec,
-					})...)
-			}(),
+			expected: NewClusterSpecBuilder().
+				WithBootstrapConfig(&apiv1.BootstrapConfiguration{
+					Recovery: &apiv1.BootstrapRecovery{
+						Database: "xata",
+						Owner:    "xata",
+						Secret: &apiv1.LocalObjectReference{
+							Name: "test-branch-app",
+						},
+						Source: "source-cluster",
+					},
+				}).
+				WithExternalClusters([]apiv1.ExternalCluster{
+					{
+						Name: "source-cluster",
+						PluginConfiguration: &apiv1.PluginConfiguration{
+							Name: "barman-cloud.cloudnative-pg.io",
+							Parameters: map[string]string{
+								"barmanObjectName": "source-cluster",
+								"serverName":       "some-other-servername",
+							},
+						},
+					},
+				}).
+				Build(),
 		},
 		{
 			name: "smart shutdown timeout - custom value set",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.SmartShutdownTimeout = ptr.To[int32](300)
 			},
-			expected: baseExpectedSpec().
-				WithSmartShutdownTimeout(300),
+			expected: NewClusterSpecBuilder().
+				WithSmartShutdownTimeout(300).
+				Build(),
 		},
 	}
 
@@ -395,7 +408,7 @@ func TestClusterSpec(t *testing.T) {
 				tc.cfgModifier(&cfg)
 			}
 
-			spec := resources.ClusterSpec(testBranchName, testBranchName, cfg)
+			spec := resources.ClusterSpec("test-branch", "test-branch", cfg)
 
 			require.Equal(t, tc.expected, spec)
 		})
@@ -412,7 +425,7 @@ func baseClusterConfig() resources.ClusterConfig {
 				Size:                "10Gi",
 				VolumeSnapshotClass: new("snapshot-class"),
 			},
-			Image: testImage,
+			Image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.7",
 		},
 	}
 }
@@ -567,75 +580,4 @@ func TestGeneratePostInitSQL(t *testing.T) {
 			}
 		})
 	}
-}
-
-// baseExpectedSpecWithPlugins returns baseExpectedSpec with the plugins
-// replaced by the given values.
-func baseExpectedSpecWithPlugins(plugins ...*apiv1ac.PluginConfigurationApplyConfiguration) *apiv1ac.ClusterSpecApplyConfiguration {
-	spec := baseExpectedSpec()
-	spec.Plugins = nil
-	return spec.WithPlugins(plugins...)
-}
-
-// baseExpectedSpec returns the expected apply configuration for a default
-// baseClusterConfig(). Test cases that modify the config should also modify
-// the expected spec to match.
-func baseExpectedSpec() *apiv1ac.ClusterSpecApplyConfiguration {
-	majorVersion := postgresversions.ExtractMajorVersionFromImage(testImage)
-	return apiv1ac.ClusterSpec().
-		WithInstances(1).
-		WithEnablePDB(false).
-		WithStorageConfiguration(apiv1ac.StorageConfiguration().
-			WithSize("10Gi")).
-		WithImageName(testImage).
-		WithEnableSuperuserAccess(true).
-		WithSuperuserSecret(corev1ac.LocalObjectReference().
-			WithName(testBranchName+"-superuser")).
-		WithBootstrap(apiv1ac.BootstrapConfiguration().
-			WithInitDB(resources.BootstrapInitDB(testBranchName, majorVersion))).
-		WithPostgresConfiguration(apiv1ac.PostgresConfiguration()).
-		WithPlugins(
-			apiv1ac.PluginConfiguration().
-				WithName("cnpg-i-scale-to-zero.xata.io"),
-			apiv1ac.PluginConfiguration().
-				WithName("barman-cloud.cloudnative-pg.io").
-				WithEnabled(false).
-				WithIsWALArchiver(true).
-				WithParameters(map[string]string{
-					"barmanObjectName": testBranchName,
-				}),
-		).
-		WithResources(corev1.ResourceRequirements{}).
-		WithBackup(apiv1ac.BackupConfiguration().
-			WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
-				WithClassName("snapshot-class").
-				WithOnline(true).
-				WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
-					WithImmediateCheckpoint(true)))).
-		WithProbes(apiv1ac.ProbesConfiguration().
-			WithStartup(apiv1ac.ProbeWithStrategy().
-				WithTimeoutSeconds(5).
-				WithPeriodSeconds(1).
-				WithSuccessThreshold(1).
-				WithFailureThreshold(3600))).
-		WithManaged(apiv1ac.ManagedConfiguration().
-			WithServices(apiv1ac.ManagedServices().
-				WithDisabledDefaultServices(
-					apiv1.ServiceSelectorTypeR,
-					apiv1.ServiceSelectorTypeRO))).
-		WithMonitoring(apiv1ac.MonitoringConfiguration().
-			WithTLSConfig(apiv1ac.ClusterMonitoringTLSConfiguration().
-				WithEnabled(true)).
-			WithCustomQueriesConfigMap(machineryapi.ConfigMapKeySelector{
-				Key: "metrics.yaml",
-				LocalObjectReference: machineryapi.LocalObjectReference{
-					Name: "cnpg-custom-metrics",
-				},
-			})).
-		WithAffinity(apiv1ac.AffinityConfiguration()).
-		WithInheritedMetadata(apiv1ac.EmbeddedObjectMetadata().
-			WithAnnotations(resources.InheritedAnnotations)).
-		WithPrimaryUpdateStrategy(apiv1.PrimaryUpdateStrategy("unsupervised")).
-		WithPrimaryUpdateMethod(apiv1.PrimaryUpdateMethod("switchover")).
-		WithSmartShutdownTimeout(resources.DefaultSmartShutdownTimeout)
 }
