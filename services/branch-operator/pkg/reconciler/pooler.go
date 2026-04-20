@@ -29,8 +29,10 @@ func (r *BranchReconciler) reconcilePooler(
 		},
 	}
 
-	// If pooler is not configured, ensure Pooler doesn't exist
-	if !branch.Spec.Pooler.IsEnabled() {
+	// Ensure the pooler does not exist when either:
+	// * The branch does not specify a pooler configuration
+	// * The branch does not have a Cluster associated with it
+	if !branch.Spec.Pooler.IsEnabled() || !branch.HasClusterName() {
 		err := r.Get(ctx, types.NamespacedName{
 			Name:      branch.Name + PoolerSuffix,
 			Namespace: r.ClustersNamespace,

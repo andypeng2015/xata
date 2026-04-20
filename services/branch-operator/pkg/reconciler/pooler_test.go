@@ -187,4 +187,57 @@ func TestPoolerReconciliation(t *testing.T) {
 			require.True(t, apierrors.IsNotFound(err))
 		})
 	})
+
+	t.Run("pooler is not created when cluster name is unset", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		// Create a Branch spec with a pooler but without a cluster name
+		branch := NewBranchBuilder().WithPooler().WithClusterName(nil).Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			// Wait for reconciliation to complete
+			requireEventuallyTrue(t, func() bool {
+				branch := v1alpha1.Branch{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: br.Name}, &branch); err != nil {
+					return false
+				}
+				return branch.Status.ObservedGeneration == branch.Generation
+			})
+
+			// Verify no Pooler was created
+			pooler := apiv1.Pooler{}
+			err := getK8SObject(ctx, br.Name+reconciler.PoolerSuffix, &pooler)
+			require.True(t, apierrors.IsNotFound(err))
+		})
+	})
+
+	t.Run("pooler is deleted when cluster name is unset", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		// Create a Branch spec with a pooler and a cluster name
+		branch := NewBranchBuilder().WithPooler().Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			pooler := apiv1.Pooler{}
+
+			// Expect the Pooler to be created
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, br.Name+reconciler.PoolerSuffix, &pooler)
+			})
+
+			// Unset the cluster name on the Branch
+			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Name = nil
+			})
+			require.NoError(t, err)
+
+			// Expect the Pooler to be deleted
+			requireEventuallyTrue(t, func() bool {
+				err := getK8SObject(ctx, br.Name+reconciler.PoolerSuffix, &pooler)
+				return apierrors.IsNotFound(err)
+			})
+		})
+	})
 }
