@@ -22,7 +22,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: product-analytics-clone-keycloak
-              image: ghcr.io/xataio/xata:latest-pg17
+              image: ghcr.io/xataio/xata:1.1.4-pg17
               imagePullPolicy: IfNotPresent
               env:
                 - name: XATA_CLI_SOURCE_POSTGRES_URL
