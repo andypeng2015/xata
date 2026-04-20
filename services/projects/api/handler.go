@@ -1131,12 +1131,10 @@ func (s *handler) getConnectionString(c echo.Context, organizationID string, bra
 // (GET /organizations/{organizationID}/projects/{projectID}/branches/{branchID}/credentials)
 func (s *handler) GetBranchCredentials(c echo.Context, organizationID spec.OrganizationID, projectID, branchID string, params spec.GetBranchCredentialsParams) error {
 	return s.withOrganizationAccess(c, organizationID, All, func() error {
-		username := "superuser"
-		if params.Username != nil && *params.Username != "" {
-			// default to superuser if not specified
-			// TODO: Consider removing the default behavior in the future, making it mandatory to specify the type
-			username = string(*params.Username)
+		if params.Username == nil || *params.Username != "xata" {
+			return ErrorInvalidParam{BranchName: branchID, Param: "username", Message: "only the xata user credentials can be retrieved"}
 		}
+
 		branch, err := s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID)
 		if err != nil {
 			if errors.As(err, &store.ErrBranchNotFound{}) {
@@ -1151,10 +1149,10 @@ func (s *handler) GetBranchCredentials(c echo.Context, organizationID spec.Organ
 		}
 		defer client.Close()
 
-		creds, err := client.GetPostgresClusterCredentials(c.Request().Context(), &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: username})
+		creds, err := client.GetPostgresClusterCredentials(c.Request().Context(), &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"})
 		if err != nil {
 			if errors.Is(err, clusters.SecretNotFoundForIDError(branch.ID)) {
-				return ErrorCredentialsForBranchNotFound{BranchID: branch.ID, Username: username}
+				return ErrorCredentialsForBranchNotFound{BranchID: branch.ID, Username: "xata"}
 			}
 			return err
 		}

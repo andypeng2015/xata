@@ -3212,52 +3212,55 @@ func TestGetBranchCredentials(t *testing.T) {
 		name          string
 		projectID     string
 		branchID      string
-		reqUsername   string
+		reqUsername   *string
 		setupMocks    func()
 		wantError     bool
 		expectedError error
 	}{
 		{
-			name:      "get credentials - no error",
-			projectID: projectID,
-			branchID:  branchID,
+			name:        "get credentials for xata user succeeds",
+			projectID:   projectID,
+			branchID:    branchID,
+			reqUsername: new("xata"),
 			setupMocks: func() {
 				branch := store.Branch{ID: branchID}
 				mockStore.EXPECT().
 					DescribeBranch(mock.Anything, apitest.TestOrganization, projectID, branchID).
 					Return(&branch, nil).Once()
 				mockClusters.EXPECT().
-					GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "superuser"}).
+					GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).
 					Return(credentials, nil).Once()
 			},
 			wantError: false,
 		},
 		{
-			name:      "get credentials for non-existing branch fails",
-			projectID: projectID,
-			branchID:  branchID,
+			name:          "get credentials without username fails",
+			projectID:     projectID,
+			branchID:      branchID,
+			reqUsername:   nil,
+			setupMocks:    func() {},
+			wantError:     true,
+			expectedError: ErrorInvalidParam{BranchName: branchID, Param: "username", Message: "only the xata user credentials can be retrieved"},
+		},
+		{
+			name:          "get credentials with invalid username fails",
+			projectID:     projectID,
+			branchID:      branchID,
+			reqUsername:   new("postgres"),
+			setupMocks:    func() {},
+			wantError:     true,
+			expectedError: ErrorInvalidParam{BranchName: branchID, Param: "username", Message: "only the xata user credentials can be retrieved"},
+		},
+		{
+			name:        "get credentials for non-existing branch fails",
+			projectID:   projectID,
+			branchID:    branchID,
+			reqUsername: new("xata"),
 			setupMocks: func() {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, projectID, branchID).Return(nil, store.ErrBranchNotFound{ID: branchID}).Once()
 			},
 			wantError:     true,
 			expectedError: ErrorBranchNotFound{BranchID: branchID},
-		},
-		{
-			name:        "get credentials with non-existing username",
-			projectID:   projectID,
-			branchID:    branchID,
-			reqUsername: "nonexisting",
-			setupMocks: func() {
-				branch := store.Branch{ID: branchID}
-				mockStore.EXPECT().
-					DescribeBranch(mock.Anything, apitest.TestOrganization, projectID, branchID).
-					Return(&branch, nil).Once()
-				mockClusters.EXPECT().
-					GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "nonexisting"}).
-					Return(nil, clusters.SecretNotFoundForIDError(branchID)).Once()
-			},
-			wantError:     true,
-			expectedError: ErrorCredentialsForBranchNotFound{BranchID: branchID, Username: "nonexisting"},
 		},
 	}
 
@@ -3266,7 +3269,7 @@ func TestGetBranchCredentials(t *testing.T) {
 			tc.setupMocks()
 
 			c, rec := e.GET("/organizations/" + apitest.TestOrganization + "/projects/" + tc.projectID + "/branches/" + tc.branchID + "/credentials").Context()
-			err := handler.GetBranchCredentials(c, apitest.TestOrganization, tc.projectID, tc.branchID, spec.GetBranchCredentialsParams{Username: &tc.reqUsername})
+			err := handler.GetBranchCredentials(c, apitest.TestOrganization, tc.projectID, tc.branchID, spec.GetBranchCredentialsParams{Username: tc.reqUsername})
 			if tc.wantError {
 				assert.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
