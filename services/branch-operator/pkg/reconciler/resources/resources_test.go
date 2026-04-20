@@ -533,6 +533,7 @@ func TestPoolerSpec(t *testing.T) {
 				},
 				Template: &apiv1.PodTemplateSpec{
 					Spec: v1.PodSpec{
+						EnableServiceLinks: new(false),
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",
@@ -587,6 +588,7 @@ func TestPoolerSpec(t *testing.T) {
 				},
 				Template: &apiv1.PodTemplateSpec{
 					Spec: v1.PodSpec{
+						EnableServiceLinks: new(false),
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",
@@ -651,6 +653,7 @@ func TestPoolerSpec(t *testing.T) {
 						},
 					},
 					Spec: v1.PodSpec{
+						EnableServiceLinks: new(false),
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",
@@ -706,6 +709,7 @@ func TestPoolerSpec(t *testing.T) {
 				},
 				Template: &apiv1.PodTemplateSpec{
 					Spec: v1.PodSpec{
+						EnableServiceLinks: new(false),
 						ImagePullSecrets: []v1.LocalObjectReference{
 							{Name: "ghcr-secret"},
 							{Name: "ecr-secret"},
@@ -766,6 +770,7 @@ func TestPoolerSpec(t *testing.T) {
 				},
 				Template: &apiv1.PodTemplateSpec{
 					Spec: v1.PodSpec{
+						EnableServiceLinks: new(false),
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",

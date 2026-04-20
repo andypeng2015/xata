@@ -276,7 +276,8 @@ func PoolerSpec(clusterName string, instances int32, hibernated bool, poolMode a
 	}
 
 	podSpec := v1.PodSpec{
-		ImagePullSecrets: pullSecrets,
+		EnableServiceLinks: new(false),
+		ImagePullSecrets:   pullSecrets,
 		Containers: []v1.Container{
 			{
 				Name: "pgbouncer",
