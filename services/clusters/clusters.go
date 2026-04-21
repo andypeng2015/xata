@@ -255,10 +255,7 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		storageClass := ptr.Deref(branch.Spec.ClusterSpec.Storage.StorageClass, "")
 		image := branch.Spec.ClusterSpec.Image
 		cpuReq := branch.Spec.ClusterSpec.Resources.Requests.Cpu().String()
-		// Use the original memory from the request config for pool matching,
-		// not the reduced value from resourceRequirements (which subtracts
-		// the pooler memory reservation).
-		memReq := req.GetConfiguration().GetMemory()
+		memReq := quantityGiStringWithPoolerReservation(*branch.Spec.ClusterSpec.Resources.Requests.Memory()) + "Gi"
 		log.Ctx(ctx).Info().
 			Str("storageClass", storageClass).
 			Str("image", image).
