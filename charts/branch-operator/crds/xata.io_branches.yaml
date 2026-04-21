@@ -331,8 +331,8 @@ spec:
                   source.
                 properties:
                   name:
-                    description: Name is the name of the restore source (volume snapshot,
-                      object store, or base backup)
+                    description: Name is the name of the restore source (for volume
+                      snapshot, object store, base backup or XVol clone)
                     maxLength: 256
                     type: string
                     x-kubernetes-validations:
@@ -362,6 +362,7 @@ spec:
                     - VolumeSnapshot
                     - ObjectStore
                     - BaseBackup
+                    - XVolClone
                     type: string
                     x-kubernetes-validations:
                     - message: restore.type is immutable

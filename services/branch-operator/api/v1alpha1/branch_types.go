@@ -38,10 +38,10 @@ type RestoreSpec struct {
 	// Type specifies the type of restore source
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="restore.type is immutable"
-	// +kubebuilder:validation:Enum=VolumeSnapshot;ObjectStore;BaseBackup
+	// +kubebuilder:validation:Enum=VolumeSnapshot;ObjectStore;BaseBackup;XVolClone
 	Type RestoreType `json:"type"`
 
-	// Name is the name of the restore source (volume snapshot, object store, or base backup)
+	// Name is the name of the restore source (for volume snapshot, object store, base backup or XVol clone)
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="restore.name is immutable"
 	// +kubebuilder:validation:MaxLength=256
@@ -67,6 +67,8 @@ type RestoreType string
 const (
 	// RestoreTypeVolumeSnapshot restores from a Kubernetes volume snapshot
 	RestoreTypeVolumeSnapshot RestoreType = "VolumeSnapshot"
+	// RestoreTypeXVolClone restores from a clone of an existing XVol
+	RestoreTypeXVolClone RestoreType = "XVolClone"
 	// RestoreTypeObjectStore restores from object storage (supports PITR with timestamp)
 	RestoreTypeObjectStore RestoreType = "ObjectStore"
 	// RestoreTypeBaseBackup restores from a base backup
