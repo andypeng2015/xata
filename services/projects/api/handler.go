@@ -59,7 +59,6 @@ const (
 var (
 	DefaultMaxInstances = 5
 	DefaultMinInstances = 1
-	DefaultRegion       = []string{"us-east-1"}
 
 	// maxDateRange is the maximum date range for metrics queries
 	maxDateRange = 6 * 30 * 24 * time.Hour // 6 months
@@ -1570,14 +1569,10 @@ func (s *handler) DeleteBranch(c echo.Context, organizationID spec.OrganizationI
 // (GET /organizations/{organizationID}/projects/limits)
 func (s *handler) GetDefaultProjectLimits(c echo.Context, organizationID spec.OrganizationID) error {
 	return s.withOrganizationAccess(c, organizationID, All, func() error {
-		// TODO remove validImages var once the UI no longer uses it
-		allValidImages := append(s.imageProvider.GetAllImageNames(), validImage)
 		return c.JSON(http.StatusOK, spec.ProjectLimits{
 			MaxDescriptionLength: MaxBranchDescriptionLength,
 			MaxInstances:         DefaultMaxInstances,
 			MinInstances:         DefaultMinInstances,
-			Images:               allValidImages,
-			Regions:              DefaultRegion,
 			MaxBranches:          store.MaxBranchesPerProject,
 		})
 	})

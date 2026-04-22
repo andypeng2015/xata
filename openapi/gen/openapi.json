@@ -5322,14 +5322,6 @@
         "description": "Resource limits and constraints for projects within an organization",
         "type": "object",
         "properties": {
-          "regions": {
-            "description": "List of region identifiers where branches can be deployed",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "title": "Regions the branch can be deployed in"
-          },
           "maxInstances": {
             "description": "Maximum number of database instances allowed per branch",
             "type": "integer",
@@ -5341,15 +5333,6 @@
             "type": "integer",
             "minimum": 1,
             "title": "Minimum number of instances in a branch"
-          },
-          "images": {
-            "description": "List of PostgreSQL image identifiers that can be used for branches",
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "title": "Allowed PostgreSQL images",
-            "uniqueItems": true
           },
           "maxDescriptionLength": {
             "description": "Maximum character length allowed for project descriptions",
@@ -5364,11 +5347,9 @@
           }
         },
         "required": [
-          "regions",
           "maxInstances",
           "minInstances",
           "maxDescriptionLength",
-          "images",
           "maxBranches"
         ]
       },

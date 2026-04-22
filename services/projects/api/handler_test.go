@@ -4755,18 +4755,12 @@ func TestHandler_GetDefaultProjectLimits(t *testing.T) {
 	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
-	validVersions := []string{"cnpg-postgres-plus:17.5", "cnpg-postgres-plus:17.6", "cnpg-postgres-plus:16.3", "cnpg-postgres-plus:16.4"}
-
 	limits := spec.ProjectLimits{
 		MaxDescriptionLength: MaxBranchDescriptionLength,
 		MaxInstances:         DefaultMaxInstances,
 		MinInstances:         DefaultMinInstances,
-		Images:               append(validVersions, "postgresql:17"),
-		Regions:              DefaultRegion,
 		MaxBranches:          store.MaxBranchesPerProject,
 	}
-
-	mockImageProvider.EXPECT().GetAllImageNames().Return(validVersions).Once()
 
 	c, rec := e.GET("/organizations/" + apitest.TestOrganization + "/projects/limits").Context()
 	err := handler.GetDefaultProjectLimits(c, apitest.TestOrganization)
