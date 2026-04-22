@@ -377,6 +377,18 @@ func TestClusterSpec(t *testing.T) {
 			}(),
 		},
 		{
+			name: "recovery - xvol clone sets NoOp bootstrap",
+			cfgModifier: func(cfg *resources.ClusterConfig) {
+				cfg.RestoreSpec = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeXVolClone,
+					Name: "source-cluster",
+				}
+			},
+			expected: baseExpectedSpec().
+				WithBootstrap(apiv1ac.BootstrapConfiguration().
+					WithNoop(apiv1.BootstrapNoop{})),
+		},
+		{
 			name: "smart shutdown timeout - custom value set",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.SmartShutdownTimeout = ptr.To[int32](300)

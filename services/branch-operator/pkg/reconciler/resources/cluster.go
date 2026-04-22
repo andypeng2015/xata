@@ -152,6 +152,9 @@ func ClusterSpec(
 	case v1alpha1.RestoreTypeObjectStore:
 		bootstrap = apiv1ac.BootstrapConfiguration().
 			WithRecovery(ObjectStoreBootstrapRecovery(branchName, cfg.RestoreSpec))
+	case v1alpha1.RestoreTypeXVolClone:
+		bootstrap = apiv1ac.BootstrapConfiguration().
+			WithNoop(apiv1.BootstrapNoop{})
 	default:
 		majorVersion := postgresversions.ExtractMajorVersionFromImage(cfg.Image)
 		bootstrap = apiv1ac.BootstrapConfiguration().
