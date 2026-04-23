@@ -15,6 +15,7 @@ metricAllowlist:
   - kube_customresource_xata_branch_instances
   - kube_customresource_clusters_creation_time
   - kube_customresource_xata_wakeuprequests_info
+  - kube_customresource_xata_branch_ready
   - kube_job_failed
 
 # Scrape annotations to get them into SigNoz
@@ -23,14 +24,14 @@ podAnnotations:
   prometheus.io/port: "8080"
   prometheus.io/scrape: "true"
 
-# Grant permission to read CNPG Cluster and WakeupRequest resources
+# Grant permission to read the custom resources exposed below
 rbac:
   extraRules:
     - apiGroups: ["postgresql.cnpg.io"]
       resources: ["clusters"]
       verbs: ["list", "watch"]
     - apiGroups: ["xata.io"]
-      resources: ["wakeuprequests"]
+      resources: ["wakeuprequests", "branches"]
       verbs: ["list", "watch"]
 
 # Define the Custom Resource metrics
@@ -86,3 +87,20 @@ customResourceState:
                     branch: ["spec", "branchName"]
                     succeeded: ["status", "conditions", "0", "status"]
                     message: ["status", "conditions", "0", "message"]
+        - groupVersionKind:
+            group: xata.io
+            kind: Branch
+            version: v1alpha1
+          metrics:
+            - name: xata_branch_ready
+              help: "The Branch's Ready condition (one series per True/False/Unknown, value 1 for the current state)"
+              labelsFromPath:
+                name: ["metadata", "name"]
+                organizationID: ["metadata", "labels", "xata.io/organizationID"]
+                projectID: ["metadata", "labels", "xata.io/projectID"]
+              each:
+                type: StateSet
+                stateSet:
+                  labelName: status
+                  path: ["status", "conditions", "[type=Ready]", "status"]
+                  list: ["True", "False", "Unknown"]
