@@ -6,10 +6,8 @@ import (
 	"time"
 
 	cnpgv1 "github.com/xataio/xata-cnpg/api/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	branchv1alpha1 "xata/services/branch-operator/api/v1alpha1"
 )
@@ -29,7 +27,6 @@ type cnpgClusterClient struct {
 // postgreSQLCredentials holds the connection information for PostgreSQL
 type postgreSQLCredentials struct {
 	username string
-	password string
 	database string
 	host     string
 	port     string
@@ -98,53 +95,19 @@ func (r *cnpgClusterClient) getBranchName(ctx context.Context) (string, error) {
 	return r.clusterKey.Name, nil
 }
 
-func (r *cnpgClusterClient) getClusterCredentials(ctx context.Context) (*postgreSQLCredentials, error) {
-	// The secret name follows the pattern: <branch-name>-superuser. Secrets are
-	// branch-lifetime resources that persist across cluster swaps, so we resolve
-	// the branch name from the cluster annotation.
-	branchName, err := r.getBranchName(ctx)
-	if err != nil {
-		return nil, err
-	}
-	secretName := branchName + "-superuser"
-	secretKey := types.NamespacedName{
-		Namespace: r.clusterKey.Namespace,
-		Name:      secretName,
-	}
+// socketDir is the Unix socket directory used by CNPG for the PostgreSQL
+// server. The sidecar container, running with the same UID as the postgres
+// container, authenticates as the "postgres" role via peer auth over this
+// socket — no password required.
+const socketDir = "/controller/run"
 
-	var secret corev1.Secret
-	if err := r.client.Get(ctx, secretKey, &secret); err != nil {
-		return nil, err
-	}
-
-	// Extract credentials from the secret
-	username := string(secret.Data["username"])
-	password := string(secret.Data["password"])
-	database := string(secret.Data["dbname"])
-	if database == "*" || database == "" {
-		database = "postgres" // Default database if not specified
-	}
-
-	// The host is localhost since the sidecar runs in the same pod
-	host := "localhost"
-	port := "5432" // Default PostgreSQL port
-
-	// Check if port is specified in the secret
-	if portData, exists := secret.Data["port"]; exists {
-		port = string(portData)
-	}
-
-	creds := &postgreSQLCredentials{
-		username: username,
-		password: password,
-		database: database,
-		host:     host,
-		port:     port,
-	}
-
-	log.FromContext(ctx).Info("Retrieved PostgreSQL credentials")
-
-	return creds, nil
+func (r *cnpgClusterClient) getClusterCredentials(_ context.Context) (*postgreSQLCredentials, error) {
+	return &postgreSQLCredentials{
+		username: "postgres",
+		database: "postgres",
+		host:     socketDir,
+		port:     "5432",
+	}, nil
 }
 
 func (r *cnpgClusterClient) getClusterScheduledBackup(ctx context.Context) (*cnpgv1.ScheduledBackup, error) {
@@ -187,6 +150,6 @@ func (r *cnpgClusterClient) patchBranchClusterName(ctx context.Context, branch *
 }
 
 func (p *postgreSQLCredentials) connString() string {
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		p.host, p.port, p.username, p.password, p.database)
+	return fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable application_name=scale-to-zero",
+		p.host, p.port, p.username, p.database)
 }
