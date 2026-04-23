@@ -26,7 +26,7 @@ require (
 	github.com/grafana/pyroscope-go v1.2.7
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
-	github.com/jackc/pgx/v5 v5.7.6
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/joho/godotenv v1.5.1
 	github.com/jxskiss/base62 v1.1.0
 	github.com/kubernetes-csi/external-snapshotter/client/v6 v6.3.0

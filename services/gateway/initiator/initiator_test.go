@@ -397,7 +397,7 @@ func pgCancelRequest(ctx context.Context, conn *pgx.Conn) error {
 
 	logger.Debug().Msg("Sending cancel request")
 	frontend := pgproto3.NewFrontend(cancelConn, cancelConn)
-	frontend.Send(&pgproto3.CancelRequest{})
+	frontend.Send(&pgproto3.CancelRequest{SecretKey: make([]byte, 4)})
 	if err := frontend.Flush(); err != nil {
 		return logError(ctx, fmt.Errorf("flush cancel request: %w", err))
 	}

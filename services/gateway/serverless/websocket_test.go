@@ -335,7 +335,7 @@ func TestWebSocketHandler_PipelineConnect_CleartextAuth(t *testing.T) {
 
 		backend.Send(&pgproto3.AuthenticationOk{})
 		backend.Send(&pgproto3.ParameterStatus{Name: "server_version", Value: "16.0"})
-		backend.Send(&pgproto3.BackendKeyData{ProcessID: 1, SecretKey: 2})
+		backend.Send(&pgproto3.BackendKeyData{ProcessID: 1, SecretKey: []byte{0, 0, 0, 2}})
 		backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
 		backend.Flush()
 	}()
@@ -446,7 +446,7 @@ func TestWebSocketHandler_PipelineConnect_CleartextAuth_WithQuery(t *testing.T) 
 
 		backend.Send(&pgproto3.AuthenticationOk{})
 		backend.Send(&pgproto3.ParameterStatus{Name: "server_version", Value: "16.0"})
-		backend.Send(&pgproto3.BackendKeyData{ProcessID: 1, SecretKey: 2})
+		backend.Send(&pgproto3.BackendKeyData{ProcessID: 1, SecretKey: []byte{0, 0, 0, 2}})
 		backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
 		if err := backend.Flush(); err != nil {
 			t.Logf("mock pg: flush auth response: %v", err)

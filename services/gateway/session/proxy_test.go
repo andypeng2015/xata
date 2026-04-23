@@ -51,7 +51,7 @@ func createStartupMessage() *pgproto3.StartupMessage {
 func createCancelRequest() *pgproto3.CancelRequest {
 	return &pgproto3.CancelRequest{
 		ProcessID: 12345,
-		SecretKey: 67890,
+		SecretKey: []byte{0x00, 0x01, 0x09, 0x32},
 	}
 }
 
