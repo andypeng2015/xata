@@ -144,14 +144,19 @@ otelCollector:
               scrape_interval: 30s
               scheme: https
               tls_config:
-                insecure_skip_verify: true
+                ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
               bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
               kubernetes_sd_configs:
                 - role: node
               relabel_configs:
                 - action: replace
+                  target_label: __address__
+                  replacement: kubernetes.default.svc:443
+                - action: replace
+                  source_labels: [__meta_kubernetes_node_name]
+                  regex: (.+)
                   target_label: __metrics_path__
-                  replacement: /metrics/cadvisor
+                  replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
               metric_relabel_configs:
                 - source_labels: [__name__]
                   action: keep
@@ -160,9 +165,9 @@ otelCollector:
                   action: keep
                   regex: xata-clusters
                 - source_labels: [pod]
-                  target_label: k8s_pod_name
+                  target_label: k8s.pod.name
                 - source_labels: [namespace]
-                  target_label: k8s_namespace_name
+                  target_label: k8s.namespace.name
             # Auto-discover pods with a port named "metrics"
             - job_name: metrics-port
               scheme: http
