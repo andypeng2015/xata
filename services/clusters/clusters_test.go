@@ -177,6 +177,80 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 		},
 		{
+			name: "child branch - xatastor parent uses XVolClone restore",
+			parentBranch: parentBranch(
+				withStorageClass("xatastor"),
+			),
+			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
+				r.ParentId = new("gmnfj6042d3qd09dcc8a7le0eo")
+				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ClusterSnapshot{
+					ClusterSnapshot: &clustersv1.ClusterSnapshot{
+						ClusterId: "gmnfj6042d3qd09dcc8a7le0eo",
+					},
+				}
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.Restore = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeXVolClone,
+					Name: "gmnfj6042d3qd09dcc8a7le0eo",
+				}
+				b.Spec.ClusterSpec.Instances = 1
+				b.Spec.ClusterSpec.Image = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:16.3"
+				b.Spec.ClusterSpec.Storage.Size = "200Gi"
+				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor-slot")
+				b.Spec.ClusterSpec.Resources = corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
+					},
+				}
+				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "max_connections", "100")
+				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "shared_buffers", "128MB")
+				b.Spec.ClusterSpec.Postgres.SharedPreloadLibraries = []string{"xatautils", "pg_stat_statements"}
+			},
+		},
+		{
+			name: "child branch - xatastor-slot parent uses XVolClone restore",
+			parentBranch: parentBranch(
+				withStorageClass("xatastor-slot"),
+			),
+			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
+				r.ParentId = new("gmnfj6042d3qd09dcc8a7le0eo")
+				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ClusterSnapshot{
+					ClusterSnapshot: &clustersv1.ClusterSnapshot{
+						ClusterId: "gmnfj6042d3qd09dcc8a7le0eo",
+					},
+				}
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.Restore = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeXVolClone,
+					Name: "gmnfj6042d3qd09dcc8a7le0eo",
+				}
+				b.Spec.ClusterSpec.Instances = 1
+				b.Spec.ClusterSpec.Image = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:16.3"
+				b.Spec.ClusterSpec.Storage.Size = "200Gi"
+				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor-slot")
+				b.Spec.ClusterSpec.Resources = corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
+					},
+				}
+				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "max_connections", "100")
+				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "shared_buffers", "128MB")
+				b.Spec.ClusterSpec.Postgres.SharedPreloadLibraries = []string{"xatautils", "pg_stat_statements"}
+			},
+		},
+		{
 			name: "error - child branch with non-existent parent cluster",
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.ParentId = new("non-existent-cluster")
@@ -1518,6 +1592,8 @@ func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*Cluster
 			ClustersStorageClass:        "default-storage-class",
 			ClustersVolumeSnapshotClass: "default-snapshot-class",
 			ClustersNodeSelector:        cfg.nodeSelector,
+			XVolStorageClasses:          []string{"xatastor", "xatastor-slot"},
+			XVolChildStorageClass:       "xatastor-slot",
 		},
 		kubeClient:       fakeClient,
 		clusterReader:    fakeClient,

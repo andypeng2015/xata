@@ -259,6 +259,10 @@ func TestWakeupPoolName(t *testing.T) {
 			input: "pg18-tiny-create",
 			want:  "pg18-tiny-wakeup",
 		},
+		"already wakeup pool": {
+			input: "pg18-tiny-wakeup",
+			want:  "pg18-tiny-wakeup",
+		},
 		"no create suffix": {
 			input: "pg18-tiny",
 			want:  "pg18-tiny-wakeup",

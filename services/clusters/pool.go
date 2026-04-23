@@ -63,12 +63,14 @@ func findPoolCluster(ctx context.Context, kubeClient client.Client, clusterReade
 	return "", nil, nil
 }
 
-// wakeupPoolName derives the wakeup pool name from the create pool name. Each
-// create pool (used for new branches) has a companion wakeup pool (used when
-// waking hibernated branches). We use a name convention to match the create pool
-// with its wakeup pool. For example `pg18-tiny-create` is matched with `pg18-tiny-wakeup`.
-func wakeupPoolName(createPoolName string) string {
-	return strings.TrimSuffix(createPoolName, "-create") + "-wakeup"
+// wakeupPoolName derives the wakeup pool name from a pool name. Each create
+// pool (used for new branches) has a companion wakeup pool (used when waking
+// hibernated branches). A name convention is used to match the create pool
+// with its wakeup pool. For example `pg18-tiny-create` is matched with
+// `pg18-tiny-wakeup`. If the input already has a `-wakeup` suffix it is
+// returned unchanged.
+func wakeupPoolName(poolName string) string {
+	return strings.TrimSuffix(strings.TrimSuffix(poolName, "-create"), "-wakeup") + "-wakeup"
 }
 
 var (

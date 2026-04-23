@@ -22,12 +22,19 @@ const (
 
 // BranchBuilder builds Branch resources.
 type BranchBuilder struct {
-	branch *v1alpha1.Branch
+	branch                *v1alpha1.Branch
+	xvolStorageClasses    []string
+	xvolChildStorageClass string
 }
 
-// NewBranchBuilder creates a new BranchBuilder.
-func NewBranchBuilder() *BranchBuilder {
-	return &BranchBuilder{}
+// NewBranchBuilder creates a new BranchBuilder. xvolStorageClasses is the set
+// of storage class names recognised as supporting XVols; xvolChildStorageClass
+// is the class assigned to child branches whose parent uses one of them.
+func NewBranchBuilder(xvolStorageClasses []string, xvolChildStorageClass string) *BranchBuilder {
+	return &BranchBuilder{
+		xvolStorageClasses:    xvolStorageClasses,
+		xvolChildStorageClass: xvolChildStorageClass,
+	}
 }
 
 // resourceConfigurer defines an interface for types that provide resource
@@ -96,13 +103,22 @@ func (b *BranchBuilder) WithOverridesFromParent(parent *v1alpha1.Branch) *Branch
 
 	// Override Branch spec fields with values from the parent Branch
 	clusterSpec.Storage.Size = parent.Spec.ClusterSpec.Storage.Size
-	clusterSpec.Storage.StorageClass = parent.Spec.ClusterSpec.Storage.StorageClass
 	clusterSpec.Storage.VolumeSnapshotClass = parent.Spec.ClusterSpec.Storage.VolumeSnapshotClass
 	clusterSpec.Storage.MountPropagation = parent.Spec.ClusterSpec.Storage.MountPropagation
 	clusterSpec.Image = parent.Spec.ClusterSpec.Image
 	clusterSpec.Resources = parent.Spec.ClusterSpec.Resources
 	clusterSpec.Postgres = parent.Spec.ClusterSpec.Postgres
 	clusterSpec.SmartShutdownTimeout = parent.Spec.ClusterSpec.SmartShutdownTimeout
+
+	// By default the child inherits the parent's storage class. If the parent
+	// uses an XVol-capable class, set the child to use the configured XVol child
+	// class and upgrade the restore type from VolumeSnapshot to XVolClone
+	parentSC := parent.Spec.ClusterSpec.Storage.StorageClass
+	clusterSpec.Storage.StorageClass = parentSC
+	if b.isXVolStorageClass(parentSC) {
+		clusterSpec.Storage.StorageClass = &b.xvolChildStorageClass
+		b.branch.Spec.Restore.Type = v1alpha1.RestoreTypeXVolClone
+	}
 
 	// Child branches always start with one instance, regardless of the parent's
 	// instance count
@@ -388,6 +404,15 @@ func postgresParametersFromMap(params map[string]string) []v1alpha1.PostgresPara
 	}
 
 	return pgParams
+}
+
+// isXVolStorageClass reports whether sc names a storage class configured as
+// XVol-capable.
+func (b *BranchBuilder) isXVolStorageClass(sc *string) bool {
+	if sc == nil {
+		return false
+	}
+	return slices.Contains(b.xvolStorageClasses, *sc)
 }
 
 // poolerMemoryReservation is the amount of memory reserved on each node for
