@@ -634,7 +634,8 @@ func baseExpectedSpec() *apiv1ac.ClusterSpecApplyConfiguration {
 			WithServices(apiv1ac.ManagedServices().
 				WithDisabledDefaultServices(
 					apiv1.ServiceSelectorTypeR,
-					apiv1.ServiceSelectorTypeRO))).
+					apiv1.ServiceSelectorTypeRO)).
+			WithRoles(resources.XataRoleConfiguration(testBranchName))).
 		WithMonitoring(apiv1ac.MonitoringConfiguration().
 			WithTLSConfig(apiv1ac.ClusterMonitoringTLSConfiguration().
 				WithEnabled(true)).
