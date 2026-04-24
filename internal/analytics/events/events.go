@@ -187,11 +187,10 @@ type BranchCreationSummaryMetrics struct {
 }
 
 // This is a summary event that we generate from data warehouse data
-func NewBranchCreationSummaryEvent(organizationID string, metrics BranchCreationSummaryMetrics, timestamp time.Time) Event {
+func NewBranchCreationSummaryEvent(organizationID string, metrics BranchCreationSummaryMetrics) Event {
 	return Event{
-		Name:      "summary: branch creation",
-		OrgID:     organizationID,
-		Timestamp: timestamp,
+		Name:  "summary: branch creation",
+		OrgID: organizationID,
 		Properties: map[string]any{
 			"organization":              organizationID,
 			"totalBranchesAllTime":      metrics.TotalBranchesAllTime,
@@ -218,7 +217,7 @@ type CostSummaryMetric struct {
 }
 
 // This is a summary event that we generate from data warehouse data
-func NewCostSummaryEvent(organizationID string, metrics map[string]CostSummaryMetric, timestamp time.Time) Event {
+func NewCostSummaryEvent(organizationID string, metrics map[string]CostSummaryMetric) Event {
 	properties := map[string]any{
 		"organization": organizationID,
 	}
@@ -241,7 +240,6 @@ func NewCostSummaryEvent(organizationID string, metrics map[string]CostSummaryMe
 	return Event{
 		Name:       "summary: cost",
 		OrgID:      organizationID,
-		Timestamp:  timestamp,
 		Properties: properties,
 	}
 }
