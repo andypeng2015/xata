@@ -344,7 +344,8 @@ func XataRoleConfiguration(branchName string) *apiv1ac.RoleConfigurationApplyCon
 		WithCreateDB(true).
 		WithCreateRole(true).
 		WithBypassRLS(true).
-		WithReplication(true)
+		WithReplication(true).
+		WithInRoles("xata_superuser")
 }
 
 // PostgresParametersToMap converts a list of PostgresParameter to a map
