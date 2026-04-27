@@ -132,11 +132,10 @@ func createPVCAndXVol(ctx context.Context, t *testing.T, clusterName string) (st
 	err := k8sClient.Create(ctx, xvol)
 	require.NoError(t, err)
 
-	// Set the XVol status to Bound so that the deletionPolicy field is mutable
-	// The attach field is required when state is Bound.
+	// Set the XVol status to Bound so that the xvolReclaimPolicy field is
+	// mutable
 	unstructured.SetNestedField(xvol.Object, "Bound", "status", "volumeState")
-	unstructured.SetNestedField(xvol.Object, "node-1", "status", "attach", "computeNode")
-	unstructured.SetNestedField(xvol.Object, "nqn.2024-01.io.xata:test", "status", "attach", "nqn")
+	unstructured.SetNestedField(xvol.Object, xvolName, "status", "pvName")
 	err = k8sClient.Status().Update(ctx, xvol)
 	require.NoError(t, err)
 
