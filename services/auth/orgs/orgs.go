@@ -43,10 +43,11 @@ func NewOrganizations(realm string, kcRest keycloak.KeyCloak, projectsClient pro
 type BillingStatus string
 
 const (
-	BillingStatusOk              BillingStatus = "ok"
-	BillingStatusNoPaymentMethod BillingStatus = "no_payment_method"
-	BillingStatusInvoiceOverdue  BillingStatus = "invoice_overdue"
-	BillingStatusUnknown         BillingStatus = "unknown"
+	BillingStatusOk                BillingStatus = "ok"
+	BillingStatusNoPaymentMethod   BillingStatus = "no_payment_method"
+	BillingStatusInvoiceOverdue    BillingStatus = "invoice_overdue"
+	BillingStatusUnknown           BillingStatus = "unknown"
+	BillingStatusDeletionRequested BillingStatus = "deletion_requested"
 )
 
 type UpdateOrganizationOptions struct {

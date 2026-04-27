@@ -3805,7 +3805,8 @@
               "ok",
               "no_payment_method",
               "invoice_overdue",
-              "unknown"
+              "unknown",
+              "deletion_requested"
             ]
           },
           "billing_reason": {

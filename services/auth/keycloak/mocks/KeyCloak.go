@@ -190,6 +190,45 @@ func (_c *KeyCloak_DeleteInvitation_Call) Return(_a0 error) *KeyCloak_DeleteInvi
 	return _c
 }
 
+// DeleteOrganization provides a mock function with given fields: ctx, realm, organizationID
+func (_m *KeyCloak) DeleteOrganization(ctx context.Context, realm string, organizationID string) error {
+	ret := _m.Called(ctx, realm, organizationID)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, realm, organizationID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// KeyCloak_DeleteOrganization_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteOrganization'
+type KeyCloak_DeleteOrganization_Call struct {
+	*mock.Call
+}
+
+// DeleteOrganization is a helper method to define mock.On call
+//   - ctx context.Context
+//   - realm string
+//   - organizationID string
+func (_e *KeyCloak_Expecter) DeleteOrganization(ctx interface{}, realm interface{}, organizationID interface{}) *KeyCloak_DeleteOrganization_Call {
+	return &KeyCloak_DeleteOrganization_Call{Call: _e.mock.On("DeleteOrganization", ctx, realm, organizationID)}
+}
+
+func (_c *KeyCloak_DeleteOrganization_Call) Run(run func(ctx context.Context, realm string, organizationID string)) *KeyCloak_DeleteOrganization_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *KeyCloak_DeleteOrganization_Call) Return(_a0 error) *KeyCloak_DeleteOrganization_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
 // GetInvitation provides a mock function with given fields: c, realm, organizationID, invitationID
 func (_m *KeyCloak) GetInvitation(c context.Context, realm string, organizationID string, invitationID string) (keycloak.OrganizationInvitation, error) {
 	ret := _m.Called(c, realm, organizationID, invitationID)

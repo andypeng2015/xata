@@ -21,14 +21,17 @@ import (
 )
 
 const (
-	OrganizationDisabledByAdminKey           = "disabledByAdmin"
-	OrganizationBillingStatusKey             = "billingStatus"
-	OrganizationAdminReasonKey               = "adminReason"
-	OrganizationBillingReasonKey             = "billingReason"
-	OrganizationLastUpdatedKey               = "lastUpdated"
-	OrganizationCreatedAtKey                 = "createdAt"
-	OrganizationResourcesCleanedAtKey        = "resourcesCleanedAt"
-	OrganizationBillingStatusNoPaymentMethod = "no_payment_method"
+	OrganizationDisabledByAdminKey             = "disabledByAdmin"
+	OrganizationBillingStatusKey               = "billingStatus"
+	OrganizationAdminReasonKey                 = "adminReason"
+	OrganizationBillingReasonKey               = "billingReason"
+	OrganizationLastUpdatedKey                 = "lastUpdated"
+	OrganizationCreatedAtKey                   = "createdAt"
+	OrganizationResourcesCleanedAtKey          = "resourcesCleanedAt"
+	OrganizationBillingStatusNoPaymentMethod   = "no_payment_method"
+	OrganizationBillingStatusDeletionRequested = "deletion_requested"
+
+	OrganizationDeletedAtKey = "deletedAt"
 
 	OrganizationUsageTierKey = "usageTier"
 
@@ -123,6 +126,10 @@ func (r *restKC) GetOrganization(ctx context.Context, realm, alias string) (spec
 		return spec.Organization{}, fmt.Errorf("failed to get organization: %w", err)
 	}
 
+	if _, ok := firstAttr(organization.Attributes, OrganizationDeletedAtKey); ok {
+		return spec.Organization{}, ErrOrganizationNotFound{ID: alias}
+	}
+
 	return r.convertToSpecOrganization(organization), nil
 }
 
@@ -155,9 +162,12 @@ func (r *restKC) ListOrganizations(ctx context.Context, realm, userID string) ([
 		return nil, fmt.Errorf("unmarshal organization list: %w", err)
 	}
 
-	orgs := make([]spec.Organization, len(keycloakOrganizations))
-	for i, org := range keycloakOrganizations {
-		orgs[i] = r.convertToSpecOrganization(org)
+	orgs := make([]spec.Organization, 0, len(keycloakOrganizations))
+	for _, org := range keycloakOrganizations {
+		if _, ok := firstAttr(org.Attributes, OrganizationDeletedAtKey); ok {
+			continue
+		}
+		orgs = append(orgs, r.convertToSpecOrganization(org))
 	}
 
 	return orgs, nil
@@ -486,6 +496,39 @@ func (r *restKC) UpdateOrganization(
 	return r.GetOrganization(ctx, realm, organizationID)
 }
 
+func (r *restKC) DeleteOrganization(ctx context.Context, realm, organizationID string) error {
+	organization, err := r.searchOrganization(ctx, realm, organizationID)
+	if err != nil {
+		return fmt.Errorf("get organization: %w", err)
+	}
+
+	if organization.Attributes == nil {
+		organization.Attributes = make(map[string][]string)
+	}
+
+	if _, ok := firstAttr(organization.Attributes, OrganizationDeletedAtKey); ok {
+		return nil
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	organization.Attributes[OrganizationDeletedAtKey] = []string{now}
+	organization.Attributes[OrganizationLastUpdatedKey] = []string{now}
+
+	orgURL, err := r.buildRealmURL(realm, "organizations", organization.ID)
+	if err != nil {
+		return fmt.Errorf("build organization URL: %w", err)
+	}
+
+	resp, err := r.makeAuthenticatedRequest(ctx, http.MethodPut, orgURL, nil, organization)
+	if err != nil {
+		return fmt.Errorf("set deletedAt: %w", err)
+	}
+	if !r.isSuccessStatus(resp.StatusCode(), http.StatusOK, http.StatusNoContent) {
+		return fmt.Errorf("set deletedAt: unexpected status %d: %s", resp.StatusCode(), resp.String())
+	}
+	return nil
+}
+
 func (r *restKC) ListDisabledOrganizations(ctx context.Context, realm string, returnCleanedUpOrgs bool) ([]spec.Organization, error) {
 	orgsURL, err := r.buildRealmURL(realm, "organizations")
 	if err != nil {
@@ -497,10 +540,11 @@ func (r *restKC) ListDisabledOrganizations(ctx context.Context, realm string, re
 		"billingStatus:no_payment_method",
 		"billingStatus:invoice_overdue",
 		"billingStatus:unknown",
+		"billingStatus:deletion_requested",
 	}
 
 	seen := make(map[string]struct{})
-	var result []spec.Organization
+	result := make([]spec.Organization, 0)
 
 	const pageSize = 200
 
@@ -533,6 +577,9 @@ func (r *restKC) ListDisabledOrganizations(ctx context.Context, realm string, re
 					continue
 				}
 				seen[org.Alias] = struct{}{}
+				if _, ok := firstAttr(org.Attributes, OrganizationDeletedAtKey); ok {
+					continue
+				}
 				if !returnCleanedUpOrgs {
 					if _, ok := firstAttr(org.Attributes, OrganizationResourcesCleanedAtKey); ok {
 						continue
@@ -785,6 +832,8 @@ func (r *restKC) extractStatus(attributes map[string][]string) spec.Organization
 		status.BillingStatus = spec.InvoiceOverdue
 	case ok && v == string(spec.NoPaymentMethod):
 		status.BillingStatus = spec.NoPaymentMethod
+	case ok && v == string(spec.DeletionRequested):
+		status.BillingStatus = spec.DeletionRequested
 	case ok:
 		// If the billing status is unrecognized, set it to unknown
 		status.BillingStatus = spec.Unknown

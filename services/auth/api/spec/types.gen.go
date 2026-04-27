@@ -26,10 +26,11 @@ const (
 
 // Defines values for OrganizationStatusBillingStatus.
 const (
-	InvoiceOverdue  OrganizationStatusBillingStatus = "invoice_overdue"
-	NoPaymentMethod OrganizationStatusBillingStatus = "no_payment_method"
-	Ok              OrganizationStatusBillingStatus = "ok"
-	Unknown         OrganizationStatusBillingStatus = "unknown"
+	DeletionRequested OrganizationStatusBillingStatus = "deletion_requested"
+	InvoiceOverdue    OrganizationStatusBillingStatus = "invoice_overdue"
+	NoPaymentMethod   OrganizationStatusBillingStatus = "no_payment_method"
+	Ok                OrganizationStatusBillingStatus = "ok"
+	Unknown           OrganizationStatusBillingStatus = "unknown"
 )
 
 // Defines values for OrganizationStatusStatus.

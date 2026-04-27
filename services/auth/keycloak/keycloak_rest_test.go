@@ -337,6 +337,20 @@ func TestExtractStatus(t *testing.T) {
 				UsageTier:       spec.T2,
 			},
 		},
+		{
+			name: "deletion_requested disables org",
+			attrs: map[string][]string{
+				OrganizationDisabledByAdminKey: {"false"},
+				OrganizationBillingStatusKey:   {string(spec.DeletionRequested)},
+			},
+			expect: spec.OrganizationStatus{
+				DisabledByAdmin: false,
+				BillingStatus:   spec.DeletionRequested,
+				LastUpdated:     time.Unix(0, 0).UTC(),
+				Status:          spec.Disabled,
+				UsageTier:       spec.T1,
+			},
+		},
 	}
 
 	for _, tc := range cases {

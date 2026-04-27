@@ -155,6 +155,8 @@ type KeyCloak interface {
 	DeleteInvitation(c context.Context, realm string, organizationID string, invitationID string) error
 	// UpdateOrganization updates an organization's attributes in the given realm.
 	UpdateOrganization(c context.Context, realm, organizationID string, update OrganizationUpdate) (spec.Organization, error)
+	// DeleteOrganization marks an organization as deleted by setting the deletedAt attribute.
+	DeleteOrganization(ctx context.Context, realm, organizationID string) error
 	// GetUserRepresentation returns the user representation for the given user ID in the given realm.
 	GetUserRepresentation(c context.Context, realm string, userID string) (User, error)
 	// ListDisabledOrganizations returns organizations where disabledByAdmin=true OR billingStatus!=ok.

@@ -761,6 +761,7 @@ components:
             - no_payment_method
             - invoice_overdue
             - unknown
+            - deletion_requested
         billing_reason:
           description: Reason for the current billing status
           type: string
