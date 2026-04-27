@@ -4620,6 +4620,32 @@ func TestUpdateBranch(t *testing.T) {
 			wantError:     true,
 			expectedError: ErrorInvalidParam{BranchName: "123", Param: "image", Message: "image cannot be updated together with postgres configuration parameters, instance type, or preload libraries"},
 		},
+		{
+			name:      "update branch with conflict error returns 409",
+			projectID: "project_id",
+			branchID:  "123",
+			jsonBody:  map[string]int32{"replicas": 3},
+			setupMocks: func() {
+				branch := store.Branch{
+					ID:          "123",
+					Name:        "newTest",
+					Description: new("newDesc"),
+					Region:      "region-id-1",
+				}
+				mockStore.EXPECT().UpdateBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", updateBranchConfig(nil, nil), mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchID string, cfg *store.UpdateBranchConfiguration, provisionFn func(*store.Branch) error) {
+					err := provisionFn(&branch)
+					require.Error(t, err)
+				}).Return(nil, status.Errorf(codes.Aborted, "conflict: the object has been modified")).Once()
+				mockClusters.EXPECT().UpdatePostgresCluster(mock.Anything, &clustersv1.UpdatePostgresClusterRequest{
+					Id: "123",
+					UpdateConfiguration: &clustersv1.UpdateClusterConfiguration{
+						NumInstances: new(int32(4)),
+					},
+				}).Return(nil, status.Errorf(codes.Aborted, "conflict: the object has been modified")).Once()
+			},
+			wantError:     true,
+			expectedError: ErrorBranchConflict{BranchID: "123"},
+		},
 	}
 	for _, tt := range updateBranchTests {
 		t.Run(tt.name, func(t *testing.T) {

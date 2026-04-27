@@ -163,6 +163,18 @@ func (e ErrorBackupNotFound) StatusCode() int {
 	return http.StatusNotFound
 }
 
+type ErrorBranchConflict struct {
+	BranchID string
+}
+
+func (e ErrorBranchConflict) Error() string {
+	return fmt.Sprintf("branch [%s] was modified concurrently, please retry", e.BranchID)
+}
+
+func (e ErrorBranchConflict) StatusCode() int {
+	return http.StatusConflict
+}
+
 type ErrorNewOrgBranchLimitExceeded struct {
 	OrganizationID string
 }

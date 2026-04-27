@@ -5,8 +5,69 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"xata/internal/xvalidator"
 )
+
+func TestErrorStatusCodes(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		err        error
+		wantCode   int
+		wantSubstr string
+	}{
+		"ErrorBranchConflict": {
+			err:        ErrorBranchConflict{BranchID: "br-1"},
+			wantCode:   409,
+			wantSubstr: "modified concurrently",
+		},
+		"ErrorBranchNotFound": {
+			err:        ErrorBranchNotFound{BranchID: "br-1"},
+			wantCode:   404,
+			wantSubstr: "not found",
+		},
+		"ErrorInvalidParam": {
+			err:        ErrorInvalidParam{BranchName: "br-1", Param: "name", Message: "too long"},
+			wantCode:   400,
+			wantSubstr: "invalid parameter",
+		},
+		"ErrorBranchUpdateForbidden": {
+			err:        ErrorBranchUpdateForbidden{BranchID: "br-1"},
+			wantCode:   403,
+			wantSubstr: "temporarily unavailable",
+		},
+		"ErrorParentBranchUnhealthy": {
+			err:        ErrorParentBranchUnhealthy{ParentID: "br-1"},
+			wantCode:   412,
+			wantSubstr: "not healthy",
+		},
+		"ErrorBranchCreationDisabled": {
+			err:        ErrorBranchCreationDisabled{},
+			wantCode:   503,
+			wantSubstr: "temporarily disabled",
+		},
+		"ErrorCredentialsForBranchNotFound": {
+			err:        ErrorCredentialsForBranchNotFound{BranchID: "br-1", Username: "xata"},
+			wantCode:   404,
+			wantSubstr: "not found",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			type statusCoder interface {
+				StatusCode() int
+			}
+			sc, ok := tt.err.(statusCoder)
+			require.True(t, ok)
+			require.Equal(t, tt.wantCode, sc.StatusCode())
+			require.Contains(t, tt.err.Error(), tt.wantSubstr)
+		})
+	}
+}
 
 func TestIsDescriptionValid(t *testing.T) {
 	t.Parallel()

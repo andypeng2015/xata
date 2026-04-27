@@ -51,6 +51,8 @@ func k8sErrorToGRPCError(err error) error {
 		return status.Errorf(codes.InvalidArgument, "invalid resource: %v", err)
 	case errors.IsForbidden(err):
 		return status.Errorf(codes.PermissionDenied, "forbidden: %v", err)
+	case errors.IsConflict(err):
+		return status.Errorf(codes.Aborted, "conflict: %v", err)
 	default:
 		return status.Errorf(codes.Unknown, "kubernetes error: %v", err)
 	}

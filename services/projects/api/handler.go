@@ -1485,6 +1485,9 @@ func (s *handler) UpdateBranch(c echo.Context, organizationID spec.OrganizationI
 			if st.Code() == codes.PermissionDenied {
 				return ErrorBranchUpdateForbidden{BranchID: branchID}
 			}
+			if st.Code() == codes.Aborted {
+				return ErrorBranchConflict{BranchID: branchID}
+			}
 			return err
 		}
 
