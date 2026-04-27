@@ -190,6 +190,7 @@ components:
         - rw
         - ro
         - r
+        - pooled_rw
     SQLRequest:
       description: SQL query request. Provide either `query` for a single query or `queries` for a batch.
       type: object

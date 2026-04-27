@@ -4157,7 +4157,8 @@
         "enum": [
           "rw",
           "ro",
-          "r"
+          "r",
+          "pooled_rw"
         ]
       },
       "SQLRequest": {
