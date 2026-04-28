@@ -27,6 +27,7 @@ const (
 // +kubebuilder:rbac:groups=xata.io,resources=wakeuprequests/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=xata.io,resources=branches,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=xata.io,resources=clusterpools,verbs=get;list;watch
+// +kubebuilder:rbac:groups=xata.io,resources=xvols,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=persistentvolumes,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
@@ -121,6 +122,14 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// Get the XVol name from the Branch status
 	xvolName, err := getXVolName(branch)
 	if err != nil {
+		return ctrl.Result{}, ignoreTerminal(err)
+	}
+
+	// Validate that the XVol is in a state that can be used as the target of a
+	// wakeup operation
+	err = r.validateXVolStatus(ctx, xvolName)
+	if err != nil {
+		log.Error(err, "validating XVol status", "xvolName", xvolName)
 		return ctrl.Result{}, ignoreTerminal(err)
 	}
 

@@ -18,7 +18,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -235,8 +237,8 @@ func setupPoolCluster(ctx context.Context, pool *poolv1alpha1.ClusterPool, name,
 }
 
 // createBranch creates a Branch with the given name, annotations, and the
-// default test spec. It also sets PrimaryXVolName in the Branch status so that
-// the wakeup reconciler's getXVolName precondition is satisfied.
+// default test spec. It also creates an XVol named "xvol-<name>" in the
+// Available state and sets PrimaryXVolName in the Branch status
 func createBranch(ctx context.Context, name string, annotations map[string]string) (*v1alpha1.Branch, error) {
 	branch := &v1alpha1.Branch{
 		ObjectMeta: metav1.ObjectMeta{
@@ -256,13 +258,66 @@ func createBranch(ctx context.Context, name string, annotations map[string]strin
 		return nil, err
 	}
 
+	// Create an XVol in the Available state for the branch
+	xvolName := "xvol-" + name
+	if err := createXVol(ctx, xvolName, "Available"); err != nil {
+		return nil, err
+	}
+
 	// Set PrimaryXVolName in the Branch status
-	branch.Status.PrimaryXVolName = "xvol-" + name
+	branch.Status.PrimaryXVolName = xvolName
 	if err := k8sClient.Status().Update(ctx, branch); err != nil {
 		return nil, err
 	}
 
 	return branch, nil
+}
+
+// createXVol creates a cluster-scoped XVol resource with the given name and
+// status.volumeState.
+func createXVol(ctx context.Context, name, state string) error {
+	gvk := schema.GroupVersionKind{Group: "xata.io", Version: "v1alpha1", Kind: "Xvol"}
+
+	xvol := &unstructured.Unstructured{}
+	xvol.SetGroupVersionKind(gvk)
+	xvol.SetName(name)
+	if err := unstructured.SetNestedField(xvol.Object, "1Gi", "spec", "size"); err != nil {
+		return err
+	}
+	if err := k8sClient.Create(ctx, xvol); err != nil {
+		return err
+	}
+
+	if err := unstructured.SetNestedField(xvol.Object, state, "status", "volumeState"); err != nil {
+		return err
+	}
+	return k8sClient.Status().Update(ctx, xvol)
+}
+
+// setXVolState updates an existing XVol's status.volumeState
+func setXVolState(ctx context.Context, name, state string) error {
+	gvk := schema.GroupVersionKind{Group: "xata.io", Version: "v1alpha1", Kind: "Xvol"}
+
+	xvol := &unstructured.Unstructured{}
+	xvol.SetGroupVersionKind(gvk)
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name}, xvol); err != nil {
+		return err
+	}
+
+	if err := unstructured.SetNestedField(xvol.Object, state, "status", "volumeState"); err != nil {
+		return err
+	}
+	return k8sClient.Status().Update(ctx, xvol)
+}
+
+// deleteXVol deletes an XVol by name
+func deleteXVol(ctx context.Context, name string) error {
+	gvk := schema.GroupVersionKind{Group: "xata.io", Version: "v1alpha1", Kind: "Xvol"}
+
+	xvol := &unstructured.Unstructured{}
+	xvol.SetGroupVersionKind(gvk)
+	xvol.SetName(name)
+	return k8sClient.Delete(ctx, xvol)
 }
 
 // createWakeupRequest creates a WakeupRequest in the test namespace for the

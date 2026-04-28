@@ -519,4 +519,48 @@ func TestWakeupReconciler(t *testing.T) {
 		// Expect SlotIDNotAvailable because the PV has no CSI volume source
 		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionFalse, v1alpha1.SlotIDNotAvailableReason)
 	})
+
+	t.Run("sets XVolNotReady when the XVol is in Pending state", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branchName := "branch-" + randomString(10)
+		wrName := "wur-" + randomString(10)
+
+		// Create a Branch (createBranch creates an XVol in the Available state)
+		branch, err := createBranch(ctx, branchName, nil)
+		require.NoError(t, err)
+
+		// Move the XVol into the Pending state
+		require.NoError(t, setXVolState(ctx, branch.Status.PrimaryXVolName, "Pending"))
+
+		// Create a WakeupRequest
+		wr, err := createWakeupRequest(ctx, wrName, branch.Name)
+		require.NoError(t, err)
+
+		// Expect XVolNotReady because the XVol is not in a wakeable state
+		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionUnknown, v1alpha1.XVolNotReadyReason)
+	})
+
+	t.Run("sets XVolNotFound when the XVol resource is missing", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branchName := "branch-" + randomString(10)
+		wrName := "wur-" + randomString(10)
+
+		// Create a Branch (createBranch creates an XVol in the Available state)
+		branch, err := createBranch(ctx, branchName, nil)
+		require.NoError(t, err)
+
+		// Delete the XVol so the validation step finds nothing
+		require.NoError(t, deleteXVol(ctx, branch.Status.PrimaryXVolName))
+
+		// Create a WakeupRequest
+		wr, err := createWakeupRequest(ctx, wrName, branch.Name)
+		require.NoError(t, err)
+
+		// Expect XVolNotFound because the XVol resource is missing
+		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionUnknown, v1alpha1.XVolNotFoundReason)
+	})
 }

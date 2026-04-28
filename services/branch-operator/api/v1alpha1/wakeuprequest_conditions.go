@@ -24,6 +24,7 @@ const (
 	NoPoolAnnotationReason             = "WakeupPoolAnnotationMissing"
 	PoolNotFoundReason                 = "WakeupPoolNotFound"
 	PoolExhaustedReason                = "WakeupPoolExhausted"
+	XVolNotReadyReason                 = "XVolNotReady"
 )
 
 // WakeupConditionMessages maps condition reasons to human-readable messages
@@ -39,4 +40,6 @@ var WakeupConditionMessages = map[string]string{
 	WakeupInProgressReason:             "Wakeup is in progress",
 	SlotIDNotAvailableReason:           "The slot ID could not be determined from the cluster PV",
 	CSINodePodNotFoundReason:           "No CSI node plugin pod found on the primary pod's node",
+	XVolNotReadyReason:                 "The XVol status indicates it is not ready for wakeup",
+	XVolNotFoundReason:                 "The XVol referenced by the branch was not found",
 }
