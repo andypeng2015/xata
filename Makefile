@@ -14,12 +14,16 @@ help:  ## This help dialog.
 check: lint  ## CI code checks
 
 .PHONY: lint
-lint: lint-openapi lint-go lint-buf lint-opa lint-keycloak-turnstile lint-charts ## Lint source code
+lint: lint-openapi lint-go lint-buf lint-opa lint-keycloak-turnstile lint-charts lint-kube ## Lint source code
 	@echo "All lint tasks completed at $$(date)"
 
 .PHONY: lint-charts
 lint-charts: ## Lint Helm charts
 	@cd charts && $(MAKE) lint
+
+.PHONY: lint-kube
+lint-kube: ## Lint Kubernetes manifests
+	@cd kustomize && $(MAKE) lint
 
 .PHONY: lint-openapi
 lint-openapi: ## Lint OpenAPI code

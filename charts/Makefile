@@ -85,7 +85,7 @@ lint-kube:
 	@set -e; \
 	echo "Running kube-linter..." >&2; \
 	$(MAKE) --no-print-directory template 2>/dev/null \
-		| $(KUBE_LINTER) lint -v --config "../.kube-linter.yaml" -
+		| $(KUBE_LINTER) lint -v --config "../.kube-linter.yml" -
 
 template:
 	@set -e; \

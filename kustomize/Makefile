@@ -31,9 +31,13 @@ build:
 	done
 
 lint:
-	@$(MAKE) build 2>/dev/null \
-		| yq 'del(.sops) | select(.kind == "Secret")' \
-		| $(KUBE_LINTER) lint - --config "../.kube-linter.yaml"
+	@set -e; \
+	for overlay in $(OVERLAYS); do \
+		>&2 echo "Linting $$overlay"; \
+		$(KUSTOMIZE) build --enable-helm "$$overlay" \
+			| yq 'with(select(.kind == "Secret"); del(.sops))' \
+			| $(KUBE_LINTER) lint - --config "../.kube-linter.yml"; \
+	done
 
 diff-oci:
 	@set -e; \

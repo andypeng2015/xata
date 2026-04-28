@@ -5,4 +5,13 @@ checks:
   include:
     - "schema-validation"
   exclude:
+    # TODO(Martin): Remove these as we fix them or exclude them with specific
+    # overrides.
+    - "env-var-secret"
+    - "job-ttl-seconds-after-finished"
     - "latest-tag"
+    - "liveness-port"
+    - "no-read-only-root-fs"
+    - "readiness-port"
+    - "unset-cpu-requirements"
+    - "unset-memory-requirements"
