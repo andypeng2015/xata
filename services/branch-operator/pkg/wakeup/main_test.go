@@ -29,10 +29,10 @@ import (
 )
 
 const (
-	BranchOperatorCRDsPath = "../../../../charts/branch-operator/crds/"
-	ClusterPoolCRDsPath    = "../../../../saas-charts/clusterpool-operator/crds/"
-	ThirdPartyCRDsPath     = "./testutils/crds/"
-	TestNamespace          = "xata-wakeup-test"
+	BranchOperatorCRDsPath   = "../../../../charts/branch-operator/crds/"
+	ClusterPoolCRDsPath      = "../../../../saas-charts/clusterpool-operator/crds/"
+	SharedThirdPartyCRDsPath = "../../testutils/crds/"
+	TestNamespace            = "xata-wakeup-test"
 )
 
 // k8sClient is a live Kubernetes client connected to the test environment.
@@ -78,7 +78,7 @@ func TestMain(m *testing.M) {
 			CRDDirectoryPaths: []string{
 				BranchOperatorCRDsPath,
 				ClusterPoolCRDsPath,
-				ThirdPartyCRDsPath,
+				SharedThirdPartyCRDsPath,
 			},
 			SchemeAdders: []func(*runtime.Scheme) error{
 				corev1.AddToScheme,
