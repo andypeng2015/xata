@@ -9,6 +9,7 @@ metadata:
 spec:
   template:
     spec:
+      enableServiceLinks: false
       containers:
         - name: create-db
           image: postgres:15.4

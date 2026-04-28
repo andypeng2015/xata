@@ -9,6 +9,7 @@ spec:
   ttlSecondsAfterFinished: {{ .Values.realmImport.ttlSecondsAfterFinished }}
   template:
     spec:
+      enableServiceLinks: false
       containers:
         - name: import
           image: {{ .Values.realmImport.image }}

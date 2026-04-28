@@ -392,6 +392,7 @@ spec:
         app.kubernetes.io/version: 26.5.4
         app.kubernetes.io/name: keycloak-operator
     spec:
+      enableServiceLinks: false
       containers:
         - env:
             - name: KUBERNETES_NAMESPACE

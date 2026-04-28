@@ -17,6 +17,7 @@ spec:
         app: clusters
     spec:
       serviceAccountName: clusters
+      enableServiceLinks: false
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

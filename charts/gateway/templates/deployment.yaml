@@ -17,6 +17,7 @@ spec:
         app: gateway
     spec:
       serviceAccountName: gateway
+      enableServiceLinks: false
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

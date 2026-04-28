@@ -25,6 +25,7 @@ spec:
         spec:
           serviceAccountName: {{ .Chart.Name }}-resource-cleanup
           restartPolicy: Never
+          enableServiceLinks: false
           {{- with .Values.tolerations }}
           tolerations:
             {{- toYaml . | nindent 12 }}
