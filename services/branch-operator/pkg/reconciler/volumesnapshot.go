@@ -128,7 +128,7 @@ func (r *BranchReconciler) ensureVolumeSnapshotExists(
 		}
 
 		// Ensure labels are set on the VolumeSnapshot
-		ensureLabels(&vs.ObjectMeta, branch.Spec.InheritedMetadata)
+		ensureLabels(vs, branch.Spec.InheritedMetadata)
 
 		// Set the spec for the VolumeSnapshot
 		vs.Spec = resources.VolumeSnapshotSpec(sourcePVC,

@@ -50,7 +50,7 @@ func (r *BranchReconciler) reconcileSecret(ctx context.Context,
 		}
 
 		// Ensure that labels are set on the Secret
-		ensureLabels(&secret.ObjectMeta, branch.Spec.InheritedMetadata)
+		ensureLabels(secret, branch.Spec.InheritedMetadata)
 
 		// Set the CNPG reload annotatation on the Secret to trigger reloads of the
 		// CNPG Cluster when the Secret changes.

@@ -70,7 +70,7 @@ func (r *BranchReconciler) reconcileAdditionalServicePooler(
 			return err
 		}
 
-		ensureLabels(&svc.ObjectMeta, branch.Spec.InheritedMetadata)
+		ensureLabels(svc, branch.Spec.InheritedMetadata)
 
 		if svc.Annotations == nil {
 			svc.Annotations = make(map[string]string)
@@ -106,7 +106,7 @@ func (r *BranchReconciler) reconcileAdditionalService(
 		}
 
 		// Ensure labels are set on the Service
-		ensureLabels(&svc.ObjectMeta, branch.Spec.InheritedMetadata)
+		ensureLabels(svc, branch.Spec.InheritedMetadata)
 
 		// Ensure the Cilium global annotation is set on the Service
 		if svc.Annotations == nil {

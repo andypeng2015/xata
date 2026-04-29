@@ -56,7 +56,7 @@ func (r *BranchReconciler) reconcileScheduledBackup(
 		}
 
 		// Ensure labels are set on the ScheduledBackup
-		ensureLabels(&sb.ObjectMeta, branch.Spec.InheritedMetadata)
+		ensureLabels(sb, branch.Spec.InheritedMetadata)
 
 		// Set the spec for the ScheduledBackup
 		sb.Spec = resources.ScheduledBackupSpec(

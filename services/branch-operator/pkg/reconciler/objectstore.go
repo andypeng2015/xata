@@ -56,7 +56,7 @@ func (r *BranchReconciler) reconcileObjectStore(
 		}
 
 		// Ensure labels are set on the ObjectStore
-		ensureLabels(&os.ObjectMeta, branch.Spec.InheritedMetadata)
+		ensureLabels(os, branch.Spec.InheritedMetadata)
 
 		// Set the spec for the ObjectStore
 		os.Spec = resources.ObjectStoreSpec(

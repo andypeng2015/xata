@@ -53,7 +53,7 @@ func (r *BranchReconciler) reconcileNetworkPolicy(
 		}
 
 		// Ensure labels are set on the NetworkPolicy
-		ensureLabels(&np.ObjectMeta, branch.Spec.InheritedMetadata)
+		ensureLabels(np, branch.Spec.InheritedMetadata)
 
 		// Set the spec for the NetworkPolicy
 		np.Spec = resources.NetworkPolicySpec(branch.ClusterName())

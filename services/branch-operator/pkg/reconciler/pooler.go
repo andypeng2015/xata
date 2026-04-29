@@ -52,7 +52,7 @@ func (r *BranchReconciler) reconcilePooler(
 			return err
 		}
 
-		ensureLabels(&pooler.ObjectMeta, branch.Spec.InheritedMetadata)
+		ensureLabels(pooler, branch.Spec.InheritedMetadata)
 
 		pooler.Spec = resources.PoolerSpec(
 			branch.ClusterName(),

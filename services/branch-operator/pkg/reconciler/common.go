@@ -14,18 +14,21 @@ const (
 )
 
 // ensureLabels adds the canonical set of labels for resources managed by the
-// operator to the given ObjectMeta, merging in any user-provided labels from
+// operator to the given object, merging in any user-provided labels from
 // InheritedMetadata.
-func ensureLabels(m *metav1.ObjectMeta, inheritedMetadata *v1alpha1.InheritedMetadata) {
-	if m.Labels == nil {
-		m.Labels = make(map[string]string)
+func ensureLabels(obj metav1.Object, inheritedMetadata *v1alpha1.InheritedMetadata) {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
 	}
 
 	// Apply user labels
 	if inheritedMetadata != nil && inheritedMetadata.Labels != nil {
-		maps.Copy(m.Labels, inheritedMetadata.Labels)
+		maps.Copy(labels, inheritedMetadata.Labels)
 	}
 
 	// Apply operator labels
-	m.Labels["app.kubernetes.io/managed-by"] = OperatorName
+	labels["app.kubernetes.io/managed-by"] = OperatorName
+
+	obj.SetLabels(labels)
 }
