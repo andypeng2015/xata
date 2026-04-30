@@ -32,8 +32,8 @@ spec:
                 - name: XATA_PRODUCT_ANALYTICS_PA_DATAWAREHOUSE_POSTGRES_URL
                   valueFrom:
                     secretKeyRef:
-                      name: product-analytics-datawarehouse-secrets
-                      key: pa-datawarehouse-postgres-url
+                      name: product-analytics-datawarehouse-reader-secrets
+                      key: pa-datawarehouse-reader-postgres-url
               envFrom:
                 - configMapRef:
                     name: otel-config
