@@ -50,7 +50,7 @@ lint-keycloak-turnstile: ## Lint Keycloak Turnstile plugin (Kotlin)
 .PHONY: lint-workflows
 lint-workflows: ## Lint GitHub Actions workflows
 	@command -v actionlint >/dev/null 2>&1 || $(GO) install github.com/rhysd/actionlint/cmd/actionlint@latest
-	@actionlint -ignore 'is potentially untrusted' -ignore '\[credentials\]'
+	@actionlint
 
 .PHONY: fmt
 fmt: tools fmt-openapi fmt-go fmt-buf fmt-opa fmt-json fmt-keycloak-turnstile ## Format source code
