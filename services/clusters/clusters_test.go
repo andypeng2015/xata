@@ -50,6 +50,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 		requestFn          func(r *clustersv1.CreatePostgresClusterRequest)
 		expectedBranchFn   func(b *v1alpha1.Branch)
 		expectedStatusCode codes.Code
+		wantWUR            bool
 	}{
 		{
 			name:             "main branch - with backups and scale to zero",
@@ -177,9 +178,10 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 		},
 		{
-			name: "child branch - xatastor parent uses XVolClone restore",
+			name: "child branch with xatastor parent uses XVolClone restore",
 			parentBranch: parentBranch(
 				withStorageClass("xatastor"),
+				withWakeupPool("test-pool"),
 			),
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.ParentId = new("gmnfj6042d3qd09dcc8a7le0eo")
@@ -194,6 +196,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 					Type: v1alpha1.RestoreTypeXVolClone,
 					Name: "gmnfj6042d3qd09dcc8a7le0eo",
 				}
+				b.Spec.ClusterSpec.Name = nil
 				b.Spec.ClusterSpec.Instances = 1
 				b.Spec.ClusterSpec.Image = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:16.3"
 				b.Spec.ClusterSpec.Storage.Size = "200Gi"
@@ -211,12 +214,15 @@ func TestCreatePostgresCluster(t *testing.T) {
 				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "max_connections", "100")
 				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "shared_buffers", "128MB")
 				b.Spec.ClusterSpec.Postgres.SharedPreloadLibraries = []string{"xatautils", "pg_stat_statements"}
+				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool"}
 			},
+			wantWUR: true,
 		},
 		{
-			name: "child branch - xatastor-slot parent uses XVolClone restore",
+			name: "child branch with xatastor-slot parent uses XVolClone restore",
 			parentBranch: parentBranch(
 				withStorageClass("xatastor-slot"),
+				withWakeupPool("test-pool"),
 			),
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.ParentId = new("gmnfj6042d3qd09dcc8a7le0eo")
@@ -231,6 +237,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 					Type: v1alpha1.RestoreTypeXVolClone,
 					Name: "gmnfj6042d3qd09dcc8a7le0eo",
 				}
+				b.Spec.ClusterSpec.Name = nil
 				b.Spec.ClusterSpec.Instances = 1
 				b.Spec.ClusterSpec.Image = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:16.3"
 				b.Spec.ClusterSpec.Storage.Size = "200Gi"
@@ -248,7 +255,9 @@ func TestCreatePostgresCluster(t *testing.T) {
 				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "max_connections", "100")
 				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "shared_buffers", "128MB")
 				b.Spec.ClusterSpec.Postgres.SharedPreloadLibraries = []string{"xatautils", "pg_stat_statements"}
+				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool"}
 			},
+			wantWUR: true,
 		},
 		{
 			name: "error - child branch with non-existent parent cluster",
@@ -421,6 +430,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 			expectedBranchFn: func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
 				b.Spec.BackupSpec = nil
+				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool-wakeup"}
 			},
 		},
 		{
@@ -489,7 +499,20 @@ func TestCreatePostgresCluster(t *testing.T) {
 
 				require.Equal(t, expectedBranch.Spec, branch.Spec)
 				require.Equal(t, expectedBranch.Labels, branch.Labels)
+				require.Equal(t, expectedBranch.Annotations, branch.Annotations)
 				require.Equal(t, resp.GetId(), branch.Name)
+
+				wur := &v1alpha1.WakeupRequest{}
+				wurErr := k8sClient.Get(ctx, client.ObjectKey{
+					Name:      branch.Name,
+					Namespace: "xata-clusters",
+				}, wur)
+				if tt.wantWUR {
+					require.NoError(t, wurErr)
+					require.Equal(t, branch.Name, wur.Spec.BranchName)
+				} else {
+					require.True(t, errors.IsNotFound(wurErr))
+				}
 			}
 		})
 	}
@@ -1940,6 +1963,15 @@ func withSharedPreloadLibraries(libs []string) parentBranchOption {
 	}
 }
 
+func withWakeupPool(pool string) parentBranchOption {
+	return func(b *v1alpha1.Branch) {
+		if b.Annotations == nil {
+			b.Annotations = map[string]string{}
+		}
+		b.Annotations[v1alpha1.WakeupPoolAnnotation] = pool
+	}
+}
+
 func sourceClusterForPITR() *apiv1.Cluster {
 	return &apiv1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2139,7 +2171,7 @@ func TestCreateWakeupRequest(t *testing.T) {
 			existingObjs := append([]client.Object{branch}, tt.extraObjects...)
 			svc, k8sClient := setupTestClustersService(t, withExistingObjects(existingObjs...))
 
-			err := svc.createWakeupRequest(ctx, branch, req)
+			err := svc.createWakeupRequestFromUpdateClusterRequest(ctx, branch, req)
 			if tt.wantErr {
 				require.Error(t, err)
 				return

@@ -13,13 +13,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// createWakeupRequest creates a WakeupRequest for the branch if the
+// createWakeupRequestFromUpdateClusterRequest creates a WakeupRequest for the branch if the
 // `UpdatePostgresClusterRequest` is waking a branch that uses pool
-// hibernation. If a WakeupRequest already exists for the branch, it checks its
-// status. If the existing WakeupRequest is still in progress, it returns
-// without creating a new one. If the existing WakeupRequest has succeeded or
-// failed, it deletes it and creates a new one.
-func (c *ClustersService) createWakeupRequest(ctx context.Context, branch *v1alpha1.Branch, req *clustersv1.UpdatePostgresClusterRequest) error {
+// hibernation.
+func (c *ClustersService) createWakeupRequestFromUpdateClusterRequest(
+	ctx context.Context,
+	branch *v1alpha1.Branch,
+	req *clustersv1.UpdatePostgresClusterRequest,
+) error {
 	// If the update doesn't modify hibernation status, no WakeupRequest is
 	// needed
 	if req.UpdateConfiguration.Hibernate == nil {
@@ -36,10 +37,33 @@ func (c *ClustersService) createWakeupRequest(ctx context.Context, branch *v1alp
 		return nil
 	}
 
+	// Ensure that a WakeupRequest exists for the branch
+	return c.ensureWakeupRequest(ctx, branch.Name)
+}
+
+// createWakeupRequestForNewBranch creates a WakeupRequest for a newly created
+// branch if it requires one.
+func (c *ClustersService) createWakeupRequestForNewBranch(ctx context.Context, branch *v1alpha1.Branch) error {
+	// If the branch does not use the xvol clone restore type, no WakeupRequest
+	// is needed
+	if !branch.Spec.Restore.IsXVolCloneType() {
+		return nil
+	}
+
+	// Ensure that a WakeupRequest exists for the branch
+	return c.ensureWakeupRequest(ctx, branch.Name)
+}
+
+// ensureWakeupRequest ensures that a WakeupRequest exists for the given
+// branch. If a WakeupRequest already exists for the branch, it checks its
+// status. If the existing WakeupRequest is still in progress, it returns
+// without creating a new one. If the existing WakeupRequest has succeeded or
+// failed, it deletes it and creates a new one.
+func (c *ClustersService) ensureWakeupRequest(ctx context.Context, branchName string) error {
 	// Check for a WakeupRequest for this branch
 	wur := &v1alpha1.WakeupRequest{}
 	err := c.kubeClient.Get(ctx, types.NamespacedName{
-		Name:      branch.Name,
+		Name:      branchName,
 		Namespace: c.config.ClustersNamespace,
 	}, wur)
 	if err != nil && !errors.IsNotFound(err) {
@@ -67,11 +91,11 @@ func (c *ClustersService) createWakeupRequest(ctx context.Context, branch *v1alp
 	// Build the new WakeupRequest for the branch
 	wur = &v1alpha1.WakeupRequest{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      branch.Name,
+			Name:      branchName,
 			Namespace: c.config.ClustersNamespace,
 		},
 		Spec: v1alpha1.WakeupRequestSpec{
-			BranchName: branch.Name,
+			BranchName: branchName,
 		},
 	}
 
@@ -79,6 +103,5 @@ func (c *ClustersService) createWakeupRequest(ctx context.Context, branch *v1alp
 	if err := c.kubeClient.Create(ctx, wur); err != nil {
 		return fmt.Errorf("create wakeup request: %w", err)
 	}
-
 	return nil
 }

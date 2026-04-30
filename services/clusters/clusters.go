@@ -243,10 +243,12 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		WithXataUtilsPreloadLibrary().
 		WithMandatoryPostgresParameters()
 
-	if req.GetUsePool() {
-		// If use_pool is set, we look for a create pool matching the request.
-		// If one is found, a cluster from that pool is selected and used to instantiate the branch.
-
+	// If use_pool is set, we look for a create pool matching the request. If one
+	// is found, a cluster from that pool is selected and used to instantiate the
+	// branch. Child branches do not use clusters from the create pool - their
+	// clusters are created via XVol cloning and then waking up a cluster using a
+	// WakeupRequest.
+	if req.GetUsePool() && parent == nil {
 		if err := c.waitForClusterCache(ctx); err != nil {
 			return nil, fmt.Errorf("wait for cluster cache: %w", err)
 		}
@@ -285,6 +287,11 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 
 	// Create the Branch CR
 	if err := c.kubeClient.Create(ctx, branch); err != nil {
+		return nil, k8sErrorToGRPCError(err)
+	}
+
+	// Create the WakeupRequest CR if the new branch requires one
+	if err := c.createWakeupRequestForNewBranch(ctx, branch); err != nil {
 		return nil, k8sErrorToGRPCError(err)
 	}
 
@@ -328,7 +335,7 @@ func (c *ClustersService) UpdatePostgresCluster(ctx context.Context, req *cluste
 
 	// Create the WakeupRequest if the update requires waking up a pool
 	// hibernated branch
-	if err := c.createWakeupRequest(ctx, branch, req); err != nil {
+	if err := c.createWakeupRequestFromUpdateClusterRequest(ctx, branch, req); err != nil {
 		return nil, k8sErrorToGRPCError(err)
 	}
 

@@ -110,14 +110,26 @@ func (b *BranchBuilder) WithOverridesFromParent(parent *v1alpha1.Branch) *Branch
 	clusterSpec.Postgres = parent.Spec.ClusterSpec.Postgres
 	clusterSpec.SmartShutdownTimeout = parent.Spec.ClusterSpec.SmartShutdownTimeout
 
-	// By default the child inherits the parent's storage class. If the parent
-	// uses an XVol-capable class, set the child to use the configured XVol child
-	// class and upgrade the restore type from VolumeSnapshot to XVolClone
+	// By default the child inherits the parent's storage class.
 	parentSC := parent.Spec.ClusterSpec.Storage.StorageClass
 	clusterSpec.Storage.StorageClass = parentSC
+
+	// If the parent branch uses an XVol-capable storage class:
+	// * Set the child to use the configured XVol child class
+	// * Upgrade the restore type from VolumeSnapshot to XVolClone
+	// * Clear the cluster name from the child Branch
 	if b.isXVolStorageClass(parentSC) {
 		clusterSpec.Storage.StorageClass = &b.xvolChildStorageClass
 		b.branch.Spec.Restore.Type = v1alpha1.RestoreTypeXVolClone
+		b.branch.Spec.ClusterSpec.Name = nil
+	}
+
+	// Child branches should use the same wakeup pool as the parent
+	if parent.HasWakeupPoolAnnotation() {
+		if b.branch.Annotations == nil {
+			b.branch.Annotations = make(map[string]string)
+		}
+		b.branch.Annotations[v1alpha1.WakeupPoolAnnotation] = parent.Annotations[v1alpha1.WakeupPoolAnnotation]
 	}
 
 	// Child branches always start with one instance, regardless of the parent's
