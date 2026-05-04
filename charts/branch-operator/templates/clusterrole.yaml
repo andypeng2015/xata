@@ -7,8 +7,67 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - persistentvolumeclaims
   - persistentvolumes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - xata.io
+  resources:
+  - branches
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - xata.io
+  resources:
+  - branches/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - xata.io
+  resources:
+  - xvols
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: branch-operator
+  namespace: xata
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: branch-operator
+  namespace: xata-clusters
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
   - pods
   verbs:
   - get
@@ -79,25 +138,6 @@ rules:
 - apiGroups:
   - xata.io
   resources:
-  - branches
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - xata.io
-  resources:
-  - branches/status
-  - wakeuprequests/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - xata.io
-  resources:
   - clusterpools
   verbs:
   - get
@@ -115,10 +155,23 @@ rules:
 - apiGroups:
   - xata.io
   resources:
-  - xvols
+  - wakeuprequests/status
   verbs:
-  - create
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: branch-operator
+  namespace: xatastor
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
   - get
   - list
-  - patch
   - watch

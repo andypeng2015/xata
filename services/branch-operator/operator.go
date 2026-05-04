@@ -7,9 +7,17 @@ import (
 	"github.com/go-logr/zerologr"
 	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"xata/internal/envcfg"
 	"xata/internal/o11y"
@@ -19,6 +27,14 @@ import (
 	"xata/services/branch-operator/pkg/reconciler"
 	"xata/services/branch-operator/pkg/wakeup"
 )
+
+var xvolGVK = schema.GroupVersionKind{
+	Group:   "xata.io",
+	Version: "v1alpha1",
+	Kind:    "Xvol",
+}
+
+var clusterPoolGVK = poolv1alpha1.GroupVersion.WithKind(poolv1alpha1.ClusterPoolKind)
 
 // Ensure BranchOperatorService implements Service interface
 var _ service.Service = (*BranchOperatorService)(nil)
@@ -74,8 +90,58 @@ func (s *BranchOperatorService) Init(ctx context.Context) error {
 		return err
 	}
 
+	cacheByObject := map[ctrlclient.Object]cache.ByObject{
+		&corev1.Secret{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&corev1.PersistentVolume{}: {},
+		&corev1.PersistentVolumeClaim{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&corev1.Pod{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace, s.config.CSINodeNamespace),
+		},
+		&corev1.Service{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace, reconciler.XataNamespace),
+		},
+		&networkingv1.NetworkPolicy{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&barmanPluginApi.ObjectStore{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&apiv1.Cluster{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&apiv1.Pooler{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&apiv1.ScheduledBackup{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&snapshotv1.VolumeSnapshot{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&v1alpha1.WakeupRequest{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+	}
+	if hasAPIResource(config, clusterPoolGVK) {
+		cacheByObject[&poolv1alpha1.ClusterPool{}] = cache.ByObject{
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		}
+	}
+	if hasAPIResource(config, xvolGVK) {
+		cacheByObject[newXVolObject()] = cache.ByObject{}
+	}
+
 	// Create the controller manager
-	mgr, err := ctrl.NewManager(config, ctrl.Options{Scheme: scheme})
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme: scheme,
+		Cache: cache.Options{
+			ByObject: cacheByObject,
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -110,6 +176,37 @@ func (s *BranchOperatorService) Init(ctx context.Context) error {
 
 	s.manager = mgr
 	return nil
+}
+
+func cacheNamespaces(namespaces ...string) map[string]cache.Config {
+	configs := make(map[string]cache.Config, len(namespaces))
+	for _, namespace := range namespaces {
+		configs[namespace] = cache.Config{}
+	}
+	return configs
+}
+
+func newXVolObject() *unstructured.Unstructured {
+	xvol := &unstructured.Unstructured{}
+	xvol.SetGroupVersionKind(xvolGVK)
+	return xvol
+}
+
+func hasAPIResource(config *rest.Config, gvk schema.GroupVersionKind) bool {
+	client, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return false
+	}
+	resourceList, err := client.ServerResourcesForGroupVersion(gvk.GroupVersion().String())
+	if err != nil {
+		return false
+	}
+	for _, resource := range resourceList.APIResources {
+		if resource.Kind == gvk.Kind {
+			return true
+		}
+	}
+	return false
 }
 
 // Setup implements service.Service.

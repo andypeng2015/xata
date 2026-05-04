@@ -77,6 +77,13 @@ def create_resources():
         'metastore_reader_password': 'changeme',
     }))
 
+    k8s_yaml(blob("""
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: xatastor
+"""))
+
     # Use OSS kustomize overlay
     k8s_yaml(kustomize('kustomize/overlays/local', flags=KUSTOMIZE_FLAGS))
     secret_settings(disable_scrub=True)

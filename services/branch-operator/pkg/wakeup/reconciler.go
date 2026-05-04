@@ -23,14 +23,15 @@ const (
 	ReconcilerName      = "wakeup-reconciler"
 )
 
-// +kubebuilder:rbac:groups=xata.io,resources=wakeuprequests,verbs=get;list;watch;delete
-// +kubebuilder:rbac:groups=xata.io,resources=wakeuprequests/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=xata.io,resources=branches,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=xata.io,resources=clusterpools,verbs=get;list;watch
+// +kubebuilder:rbac:groups=xata.io,resources=wakeuprequests,verbs=get;list;watch;delete,namespace=xata-clusters
+// +kubebuilder:rbac:groups=xata.io,resources=wakeuprequests/status,verbs=get;update;patch,namespace=xata-clusters
+// +kubebuilder:rbac:groups=xata.io,resources=branches,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=xata.io,resources=clusterpools,verbs=get;list;watch,namespace=xata-clusters
 // +kubebuilder:rbac:groups=xata.io,resources=xvols,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch,namespace=xata-clusters
 // +kubebuilder:rbac:groups="",resources=persistentvolumes,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch,namespace=xata-clusters
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch,namespace=xatastor
 
 // WakeupReconciler reconciles a WakeupRequest object
 type WakeupReconciler struct {

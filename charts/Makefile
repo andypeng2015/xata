@@ -77,8 +77,9 @@ lint-cue:
 	echo "Running cue vet..." >&2; \
 	for chart in $(CHARTS); do \
 		echo "Validating $$chart..." >&2; \
-		helm template $$chart $$chart | $(CUE) vet \
-			-l 'kind' -l 'metadata.name' ../cue/** yaml: - ; \
+		helm template $$chart $$chart \
+			| yq eval '.metadata.namespace = (.metadata.namespace // "_")' - \
+			| $(CUE) vet -l 'kind' -l 'metadata.namespace' -l 'metadata.name' ../cue/** yaml: - ; \
 	done
 
 lint-kube:
