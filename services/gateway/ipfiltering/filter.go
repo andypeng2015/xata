@@ -53,7 +53,7 @@ func NewFilter(ctx context.Context, kubeClient kubernetes.Interface, namespace, 
 		Msg("initializing IP filter, watching ConfigMap via Kubernetes API")
 
 	fieldSelector := fields.OneTermEqualSelector("metadata.name", configMapName).String()
-	lw := &cache.ListWatch{
+	lw := cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
 			return kubeClient.CoreV1().ConfigMaps(namespace).List(ctx, options)
@@ -62,7 +62,7 @@ func NewFilter(ctx context.Context, kubeClient kubernetes.Interface, namespace, 
 			options.FieldSelector = fieldSelector
 			return kubeClient.CoreV1().ConfigMaps(namespace).Watch(ctx, options)
 		},
-	}
+	}, kubeClient)
 
 	_, informer := cache.NewInformerWithOptions(cache.InformerOptions{
 		ListerWatcher: lw,

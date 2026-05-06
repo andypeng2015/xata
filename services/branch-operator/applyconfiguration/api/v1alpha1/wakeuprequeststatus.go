@@ -8,10 +8,15 @@ import (
 
 // WakeupRequestStatusApplyConfiguration represents a declarative configuration of the WakeupRequestStatus type for use
 // with apply.
+//
+// WakeupRequestStatus defines the observed state of a WakeupRequest
 type WakeupRequestStatusApplyConfiguration struct {
-	ObservedGeneration *int64                           `json:"observedGeneration,omitempty"`
-	Conditions         []v1.ConditionApplyConfiguration `json:"conditions,omitempty"`
-	LastError          *string                          `json:"lastError,omitempty"`
+	// ObservedGeneration reflects the generation of the most recently observed spec
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
+	// Conditions represent the latest available observations of the WakeupRequest's state
+	Conditions []v1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	// LastError contains the last error message encountered during reconciliation
+	LastError *string `json:"lastError,omitempty"`
 }
 
 // WakeupRequestStatusApplyConfiguration constructs a declarative configuration of the WakeupRequestStatus type for use with

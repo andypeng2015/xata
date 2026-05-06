@@ -4,8 +4,12 @@ package v1alpha1
 
 // PostgresParameterApplyConfiguration represents a declarative configuration of the PostgresParameter type for use
 // with apply.
+//
+// PostgresParameter defines a PostgreSQL configuration parameter
 type PostgresParameterApplyConfiguration struct {
-	Name  *string `json:"name,omitempty"`
+	// Name is the parameter name
+	Name *string `json:"name,omitempty"`
+	// Value is the parameter value
 	Value *string `json:"value,omitempty"`
 }
 

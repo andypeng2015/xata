@@ -4,7 +4,10 @@ package v1alpha1
 
 // AffinitySpecApplyConfiguration represents a declarative configuration of the AffinitySpec type for use
 // with apply.
+//
+// AffinitySpec defines pod scheduling constraints
 type AffinitySpecApplyConfiguration struct {
+	// NodeSelector specifies node labels that pods must match to be scheduled
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 

@@ -4,11 +4,22 @@ package v1alpha1
 
 // BranchSpecApplyConfiguration represents a declarative configuration of the BranchSpec type for use
 // with apply.
+//
+// BranchSpec defines the desired state of a Branch
 type BranchSpecApplyConfiguration struct {
-	Restore           *RestoreSpecApplyConfiguration       `json:"restore,omitempty"`
-	ClusterSpec       *ClusterSpecApplyConfiguration       `json:"cluster,omitempty"`
-	BackupSpec        *BackupSpecApplyConfiguration        `json:"backup,omitempty"`
-	Pooler            *PoolerSpecApplyConfiguration        `json:"pooler,omitempty"`
+	// Restore specifies how to restore the branch from a backup source.
+	Restore *RestoreSpecApplyConfiguration `json:"restore,omitempty"`
+	// ClusterSpec defines the CNPG cluster configuration for the branch
+	ClusterSpec *ClusterSpecApplyConfiguration `json:"cluster,omitempty"`
+	// BackupSpec configures backups for the branch. When set, an
+	// ObjectStore resource is created to manage backup storage and retention.
+	// When nil, no ObjectStore is created.
+	BackupSpec *BackupSpecApplyConfiguration `json:"backup,omitempty"`
+	// Pooler configures a PgBouncer connection pooler for the branch.
+	// When nil, no pooler is created.
+	Pooler *PoolerSpecApplyConfiguration `json:"pooler,omitempty"`
+	// InheritedMetadata defines metadata to be inherited by all resources
+	// created by the operator
 	InheritedMetadata *InheritedMetadataApplyConfiguration `json:"inheritedMetadata,omitempty"`
 }
 

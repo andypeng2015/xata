@@ -10,6 +10,8 @@ import (
 
 // WakeupRequestApplyConfiguration represents a declarative configuration of the WakeupRequest type for use
 // with apply.
+//
+// WakeupRequest is the Schema for the wakeuprequests API
 type WakeupRequestApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
@@ -27,6 +29,7 @@ func WakeupRequest(name, namespace string) *WakeupRequestApplyConfiguration {
 	b.WithAPIVersion("xata.io/v1alpha1")
 	return b
 }
+
 func (b WakeupRequestApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value

@@ -4,8 +4,14 @@ package v1alpha1
 
 // ScaleToZeroConfigurationApplyConfiguration represents a declarative configuration of the ScaleToZeroConfiguration type for use
 // with apply.
+//
+// ScaleToZeroConfiguration defines scale-to-zero settings
 type ScaleToZeroConfigurationApplyConfiguration struct {
-	Enabled                 *bool  `json:"enabled,omitempty"`
+	// Enabled controls whether scale-to-zero is active.
+	// When false the configuration (e.g. InactivityPeriodMinutes) is preserved
+	// but scale-to-zero is disabled.
+	Enabled *bool `json:"enabled,omitempty"`
+	// InactivityPeriodMinutes is the period of inactivity before scaling to zero
 	InactivityPeriodMinutes *int32 `json:"inactivityPeriodMinutes,omitempty"`
 }
 

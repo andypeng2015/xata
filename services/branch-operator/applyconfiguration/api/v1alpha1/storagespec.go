@@ -4,11 +4,18 @@ package v1alpha1
 
 // StorageSpecApplyConfiguration represents a declarative configuration of the StorageSpec type for use
 // with apply.
+//
+// StorageSpec defines storage configuration for the cluster
 type StorageSpecApplyConfiguration struct {
-	Size                *string `json:"size,omitempty"`
-	StorageClass        *string `json:"storageClass,omitempty"`
+	// Size is the size of the persistent volume for each instance
+	Size *string `json:"size,omitempty"`
+	// StorageClass is the Kubernetes storage class for the cluster PVCs
+	StorageClass *string `json:"storageClass,omitempty"`
+	// VolumeSnapshotClass is the Kubernetes volume snapshot class for snapshots
 	VolumeSnapshotClass *string `json:"volumeSnapshotClass,omitempty"`
-	MountPropagation    *string `json:"mountPropagation,omitempty"`
+	// MountPropagation sets the mount propagation mode for the storage volume.
+	// Valid values are "None", "HostToContainer", and "Bidirectional".
+	MountPropagation *string `json:"mountPropagation,omitempty"`
 }
 
 // StorageSpecApplyConfiguration constructs a declarative configuration of the StorageSpec type for use with

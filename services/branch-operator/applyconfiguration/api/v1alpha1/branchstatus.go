@@ -8,11 +8,19 @@ import (
 
 // BranchStatusApplyConfiguration represents a declarative configuration of the BranchStatus type for use
 // with apply.
+//
+// BranchStatus defines the observed state of a Branch
 type BranchStatusApplyConfiguration struct {
-	ObservedGeneration *int64                           `json:"observedGeneration,omitempty"`
-	Conditions         []v1.ConditionApplyConfiguration `json:"conditions,omitempty"`
-	LastError          *string                          `json:"lastError,omitempty"`
-	PrimaryXVolName    *string                          `json:"primaryXVolName,omitempty"`
+	// ObservedGeneration reflects the generation of the most recently observed Branch spec
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
+	// Conditions represent the latest available observations of the Branch's state
+	Conditions []v1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	// LastError contains the last error message encountered during
+	// reconciliation, if any.
+	LastError *string `json:"lastError,omitempty"`
+	// PrimaryXVolName is the name of the XVol backing the primary instance's
+	// PersistentVolume. Retained after cluster removal.
+	PrimaryXVolName *string `json:"primaryXVolName,omitempty"`
 }
 
 // BranchStatusApplyConfiguration constructs a declarative configuration of the BranchStatus type for use with

@@ -4,9 +4,13 @@ package v1alpha1
 
 // PostgresConfigurationApplyConfiguration represents a declarative configuration of the PostgresConfiguration type for use
 // with apply.
+//
+// PostgresConfiguration defines PostgreSQL-specific settings
 type PostgresConfigurationApplyConfiguration struct {
-	Parameters             []PostgresParameterApplyConfiguration `json:"parameters,omitempty"`
-	SharedPreloadLibraries []string                              `json:"sharedPreloadLibraries,omitempty"`
+	// Parameters are PostgreSQL configuration parameters
+	Parameters []PostgresParameterApplyConfiguration `json:"parameters,omitempty"`
+	// SharedPreloadLibraries are PostgreSQL shared preload libraries
+	SharedPreloadLibraries []string `json:"sharedPreloadLibraries,omitempty"`
 }
 
 // PostgresConfigurationApplyConfiguration constructs a declarative configuration of the PostgresConfiguration type for use with

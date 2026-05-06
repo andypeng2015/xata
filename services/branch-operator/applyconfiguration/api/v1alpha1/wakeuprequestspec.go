@@ -4,7 +4,10 @@ package v1alpha1
 
 // WakeupRequestSpecApplyConfiguration represents a declarative configuration of the WakeupRequestSpec type for use
 // with apply.
+//
+// WakeupRequestSpec defines the desired state of a WakeupRequest
 type WakeupRequestSpecApplyConfiguration struct {
+	// BranchName is the name of the Branch resource to wake up
 	BranchName *string `json:"branchName,omitempty"`
 }
 

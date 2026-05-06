@@ -10,11 +10,20 @@ import (
 
 // RestoreSpecApplyConfiguration represents a declarative configuration of the RestoreSpec type for use
 // with apply.
+//
+// RestoreSpec defines how to restore the branch from a backup source
 type RestoreSpecApplyConfiguration struct {
-	Type       *apiv1alpha1.RestoreType `json:"type,omitempty"`
-	Name       *string                  `json:"name,omitempty"`
-	Timestamp  *v1.Time                 `json:"timestamp,omitempty"`
-	ServerName *string                  `json:"serverName,omitempty"`
+	// Type specifies the type of restore source
+	Type *apiv1alpha1.RestoreType `json:"type,omitempty"`
+	// Name is the name of the restore source (for volume snapshot, object store, base backup or XVol clone)
+	Name *string `json:"name,omitempty"`
+	// Timestamp specifies the point-in-time to restore to.
+	// Only applicable when Type is ObjectStore.
+	Timestamp *v1.Time `json:"timestamp,omitempty"`
+	// ServerName overrides the barman serverName parameter in the external
+	// cluster plugin configuration. Only applicable when Type is ObjectStore.
+	// When empty, defaults to the restore name.
+	ServerName *string `json:"serverName,omitempty"`
 }
 
 // RestoreSpecApplyConfiguration constructs a declarative configuration of the RestoreSpec type for use with

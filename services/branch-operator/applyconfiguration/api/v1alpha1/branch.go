@@ -10,6 +10,8 @@ import (
 
 // BranchApplyConfiguration represents a declarative configuration of the Branch type for use
 // with apply.
+//
+// Branch is the Schema for the branches API
 type BranchApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
@@ -27,6 +29,7 @@ func Branch(name, namespace string) *BranchApplyConfiguration {
 	b.WithAPIVersion("xata.io/v1alpha1")
 	return b
 }
+
 func (b BranchApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value

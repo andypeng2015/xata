@@ -4,7 +4,11 @@ package v1alpha1
 
 // InheritedMetadataApplyConfiguration represents a declarative configuration of the InheritedMetadata type for use
 // with apply.
+//
+// InheritedMetadata defines metadata to be inherited by all resources created
+// by the operator
 type InheritedMetadataApplyConfiguration struct {
+	// Labels are additional labels to apply to resources created by the operator
 	Labels map[string]string `json:"labels,omitempty"`
 }
 

@@ -8,11 +8,19 @@ import (
 
 // PoolerSpecApplyConfiguration represents a declarative configuration of the PoolerSpec type for use
 // with apply.
+//
+// PoolerSpec configures a PgBouncer connection pooler for the branch.
 type PoolerSpecApplyConfiguration struct {
-	Instances       *int32                `json:"instances,omitempty"`
-	Mode            *apiv1alpha1.PoolMode `json:"mode,omitempty"`
-	MaxClientConn   *string               `json:"maxClientConn,omitempty"`
-	DefaultPoolSize *string               `json:"defaultPoolSize,omitempty"`
+	// Instances is the number of PgBouncer instances
+	Instances *int32 `json:"instances,omitempty"`
+	// Mode is the PgBouncer pool mode
+	Mode *apiv1alpha1.PoolMode `json:"mode,omitempty"`
+	// MaxClientConn is the maximum number of client connections to PgBouncer
+	MaxClientConn *string `json:"maxClientConn,omitempty"`
+	// DefaultPoolSize overrides the PgBouncer default_pool_size parameter.
+	// When empty, default_pool_size is derived as floor(0.9 * max_connections)
+	// from the branch's Postgres configuration.
+	DefaultPoolSize *string `json:"defaultPoolSize,omitempty"`
 }
 
 // PoolerSpecApplyConfiguration constructs a declarative configuration of the PoolerSpec type for use with

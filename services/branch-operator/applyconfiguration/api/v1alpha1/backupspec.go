@@ -8,11 +8,19 @@ import (
 
 // BackupSpecApplyConfiguration represents a declarative configuration of the BackupSpec type for use
 // with apply.
+//
+// BackupSpec defines backup settings for a Branch
 type BackupSpecApplyConfiguration struct {
-	Retention       *string                                `json:"retention,omitempty"`
-	WALArchiving    *apiv1alpha1.WALArchivingMode          `json:"walArchiving,omitempty"`
+	// Retention specifies how long to retain backups
+	// Examples: "60d", "4w", "2m"
+	Retention *string `json:"retention,omitempty"`
+	// WALArchiving specifies whether WAL archiving is enabled
+	WALArchiving *apiv1alpha1.WALArchivingMode `json:"walArchiving,omitempty"`
+	// ScheduledBackup configures periodic base backups.
 	ScheduledBackup *ScheduledBackupSpecApplyConfiguration `json:"scheduledBackup,omitempty"`
-	ServerName      *string                                `json:"serverName,omitempty"`
+	// ServerName overrides the barman serverName plugin parameter.
+	// When empty, serverName defaults to the branch name.
+	ServerName *string `json:"serverName,omitempty"`
 }
 
 // BackupSpecApplyConfiguration constructs a declarative configuration of the BackupSpec type for use with

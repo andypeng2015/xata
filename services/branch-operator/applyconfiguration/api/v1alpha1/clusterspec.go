@@ -10,17 +10,32 @@ import (
 
 // ClusterSpecApplyConfiguration represents a declarative configuration of the ClusterSpec type for use
 // with apply.
+//
+// ClusterSpec defines the PostgreSQL cluster configuration
 type ClusterSpecApplyConfiguration struct {
-	Name                 *string                                     `json:"name,omitempty"`
-	Image                *string                                     `json:"image,omitempty"`
-	Instances            *int32                                      `json:"instances,omitempty"`
-	Resources            *v1.ResourceRequirements                    `json:"resources,omitempty"`
-	Storage              *StorageSpecApplyConfiguration              `json:"storage,omitempty"`
-	Postgres             *PostgresConfigurationApplyConfiguration    `json:"postgres,omitempty"`
-	ScaleToZero          *ScaleToZeroConfigurationApplyConfiguration `json:"scaleToZero,omitempty"`
-	Hibernation          *apiv1alpha1.HibernationMode                `json:"hibernation,omitempty"`
-	Affinity             *AffinitySpecApplyConfiguration             `json:"affinity,omitempty"`
-	SmartShutdownTimeout *int32                                      `json:"smartShutdownTimeout,omitempty"`
+	// Name is the name of the CNPG Cluster resource.
+	// If nil, the branch has no cluster associated with it.
+	Name *string `json:"name,omitempty"`
+	// Image is the PostgreSQL container image to use
+	Image *string `json:"image,omitempty"`
+	// Instances is the number of PostgreSQL instances in the cluster
+	Instances *int32 `json:"instances,omitempty"`
+	// Resources defines the compute resources for the PostgreSQL instances
+	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
+	// Storage defines the persistent volume configuration for each instance
+	Storage *StorageSpecApplyConfiguration `json:"storage,omitempty"`
+	// Postgres defines PostgreSQL-specific configuration
+	Postgres *PostgresConfigurationApplyConfiguration `json:"postgres,omitempty"`
+	// ScaleToZero defines scale-to-zero configuration for the cluster
+	ScaleToZero *ScaleToZeroConfigurationApplyConfiguration `json:"scaleToZero,omitempty"`
+	// Hibernation specifies whether the cluster should be hibernated
+	Hibernation *apiv1alpha1.HibernationMode `json:"hibernation,omitempty"`
+	// Affinity defines scheduling constraints for the cluster pods
+	Affinity *AffinitySpecApplyConfiguration `json:"affinity,omitempty"`
+	// SmartShutdownTimeout is the time in seconds reserved for the smart
+	// shutdown of Postgres to complete. If not set, the CNPG default (180s)
+	// is used.
+	SmartShutdownTimeout *int32 `json:"smartShutdownTimeout,omitempty"`
 }
 
 // ClusterSpecApplyConfiguration constructs a declarative configuration of the ClusterSpec type for use with

@@ -4,7 +4,12 @@ package v1alpha1
 
 // ScheduledBackupSpecApplyConfiguration represents a declarative configuration of the ScheduledBackupSpec type for use
 // with apply.
+//
+// ScheduledBackupSpec configures periodic base backups
 type ScheduledBackupSpecApplyConfiguration struct {
+	// Schedule in CNPG 6-field cron format.
+	// The format is : "second minute hour day month dayofweek"
+	// Examples: "0 0 0 * * *" (daily at midnight), "0 0 2 * * 0" (weekly on Sunday at 2am)
 	Schedule *string `json:"schedule,omitempty"`
 }
 
