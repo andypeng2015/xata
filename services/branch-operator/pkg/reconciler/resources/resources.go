@@ -12,11 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-const (
-	PoolerMetricsPort     int32  = 9127
-	PoolerMetricsPortName string = "metrics-pooler"
-)
-
 // NetworkPolicySpec defines the NetworkPolicySpec for the given cluster name.
 // It allows ingress and egress traffic only between pods within the same
 // cluster.
@@ -283,13 +278,6 @@ func PoolerSpec(clusterName string, instances int32, hibernated bool, poolMode a
 		Containers: []v1.Container{
 			{
 				Name: "pgbouncer",
-				Ports: []v1.ContainerPort{
-					{
-						Name:          PoolerMetricsPortName,
-						ContainerPort: PoolerMetricsPort,
-						Protocol:      v1.ProtocolTCP,
-					},
-				},
 				Resources: v1.ResourceRequirements{
 					Requests: v1.ResourceList{
 						v1.ResourceCPU:    resource.MustParse("200m"),

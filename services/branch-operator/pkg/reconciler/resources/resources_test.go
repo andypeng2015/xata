@@ -539,13 +539,6 @@ func TestPoolerSpec(t *testing.T) {
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",
-								Ports: []v1.ContainerPort{
-									{
-										Name:          resources.PoolerMetricsPortName,
-										ContainerPort: resources.PoolerMetricsPort,
-										Protocol:      v1.ProtocolTCP,
-									},
-								},
 								Resources: v1.ResourceRequirements{
 									Requests: v1.ResourceList{
 										v1.ResourceCPU:    resource.MustParse("200m"),
@@ -594,13 +587,6 @@ func TestPoolerSpec(t *testing.T) {
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",
-								Ports: []v1.ContainerPort{
-									{
-										Name:          resources.PoolerMetricsPortName,
-										ContainerPort: resources.PoolerMetricsPort,
-										Protocol:      v1.ProtocolTCP,
-									},
-								},
 								Resources: v1.ResourceRequirements{
 									Requests: v1.ResourceList{
 										v1.ResourceCPU:    resource.MustParse("200m"),
@@ -659,13 +645,6 @@ func TestPoolerSpec(t *testing.T) {
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",
-								Ports: []v1.ContainerPort{
-									{
-										Name:          resources.PoolerMetricsPortName,
-										ContainerPort: resources.PoolerMetricsPort,
-										Protocol:      v1.ProtocolTCP,
-									},
-								},
 								Resources: v1.ResourceRequirements{
 									Requests: v1.ResourceList{
 										v1.ResourceCPU:    resource.MustParse("200m"),
@@ -719,13 +698,6 @@ func TestPoolerSpec(t *testing.T) {
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",
-								Ports: []v1.ContainerPort{
-									{
-										Name:          resources.PoolerMetricsPortName,
-										ContainerPort: resources.PoolerMetricsPort,
-										Protocol:      v1.ProtocolTCP,
-									},
-								},
 								Resources: v1.ResourceRequirements{
 									Requests: v1.ResourceList{
 										v1.ResourceCPU:    resource.MustParse("200m"),
@@ -796,13 +768,6 @@ func TestPoolerSpec(t *testing.T) {
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",
-								Ports: []v1.ContainerPort{
-									{
-										Name:          resources.PoolerMetricsPortName,
-										ContainerPort: resources.PoolerMetricsPort,
-										Protocol:      v1.ProtocolTCP,
-									},
-								},
 								Resources: v1.ResourceRequirements{
 									Requests: v1.ResourceList{
 										v1.ResourceCPU:    resource.MustParse("200m"),
@@ -853,13 +818,6 @@ func TestPoolerSpec(t *testing.T) {
 						Containers: []v1.Container{
 							{
 								Name: "pgbouncer",
-								Ports: []v1.ContainerPort{
-									{
-										Name:          resources.PoolerMetricsPortName,
-										ContainerPort: resources.PoolerMetricsPort,
-										Protocol:      v1.ProtocolTCP,
-									},
-								},
 								Resources: v1.ResourceRequirements{
 									Requests: v1.ResourceList{
 										v1.ResourceCPU:    resource.MustParse("200m"),
