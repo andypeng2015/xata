@@ -18,7 +18,7 @@ const (
 	maxStartupPacketLen = 10000
 
 	// authTimeout bounds the entire authentication phase via pgconn.
-	authTimeout = 15 * time.Second
+	authTimeout = 60 * time.Second
 )
 
 // parseStartupPipeline splits coalesced WebSocket data into the startup message

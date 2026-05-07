@@ -12,6 +12,7 @@ import (
 	"xata/services/gateway/session"
 
 	"github.com/coder/websocket"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
@@ -119,8 +120,18 @@ func (h *handler) Websocket(c echo.Context) error {
 		if err != nil {
 			logger.Error().Err(err).Msg("relay auth")
 			span.RecordError(err)
-			if errors.Is(err, session.ErrBranchHibernated) {
+			// PgErrors are already forwarded inside pipelineAuth. For everything
+			// else, surface a FATAL wire error so the client sees a reason
+			// instead of an opaque "Connection terminated".
+			var pgErr *pgconn.PgError
+			switch {
+			case errors.As(err, &pgErr):
+			case errors.Is(err, session.ErrBranchHibernated):
 				sendPgWireError(wsConn, "branch is hibernated, reactivate it to continue")
+			case errors.Is(err, context.DeadlineExceeded):
+				sendPgWireError(wsConn, "branch is reactivating, please retry")
+			default:
+				sendPgWireError(wsConn, "authentication failed")
 			}
 			return nil
 		}
