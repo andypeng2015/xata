@@ -14,7 +14,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"xata/internal/o11y/version"
 )
@@ -90,12 +92,7 @@ func GRPCLoggingUnaryClientInterceptor(logger *zerolog.Logger) grpc.UnaryClientI
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		endTime := time.Now()
 
-		var evt *zerolog.Event
-		if err != nil {
-			evt = logger.Err(err)
-		} else {
-			evt = logger.Debug()
-		}
+		evt := grpcLogEvent(logger, err, logger.Debug)
 		if !evt.Enabled() {
 			return err
 		}
@@ -119,12 +116,7 @@ func GRPCLoggingStreamClientInterceptor(logger *zerolog.Logger) grpc.StreamClien
 		stream, err := streamer(ctx, desc, cc, method, opts...)
 		endTime := time.Now()
 
-		var evt *zerolog.Event
-		if err != nil {
-			evt = logger.Err(err)
-		} else {
-			evt = logger.Debug()
-		}
+		evt := grpcLogEvent(logger, err, logger.Debug)
 		if evt.Enabled() {
 			evt.
 				Dur("duration", endTime.Sub(startTime)).
@@ -171,12 +163,7 @@ func GRPCLoggingUnaryServerInterceptor(logger *zerolog.Logger, o *O) grpc.UnaryS
 
 		stop := time.Now()
 
-		var evt *zerolog.Event
-		if err != nil {
-			evt = reqLogger.Err(err)
-		} else {
-			evt = reqLogger.Info()
-		}
+		evt := grpcLogEvent(&reqLogger, err, reqLogger.Info)
 
 		if evt.Enabled() {
 			evt.Str("grpc.service", service).
@@ -199,12 +186,7 @@ func GRPCLoggingStreamServerInterceptor(logger *zerolog.Logger) grpc.StreamServe
 
 		stop := time.Now()
 
-		var evt *zerolog.Event
-		if err != nil {
-			evt = logger.Err(err)
-		} else {
-			evt = logger.Info()
-		}
+		evt := grpcLogEvent(logger, err, logger.Info)
 
 		if evt.Enabled() {
 			evt.Str("grpc.service", service).
@@ -221,4 +203,18 @@ func callFields(fullMethodString string) (string, string) {
 	method := path.Base(fullMethodString)
 
 	return service, method
+}
+
+func grpcLogEvent(logger *zerolog.Logger, err error, successEvent func() *zerolog.Event) *zerolog.Event {
+	if err == nil {
+		return successEvent()
+	}
+	return logger.WithLevel(grpcLogLevel(err)).Err(err)
+}
+
+func grpcLogLevel(err error) zerolog.Level {
+	if status.Code(err) == codes.NotFound {
+		return zerolog.WarnLevel
+	}
+	return zerolog.ErrorLevel
 }

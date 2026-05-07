@@ -1076,7 +1076,14 @@ func (s *handler) DescribeBranch(c echo.Context, organizationID spec.Organizatio
 		cluster.Configuration.PreloadLibraries = postgrescfg.FilterOutInternalPreloadLibraries(cluster.Configuration.PreloadLibraries)
 
 		// get the connection string, ignore errors as we may not have a connection string yet
-		connString, _ := s.getConnectionString(c, organizationID, branch)
+		connString, err := s.getConnectionString(c, organizationID, branch)
+		if st, ok := status.FromError(err); ok && st.Code() == codes.NotFound {
+			log.Ctx(c.Request().Context()).
+				Err(err).
+				Str("branchID", branch.ID).
+				Str("grpc.message", st.Message()).
+				Msg("connection string not found")
+		}
 
 		// get instance type from resources
 		instanceType, err := s.getInstanceTypeByResources(c.Request().Context(), organizationID, branch.Region, cluster.Configuration.VcpuRequest, cluster.Configuration.VcpuLimit, cluster.Configuration.Memory)
@@ -1538,7 +1545,14 @@ func (s *handler) UpdateBranch(c echo.Context, organizationID spec.OrganizationI
 
 		// get the connection string
 		// swallow the error, the resource got created and the connection string will be eventually available
-		connString, _ := s.getConnectionString(c, organizationID, branch)
+		connString, err := s.getConnectionString(c, organizationID, branch)
+		if st, ok := status.FromError(err); ok && st.Code() == codes.NotFound {
+			log.Ctx(c.Request().Context()).
+				Err(err).
+				Str("branchID", branch.ID).
+				Str("grpc.message", st.Message()).
+				Msg("connection string not found")
+		}
 		return c.JSON(http.StatusOK, storeToAPIBranchShortMetadata(branch, connString))
 	})
 }
