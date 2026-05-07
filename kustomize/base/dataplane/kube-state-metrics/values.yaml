@@ -15,7 +15,7 @@ metricAllowlist:
   - kube_customresource_xata_branch_instances
   - kube_customresource_clusters_creation_time
   - kube_customresource_xata_wakeuprequests_info
-  - kube_customresource_xata_branch_ready
+  - kube_customresource_xata_branch_info
   - kube_job_failed
 
 # Scrape annotations to get them into SigNoz
@@ -92,15 +92,14 @@ customResourceState:
             kind: Branch
             version: v1alpha1
           metrics:
-            - name: xata_branch_ready
-              help: "The Branch's Ready condition (one series per True/False/Unknown, value 1 for the current state)"
+            - name: xata_branch_info
+              help: "Information about a Branch, including its Ready condition status"
               labelsFromPath:
                 name: ["metadata", "name"]
                 organizationID: ["metadata", "labels", "xata.io/organizationID"]
                 projectID: ["metadata", "labels", "xata.io/projectID"]
               each:
-                type: StateSet
-                stateSet:
-                  labelName: status
-                  path: ["status", "conditions", "[type=Ready]", "status"]
-                  list: ["True", "False", "Unknown"]
+                type: Info
+                info:
+                  labelsFromPath:
+                    ready: ["status", "conditions", "[type=Ready]", "status"]
