@@ -11,7 +11,7 @@ const (
 	WakeupSucceededReason = "WakeupSucceeded"
 
 	// Reason strings for the `Succeeded` False condition (terminal errors)
-	SlotIDNotAvailableReason = "SlotIDNotAvailable"
+	PVNotAvailableReason     = "PVNotAvailable"
 	CSINodePodNotFoundReason = "CSINodePodNotFound"
 	PoolNotFoundReason       = "WakeupPoolNotFound"
 	NoPoolAnnotationReason   = "WakeupPoolAnnotationMissing"
@@ -38,7 +38,7 @@ var WakeupConditionMessages = map[string]string{
 	PoolNotFoundReason:                 "The specified wakeup pool was not found",
 	PoolExhaustedReason:                "The wakeup pool has no healthy clusters",
 	WakeupInProgressReason:             "Wakeup is in progress",
-	SlotIDNotAvailableReason:           "The slot ID could not be determined from the cluster PV",
+	PVNotAvailableReason:               "The cluster's primary PV could not be resolved",
 	CSINodePodNotFoundReason:           "No CSI node plugin pod found on the primary pod's node",
 	XVolNotReadyReason:                 "The XVol status indicates it is not ready for wakeup",
 	XVolNotFoundReason:                 "The XVol referenced by the branch was not found",

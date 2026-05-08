@@ -164,13 +164,6 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, ignoreTerminal(err)
 	}
 
-	// Get the slot ID from the Cluster's primary PV
-	slotID, err := getSlotID(pv)
-	if err != nil {
-		log.Error(err, "getting slot ID for cluster", "clusterName", cluster.Name)
-		return ctrl.Result{}, ignoreTerminal(err)
-	}
-
 	// Find the CSI node plugin pod on the same node as the primary
 	csiNodePod, err := r.getCSINodePod(ctx, cluster)
 	if err != nil {
@@ -179,7 +172,7 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Call the WakeUp RPC on the CSI node pod
-	err = r.wakeUp(ctx, csiNodePod, slotID, xvolName, pv.Name)
+	err = r.wakeUp(ctx, csiNodePod, xvolName, pv.Name)
 	if err != nil {
 		log.Error(err, "calling WakeUp RPC", "clusterName", cluster.Name)
 		return ctrl.Result{}, ignoreTerminal(err)

@@ -15,7 +15,11 @@ service SlotController {
 }
 
 message WakeUpRequest {
-  string slot_id = 1;
+  // slot_id used to identify the slot directory; the server now derives it
+  // from pv_id.
+  reserved 1;
+  reserved "slot_id";
+
   string xvol_id = 2;
   string pv_id = 3;
 }

@@ -14,7 +14,7 @@ import (
 // wakeUp dials the SlotController gRPC service on the given CSI node pod and
 // calls the WakeUp RPC to connect the NVMe volume and mount it on the slot
 // path.
-func (r *WakeupReconciler) wakeUp(ctx context.Context, csiNodePod *v1.Pod, slotID, xvolName, pvName string) error {
+func (r *WakeupReconciler) wakeUp(ctx context.Context, csiNodePod *v1.Pod, xvolName, pvName string) error {
 	// Build the address of the SlotController service on the CSI node pod
 	addr := fmt.Sprintf("%s:%d", csiNodePod.Status.PodIP, r.CSINodePort)
 
@@ -28,7 +28,6 @@ func (r *WakeupReconciler) wakeUp(ctx context.Context, csiNodePod *v1.Pod, slotI
 	// Call the WakeUp RPC
 	client := slotv1.NewSlotControllerClient(conn)
 	_, err = client.WakeUp(ctx, &slotv1.WakeUpRequest{
-		SlotId: slotID,
 		XvolId: xvolName,
 		PvId:   pvName,
 	})

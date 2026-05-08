@@ -23,7 +23,6 @@ const (
 
 type WakeUpRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	SlotId        string                 `protobuf:"bytes,1,opt,name=slot_id,json=slotId,proto3" json:"slot_id,omitempty"`
 	XvolId        string                 `protobuf:"bytes,2,opt,name=xvol_id,json=xvolId,proto3" json:"xvol_id,omitempty"`
 	PvId          string                 `protobuf:"bytes,3,opt,name=pv_id,json=pvId,proto3" json:"pv_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -58,13 +57,6 @@ func (x *WakeUpRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use WakeUpRequest.ProtoReflect.Descriptor instead.
 func (*WakeUpRequest) Descriptor() ([]byte, []int) {
 	return file_slots_v1_slot_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *WakeUpRequest) GetSlotId() string {
-	if x != nil {
-		return x.SlotId
-	}
-	return ""
 }
 
 func (x *WakeUpRequest) GetXvolId() string {
@@ -121,11 +113,10 @@ var File_slots_v1_slot_proto protoreflect.FileDescriptor
 
 const file_slots_v1_slot_proto_rawDesc = "" +
 	"\n" +
-	"\x13slots/v1/slot.proto\x12\fxata.slot.v1\"V\n" +
+	"\x13slots/v1/slot.proto\x12\fxata.slot.v1\"L\n" +
 	"\rWakeUpRequest\x12\x17\n" +
-	"\aslot_id\x18\x01 \x01(\tR\x06slotId\x12\x17\n" +
 	"\axvol_id\x18\x02 \x01(\tR\x06xvolId\x12\x13\n" +
-	"\x05pv_id\x18\x03 \x01(\tR\x04pvId\"\x10\n" +
+	"\x05pv_id\x18\x03 \x01(\tR\x04pvIdJ\x04\b\x01\x10\x02R\aslot_id\"\x10\n" +
 	"\x0eWakeUpResponse2U\n" +
 	"\x0eSlotController\x12C\n" +
 	"\x06WakeUp\x12\x1b.xata.slot.v1.WakeUpRequest\x1a\x1c.xata.slot.v1.WakeUpResponseB\x97\x01\n" +

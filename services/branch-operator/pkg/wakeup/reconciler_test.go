@@ -373,7 +373,7 @@ func TestWakeupReconciler(t *testing.T) {
 		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionUnknown, v1alpha1.BranchHasNoXVolReason)
 	})
 
-	t.Run("sets SlotIDNotAvailable when cluster has no TargetPrimary", func(t *testing.T) {
+	t.Run("sets PVNotAvailable when cluster has no TargetPrimary", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
@@ -422,102 +422,8 @@ func TestWakeupReconciler(t *testing.T) {
 		wr, err := createWakeupRequest(ctx, wrName, branch.Name)
 		require.NoError(t, err)
 
-		// Expect SlotIDNotAvailable because the Cluster has no TargetPrimary
-		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionFalse, v1alpha1.SlotIDNotAvailableReason)
-	})
-
-	t.Run("sets SlotIDNotAvailable when PV has no CSI source", func(t *testing.T) {
-		t.Parallel()
-		ctx := context.Background()
-
-		poolName := "pool-" + randomString(10)
-		clusterName := "cluster-" + randomString(10)
-		branchName := "branch-" + randomString(10)
-		wrName := "wur-" + randomString(10)
-
-		// Create a ClusterPool
-		pool := &poolv1alpha1.ClusterPool{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      poolName,
-				Namespace: TestNamespace,
-			},
-			Spec: poolv1alpha1.ClusterPoolSpec{
-				Clusters: 1,
-				ClusterSpec: apiv1.ClusterSpec{
-					Instances: 1,
-				},
-			},
-		}
-		require.NoError(t, k8sClient.Create(ctx, pool))
-
-		// Create a healthy Cluster owned by the pool
-		cluster := &apiv1.Cluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterName,
-				Namespace: TestNamespace,
-			},
-			Spec: apiv1.ClusterSpec{Instances: 1},
-		}
-		require.NoError(t, controllerutil.SetControllerReference(pool, cluster, testScheme))
-		require.NoError(t, k8sClient.Create(ctx, cluster))
-
-		// Set TargetPrimary to PVC name
-		pvcName := clusterName + "-1"
-		pvName := clusterName + "-pv"
-		cluster.Status.Phase = apiv1.PhaseHealthy
-		cluster.Status.TargetPrimary = pvcName
-		cluster.Status.ReadyInstances = 1
-		require.NoError(t, k8sClient.Status().Update(ctx, cluster))
-
-		// Create a PV with a HostPath source instead of CSI
-		pv := &corev1.PersistentVolume{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: pvName,
-			},
-			Spec: corev1.PersistentVolumeSpec{
-				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-				Capacity: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("1Gi"),
-				},
-				PersistentVolumeSource: corev1.PersistentVolumeSource{
-					HostPath: &corev1.HostPathVolumeSource{
-						Path: "/tmp/test",
-					},
-				},
-			},
-		}
-		require.NoError(t, k8sClient.Create(ctx, pv))
-
-		// Create a PVC bound to the non-CSI PV
-		pvc := &corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      pvcName,
-				Namespace: TestNamespace,
-			},
-			Spec: corev1.PersistentVolumeClaimSpec{
-				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-				Resources: corev1.VolumeResourceRequirements{
-					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse("1Gi"),
-					},
-				},
-				VolumeName: pvName,
-			},
-		}
-		require.NoError(t, k8sClient.Create(ctx, pvc))
-
-		// Create a Branch with pool annotation
-		branch, err := createBranch(ctx, branchName, map[string]string{
-			v1alpha1.WakeupPoolAnnotation: poolName,
-		})
-		require.NoError(t, err)
-
-		// Create a WakeupRequest
-		wr, err := createWakeupRequest(ctx, wrName, branch.Name)
-		require.NoError(t, err)
-
-		// Expect SlotIDNotAvailable because the PV has no CSI volume source
-		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionFalse, v1alpha1.SlotIDNotAvailableReason)
+		// Expect PVNotAvailable because the Cluster has no TargetPrimary
+		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionFalse, v1alpha1.PVNotAvailableReason)
 	})
 
 	t.Run("sets XVolNotReady when the XVol is in Pending state", func(t *testing.T) {
