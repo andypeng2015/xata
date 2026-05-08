@@ -190,6 +190,7 @@ type ActivationSummaryMetrics struct {
 	CiBranches7day             int
 	CostMetrics                map[string]CostSummaryMetric
 	PaidInvoiceCount           int
+	HasPaymentMethod           bool
 	HasPaymentMethodAddedEvent bool
 }
 
@@ -208,6 +209,7 @@ func NewActivationSummaryEvent(organizationID string, metrics ActivationSummaryM
 		"cliBranches7day":            metrics.CliBranches7day,
 		"ciBranches7day":             metrics.CiBranches7day,
 		"paidInvoiceCount":           metrics.PaidInvoiceCount,
+		"hasPaymentMethod":           metrics.HasPaymentMethod,
 		"hasPaymentMethodAddedEvent": metrics.HasPaymentMethodAddedEvent,
 	}
 	addCostSummaryProperties(properties, metrics.CostMetrics)
