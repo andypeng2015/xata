@@ -69,6 +69,9 @@ message CreatePostgresClusterRequest {
   }
   // whether to try to adopt a cluster from a matching pool
   optional bool use_pool = 10;
+  // whether to use the xatastor StorageClass for the root cluster (no-op if
+  // xatastor is not enabled in the cell)
+  optional bool use_xatastor = 11;
 }
 
 // CreatePostgresClusterResponse is the response object for CreatePostgresCluster

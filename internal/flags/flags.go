@@ -40,6 +40,10 @@ var (
 		Name:           "useClusterPool",
 		DefaultEnabled: false,
 	}
+	UseXatastor = openfeature.FeatureFlag{
+		Name:           "useXatastor",
+		DefaultEnabled: false,
+	}
 	BranchLogs = openfeature.FeatureFlag{
 		Name:           "branchLogs",
 		DefaultEnabled: false,

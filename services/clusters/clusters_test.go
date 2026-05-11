@@ -47,6 +47,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 		sourceCluster      *apiv1.Cluster
 		objectStore        *barmanPluginApi.ObjectStore
 		extraObjects       []client.Object
+		xatastorEnabled    bool
 		requestFn          func(r *clustersv1.CreatePostgresClusterRequest)
 		expectedBranchFn   func(b *v1alpha1.Branch)
 		expectedStatusCode codes.Code
@@ -452,6 +453,99 @@ func TestCreatePostgresCluster(t *testing.T) {
 				r.UsePool = new(false)
 			},
 		},
+		{
+			name:            "use_xatastor with cell enabled - root cluster uses xatastor",
+			xatastorEnabled: true,
+			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
+				r.UseXatastor = new(true)
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor")
+			},
+		},
+		{
+			name:            "use_xatastor with cell disabled - silent fallback to default",
+			xatastorEnabled: false,
+			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
+				r.UseXatastor = new(true)
+			},
+		},
+		{
+			name:            "use_xatastor with use_pool - adopts matching xatastor pool cluster",
+			xatastorEnabled: true,
+			extraObjects: []client.Object{
+				poolForTest("xatastor", testImage, "2", "3996Mi"),
+				poolClusterForTest(),
+			},
+			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
+				r.UseXatastor = new(true)
+				r.UsePool = new(true)
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor")
+				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
+				b.Spec.BackupSpec = nil
+				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool-wakeup"}
+			},
+		},
+		{
+			name:            "use_xatastor with use_pool - no xatastor pool, falls back to normal xatastor creation",
+			xatastorEnabled: true,
+			extraObjects: []client.Object{
+				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
+				poolClusterForTest(),
+			},
+			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
+				r.UseXatastor = new(true)
+				r.UsePool = new(true)
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor")
+			},
+		},
+		{
+			name: "use_xatastor with child branch - inherits parent storage class",
+			parentBranch: parentBranch(
+				withStorageClass("some-other-storage-class"),
+				withVolumeSnapshotClass("some-other-snapshot-class"),
+				withBackupDisabled(),
+			),
+			xatastorEnabled: true,
+			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
+				r.ParentId = new("gmnfj6042d3qd09dcc8a7le0eo")
+				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ClusterSnapshot{
+					ClusterSnapshot: &clustersv1.ClusterSnapshot{
+						ClusterId: "gmnfj6042d3qd09dcc8a7le0eo",
+					},
+				}
+				r.UseXatastor = new(true)
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.Restore = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeVolumeSnapshot,
+					Name: "gmnfj6042d3qd09dcc8a7le0eo",
+				}
+				b.Spec.ClusterSpec.Instances = 1
+				b.Spec.ClusterSpec.Image = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:16.3"
+				b.Spec.ClusterSpec.Storage.Size = "200Gi"
+				b.Spec.ClusterSpec.Storage.StorageClass = new("some-other-storage-class")
+				b.Spec.ClusterSpec.Storage.VolumeSnapshotClass = new("some-other-snapshot-class")
+				b.Spec.ClusterSpec.Resources = corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
+					},
+				}
+				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "max_connections", "100")
+				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "shared_buffers", "128MB")
+				b.Spec.ClusterSpec.Postgres.SharedPreloadLibraries = []string{"xatautils", "pg_stat_statements"}
+				b.Spec.BackupSpec = nil
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -471,7 +565,8 @@ func TestCreatePostgresCluster(t *testing.T) {
 			existingObjs = append(existingObjs, tt.extraObjects...)
 			svc, k8sClient := setupTestClustersService(t,
 				withExistingObjects(existingObjs...),
-				withNodeSelector(tt.nodeSelector))
+				withNodeSelector(tt.nodeSelector),
+				withXatastorEnabled(tt.xatastorEnabled))
 
 			req, expectedBranch, _, _, _ := exampleRequestsAndBranches()
 			if tt.requestFn != nil {
@@ -1541,6 +1636,7 @@ type testServiceConfig struct {
 	nodeSelector     map[string]string
 	cnpgConnector    *cnpgmocks.Connector
 	openebsConnector *openebsmocks.Connector
+	xatastorEnabled  bool
 }
 
 type testServiceOption func(*testServiceConfig)
@@ -1566,6 +1662,12 @@ func withCNPGConnector(m *cnpgmocks.Connector) testServiceOption {
 func withOpenEBSConnector(m *openebsmocks.Connector) testServiceOption {
 	return func(c *testServiceConfig) {
 		c.openebsConnector = m
+	}
+}
+
+func withXatastorEnabled(enabled bool) testServiceOption {
+	return func(c *testServiceConfig) {
+		c.xatastorEnabled = enabled
 	}
 }
 
@@ -1609,6 +1711,7 @@ func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*Cluster
 			ClustersVolumeSnapshotClass: "default-snapshot-class",
 			ClustersNodeSelector:        cfg.nodeSelector,
 			XVolChildStorageClass:       "xatastor-slot",
+			XatastorEnabled:             cfg.xatastorEnabled,
 		},
 		kubeClient:       fakeClient,
 		clusterReader:    fakeClient,

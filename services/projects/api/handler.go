@@ -691,6 +691,14 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 					request.UsePool = proto.Bool(true)
 				}
 
+				if branch.ParentID == nil {
+					useXatastor := s.feat.BoolValue(ctx, flags.UseXatastor)
+					log.Ctx(ctx).Info().Bool("useXatastor", useXatastor).Msg("xatastor feature flag")
+					if useXatastor {
+						request.UseXatastor = proto.Bool(true)
+					}
+				}
+
 				client, err := s.cells.GetCellConnection(ctx, organizationID, createClusterPayload.CellID)
 				if err != nil {
 					return err
