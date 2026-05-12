@@ -18,7 +18,7 @@ spec:
               kubernetes.io/metadata.name: {{ .Release.Namespace }}
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: victoria-metrics-agent
+              app.kubernetes.io/name: vmagent
       ports:
         - port: 9187
           protocol: TCP

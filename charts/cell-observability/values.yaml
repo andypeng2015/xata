@@ -17,10 +17,11 @@ victoria-metrics:
   server:
     fullnameOverride: victoria-metrics
     retentionPeriod: 30d
-    securityContext:
+    podSecurityContext:
       enabled: true
       runAsNonRoot: true
       runAsUser: 1000
+      fsGroup: 1000
     tolerations:
       - key: xata.io/workload
         value: dataplane
@@ -30,6 +31,11 @@ victoria-logs:
   server:
     fullnameOverride: victoria-logs
     retentionPeriod: 30d
+    podSecurityContext:
+      enabled: true
+      runAsNonRoot: true
+      runAsUser: 1000
+      fsGroup: 1000
     tolerations:
       - key: xata.io/workload
         value: dataplane
