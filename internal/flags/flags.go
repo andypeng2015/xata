@@ -48,5 +48,12 @@ var (
 		Name:           "branchLogs",
 		DefaultEnabled: false,
 	}
+	// BranchObservabilityPerCell routes branch metrics & logs to the per-cell
+	// VictoriaMetrics/VictoriaLogs stack via the clusters gRPC service.
+	// When false (default), queries go to the legacy central SigNoz instance.
+	BranchObservabilityPerCell = openfeature.FeatureFlag{
+		Name:           "branchObservabilityPerCell",
+		DefaultEnabled: false,
+	}
 	// WARNING: Feature Flags should have positive names. Avoid disabled suffix in future
 )

@@ -1,0 +1,15 @@
+dependencies:
+- name: victoria-metrics-single
+  repository: https://victoriametrics.github.io/helm-charts/
+  version: 0.38.0
+- name: victoria-logs-single
+  repository: https://victoriametrics.github.io/helm-charts/
+  version: 0.12.4
+- name: victoria-metrics-agent
+  repository: https://victoriametrics.github.io/helm-charts/
+  version: 0.39.0
+- name: vector
+  repository: https://helm.vector.dev
+  version: 0.52.0
+digest: sha256:ba6265abb942cd742946a649b5d11d3496f5de3ea3ae6f8a4a1a46dd6858112f
+generated: "2026-05-12T13:01:15.102078+02:00"

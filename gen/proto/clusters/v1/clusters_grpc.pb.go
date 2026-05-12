@@ -33,6 +33,8 @@ const (
 	ClustersService_SetBranchesIPFiltering_FullMethodName           = "/clusters.v1.ClustersService/SetBranchesIPFiltering"
 	ClustersService_GetBranchIPFiltering_FullMethodName             = "/clusters.v1.ClustersService/GetBranchIPFiltering"
 	ClustersService_DeleteBranchIPFiltering_FullMethodName          = "/clusters.v1.ClustersService/DeleteBranchIPFiltering"
+	ClustersService_GetBranchMetrics_FullMethodName                 = "/clusters.v1.ClustersService/GetBranchMetrics"
+	ClustersService_GetBranchLogs_FullMethodName                    = "/clusters.v1.ClustersService/GetBranchLogs"
 )
 
 // ClustersServiceClient is the client API for ClustersService service.
@@ -69,6 +71,10 @@ type ClustersServiceClient interface {
 	GetBranchIPFiltering(ctx context.Context, in *GetBranchIPFilteringRequest, opts ...grpc.CallOption) (*GetBranchIPFilteringResponse, error)
 	// Delete IP filtering configuration for a branch
 	DeleteBranchIPFiltering(ctx context.Context, in *DeleteBranchIPFilteringRequest, opts ...grpc.CallOption) (*DeleteBranchIPFilteringResponse, error)
+	// Get time-series metrics for a branch (per-cell observability backend)
+	GetBranchMetrics(ctx context.Context, in *GetBranchMetricsRequest, opts ...grpc.CallOption) (*GetBranchMetricsResponse, error)
+	// Get log entries for a branch (per-cell observability backend)
+	GetBranchLogs(ctx context.Context, in *GetBranchLogsRequest, opts ...grpc.CallOption) (*GetBranchLogsResponse, error)
 }
 
 type clustersServiceClient struct {
@@ -219,6 +225,26 @@ func (c *clustersServiceClient) DeleteBranchIPFiltering(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *clustersServiceClient) GetBranchMetrics(ctx context.Context, in *GetBranchMetricsRequest, opts ...grpc.CallOption) (*GetBranchMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBranchMetricsResponse)
+	err := c.cc.Invoke(ctx, ClustersService_GetBranchMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clustersServiceClient) GetBranchLogs(ctx context.Context, in *GetBranchLogsRequest, opts ...grpc.CallOption) (*GetBranchLogsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBranchLogsResponse)
+	err := c.cc.Invoke(ctx, ClustersService_GetBranchLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClustersServiceServer is the server API for ClustersService service.
 // All implementations must embed UnimplementedClustersServiceServer
 // for forward compatibility.
@@ -253,6 +279,10 @@ type ClustersServiceServer interface {
 	GetBranchIPFiltering(context.Context, *GetBranchIPFilteringRequest) (*GetBranchIPFilteringResponse, error)
 	// Delete IP filtering configuration for a branch
 	DeleteBranchIPFiltering(context.Context, *DeleteBranchIPFilteringRequest) (*DeleteBranchIPFilteringResponse, error)
+	// Get time-series metrics for a branch (per-cell observability backend)
+	GetBranchMetrics(context.Context, *GetBranchMetricsRequest) (*GetBranchMetricsResponse, error)
+	// Get log entries for a branch (per-cell observability backend)
+	GetBranchLogs(context.Context, *GetBranchLogsRequest) (*GetBranchLogsResponse, error)
 	mustEmbedUnimplementedClustersServiceServer()
 }
 
@@ -304,6 +334,12 @@ func (UnimplementedClustersServiceServer) GetBranchIPFiltering(context.Context, 
 }
 func (UnimplementedClustersServiceServer) DeleteBranchIPFiltering(context.Context, *DeleteBranchIPFilteringRequest) (*DeleteBranchIPFilteringResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteBranchIPFiltering not implemented")
+}
+func (UnimplementedClustersServiceServer) GetBranchMetrics(context.Context, *GetBranchMetricsRequest) (*GetBranchMetricsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBranchMetrics not implemented")
+}
+func (UnimplementedClustersServiceServer) GetBranchLogs(context.Context, *GetBranchLogsRequest) (*GetBranchLogsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBranchLogs not implemented")
 }
 func (UnimplementedClustersServiceServer) mustEmbedUnimplementedClustersServiceServer() {}
 func (UnimplementedClustersServiceServer) testEmbeddedByValue()                         {}
@@ -578,6 +614,42 @@ func _ClustersService_DeleteBranchIPFiltering_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClustersService_GetBranchMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBranchMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClustersServiceServer).GetBranchMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClustersService_GetBranchMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClustersServiceServer).GetBranchMetrics(ctx, req.(*GetBranchMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClustersService_GetBranchLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBranchLogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClustersServiceServer).GetBranchLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClustersService_GetBranchLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClustersServiceServer).GetBranchLogs(ctx, req.(*GetBranchLogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClustersService_ServiceDesc is the grpc.ServiceDesc for ClustersService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -640,6 +712,14 @@ var ClustersService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteBranchIPFiltering",
 			Handler:    _ClustersService_DeleteBranchIPFiltering_Handler,
+		},
+		{
+			MethodName: "GetBranchMetrics",
+			Handler:    _ClustersService_GetBranchMetrics_Handler,
+		},
+		{
+			MethodName: "GetBranchLogs",
+			Handler:    _ClustersService_GetBranchLogs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

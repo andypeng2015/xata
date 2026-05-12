@@ -77,6 +77,10 @@ def create_resources():
         'metastore_reader_password': 'changeme',
     }))
 
+    # Fetch subchart deps before kustomize renders the
+    # overlay — kustomize --enable-helm shells out to `helm template`, which
+    # requires the deps to be present in charts/.
+    local('make -C ./charts build-deps')
     # Use OSS kustomize overlay
     k8s_yaml(kustomize('kustomize/overlays/local', flags=KUSTOMIZE_FLAGS))
     secret_settings(disable_scrub=True)
@@ -154,6 +158,13 @@ def create_resources():
         ],
         labels='monitoring',
     )
+
+    # Per-cell metrics & logs stack (VictoriaMetrics + VictoriaLogs + Vector).
+    # Runs alongside SigNoz so devs can flip the BranchObservabilityPerCell
+    k8s_resource('victoria-metrics', port_forwards=8428, labels='monitoring')
+    k8s_resource('victoria-logs', port_forwards=9428, labels='monitoring')
+    k8s_resource('vmagent', labels='monitoring')
+    k8s_resource('vector', labels='monitoring')
 
     # Networking
     k8s_resource(workload='envoy-gateway', labels='networking')

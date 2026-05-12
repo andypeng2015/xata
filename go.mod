@@ -42,6 +42,7 @@ require (
 	github.com/philip-bui/grpc-zerolog v1.0.1
 	github.com/pires/go-proxyproto v0.8.1
 	github.com/posthog/posthog-go v1.10.0
+	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.67.5
 	github.com/rs/xid v1.6.0
@@ -433,7 +434,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.87.1 // indirect
-	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/pterm/pterm v0.12.80 // indirect
 	github.com/quasilyte/go-ruleguard v0.4.5 // indirect

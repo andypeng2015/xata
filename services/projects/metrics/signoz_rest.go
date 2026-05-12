@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -60,7 +61,7 @@ func NewSigNozClient(endpoint, apiKey, clustersNamespace string) (*SigNozClient,
 	}, nil
 }
 
-func (sc *SigNozClient) GetMetric(ctx context.Context, start, end time.Time, metric string, instances, aggregations []string) (*BranchMetrics, error) {
+func (sc *SigNozClient) GetMetric(ctx context.Context, _organizationID, _cellID string, start, end time.Time, _branchID string, metric string, instances, aggregations []string) (*BranchMetrics, error) {
 	if _, exists := sigNozMetricName[metric]; !exists {
 		return nil, fmt.Errorf("metric %s not found", metric)
 	}
@@ -273,8 +274,13 @@ func buildMetricQueries(metricName string, step int, aggregations []string, filt
 	return queries, queryToAgg, nil
 }
 
-func (sc *SigNozClient) GetLogs(ctx context.Context, start, end time.Time, filters []filter.Expr, limit int, cursor string) (*BranchLogs, error) {
-	reqBody, err := buildLogsReq(sc.clustersNamespace, start, end, filters, limit, cursor)
+func (sc *SigNozClient) GetLogs(ctx context.Context, _organizationID, _cellID string, start, end time.Time, branchID string, userFilters []LogFilter, limit int, cursor string) (*BranchLogs, error) {
+	exprs, err := compileSigNozLogFilters(branchID, userFilters)
+	if err != nil {
+		return nil, fmt.Errorf("compile log filters: %w", err)
+	}
+
+	reqBody, err := buildLogsReq(sc.clustersNamespace, start, end, exprs, limit, cursor)
 	if err != nil {
 		return nil, fmt.Errorf("build logs request: %w", err)
 	}
@@ -404,7 +410,10 @@ func parseLogRow(row signoz.Querybuildertypesv5RawRow) (LogEntry, bool) {
 		Message:    message,
 	}
 	if severity, _ := data["severity_text"].(string); severity != "" {
-		if level, ok := severityToLevel[severity]; ok {
+		// SigNoz can ingest mixed-case severities depending on collector
+		// config; normalise so we don't silently miss "info" (lowercase)
+		// while observability/logs.go matches "INFO".
+		if level, ok := severityToLevel[strings.ToUpper(severity)]; ok {
 			entry.Level = &level
 		}
 	}
@@ -534,4 +543,55 @@ func buildStepInterval(step int) (*signoz.Querybuildertypesv5Step, error) {
 	}
 
 	return stepInterval, nil
+}
+
+// compileSigNozLogFilters translates the backend-neutral []LogFilter shape used
+// by the projects handler into SigNoz filter expressions. The branch-scope
+// regex on the pod name is always prepended so a caller cannot read other
+// branches' logs by omitting the instance filter.
+func compileSigNozLogFilters(branchID string, userFilters []LogFilter) ([]filter.Expr, error) {
+	exprs := make([]filter.Expr, 0, len(userFilters)+1)
+	exprs = append(exprs, filter.Regexp("k8s.pod.name", "^"+regexp.QuoteMeta(branchID)+"-"))
+	for _, f := range userFilters {
+		expr, err := compileSigNozLogFilter(f)
+		if err != nil {
+			return nil, err
+		}
+		exprs = append(exprs, expr)
+	}
+	return exprs, nil
+}
+
+func compileSigNozLogFilter(f LogFilter) (filter.Expr, error) {
+	switch f.Field {
+	case "instance":
+		if f.Op != "in" {
+			return nil, fmt.Errorf("op [%s] not allowed for field [instance]", f.Op)
+		}
+		return filter.MustIn("k8s.pod.name", f.Values), nil
+	case "level":
+		if f.Op != "in" {
+			return nil, fmt.Errorf("op [%s] not allowed for field [level]", f.Op)
+		}
+		return filter.In("severity_text", ExpandLevels(f.Values)), nil
+	case "process":
+		if f.Op != "in" {
+			return nil, fmt.Errorf("op [%s] not allowed for field [process]", f.Op)
+		}
+		return filter.In("backend_type", f.Values), nil
+	case "body":
+		switch f.Op {
+		case "contains":
+			return filter.Contains("body", f.Value), nil
+		case "icontains":
+			return filter.IContains("body", f.Value), nil
+		case "regex":
+			return filter.Regexp("body", f.Value), nil
+		case "iregex":
+			return filter.Regexp("body", "(?i)"+f.Value), nil
+		default:
+			return nil, fmt.Errorf("op [%s] not allowed for field [body]", f.Op)
+		}
+	}
+	return nil, fmt.Errorf("unknown field [%s]", f.Field)
 }

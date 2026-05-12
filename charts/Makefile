@@ -20,6 +20,16 @@ git-commit-sha: # Print the short git commit SHA
 registry: # Print the chart registry/repo
 	@echo "$(CHART_REGISTRY)"
 
+build-deps: # Build helm charts dependencies
+	@set -e; \
+	for chart in $(CHARTS); do \
+		if [ "$$(yq eval '.dependencies // "null"' "$$chart/Chart.yaml" 2>/dev/null)" != "null" ]; then \
+			yq eval -r '.dependencies[] | "helm repo add " + .name + " " + .repository + " --force-update >/dev/null"' "$$chart/Chart.yaml" | sh; \
+		fi; \
+		echo "Building dependencies for $$chart..." >&2; \
+		helm dependency build $$chart; \
+	done
+
 list-charts: # Print chart names, one per line
 	@printf '%s\n' $(CHARTS)
 
@@ -72,7 +82,7 @@ set-chart-version:
 
 # Package and push charts
 # Override with CHARTS="auth projects".
-push-charts:
+push-charts: build-deps
 	@set -euo pipefail; \
 	info="$$( $(MAKE) --no-print-directory chart-info CHARTS="$(CHARTS)" )"; \
 	while IFS=$$'\t' read -r chart _ version; do \
@@ -97,7 +107,7 @@ lint-helm:
 		helm lint $$chart; \
 	done
 
-lint-cue:
+lint-cue: build-deps
 	@set -e; \
 	echo "Running cue vet..." >&2; \
 	for chart in $(CHARTS); do \

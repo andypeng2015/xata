@@ -4,7 +4,6 @@ package metricsmock
 
 import (
 	context "context"
-	filter "xata/internal/signoz/filter"
 	metrics "xata/services/projects/metrics"
 
 	mock "github.com/stretchr/testify/mock"
@@ -25,13 +24,13 @@ func (_m *Client) EXPECT() *Client_Expecter {
 	return &Client_Expecter{mock: &_m.Mock}
 }
 
-// GetLogs provides a mock function with given fields: ctx, start, end, filters, limit, cursor
-func (_m *Client) GetLogs(ctx context.Context, start time.Time, end time.Time, filters []filter.Expr, limit int, cursor string) (*metrics.BranchLogs, error) {
-	ret := _m.Called(ctx, start, end, filters, limit, cursor)
+// GetLogs provides a mock function with given fields: ctx, organizationID, cellID, start, end, branchID, filters, limit, cursor
+func (_m *Client) GetLogs(ctx context.Context, organizationID string, cellID string, start time.Time, end time.Time, branchID string, filters []metrics.LogFilter, limit int, cursor string) (*metrics.BranchLogs, error) {
+	ret := _m.Called(ctx, organizationID, cellID, start, end, branchID, filters, limit, cursor)
 
 	var r0 *metrics.BranchLogs
-	if rf, ok := ret.Get(0).(func(context.Context, time.Time, time.Time, []filter.Expr, int, string) *metrics.BranchLogs); ok {
-		r0 = rf(ctx, start, end, filters, limit, cursor)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Time, time.Time, string, []metrics.LogFilter, int, string) *metrics.BranchLogs); ok {
+		r0 = rf(ctx, organizationID, cellID, start, end, branchID, filters, limit, cursor)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*metrics.BranchLogs)
@@ -39,8 +38,8 @@ func (_m *Client) GetLogs(ctx context.Context, start time.Time, end time.Time, f
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, time.Time, time.Time, []filter.Expr, int, string) error); ok {
-		r1 = rf(ctx, start, end, filters, limit, cursor)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, time.Time, time.Time, string, []metrics.LogFilter, int, string) error); ok {
+		r1 = rf(ctx, organizationID, cellID, start, end, branchID, filters, limit, cursor)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -55,18 +54,21 @@ type Client_GetLogs_Call struct {
 
 // GetLogs is a helper method to define mock.On call
 //   - ctx context.Context
+//   - organizationID string
+//   - cellID string
 //   - start time.Time
 //   - end time.Time
-//   - filters []filter.Expr
+//   - branchID string
+//   - filters []metrics.LogFilter
 //   - limit int
 //   - cursor string
-func (_e *Client_Expecter) GetLogs(ctx interface{}, start interface{}, end interface{}, filters interface{}, limit interface{}, cursor interface{}) *Client_GetLogs_Call {
-	return &Client_GetLogs_Call{Call: _e.mock.On("GetLogs", ctx, start, end, filters, limit, cursor)}
+func (_e *Client_Expecter) GetLogs(ctx interface{}, organizationID interface{}, cellID interface{}, start interface{}, end interface{}, branchID interface{}, filters interface{}, limit interface{}, cursor interface{}) *Client_GetLogs_Call {
+	return &Client_GetLogs_Call{Call: _e.mock.On("GetLogs", ctx, organizationID, cellID, start, end, branchID, filters, limit, cursor)}
 }
 
-func (_c *Client_GetLogs_Call) Run(run func(ctx context.Context, start time.Time, end time.Time, filters []filter.Expr, limit int, cursor string)) *Client_GetLogs_Call {
+func (_c *Client_GetLogs_Call) Run(run func(ctx context.Context, organizationID string, cellID string, start time.Time, end time.Time, branchID string, filters []metrics.LogFilter, limit int, cursor string)) *Client_GetLogs_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(time.Time), args[2].(time.Time), args[3].([]filter.Expr), args[4].(int), args[5].(string))
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(time.Time), args[4].(time.Time), args[5].(string), args[6].([]metrics.LogFilter), args[7].(int), args[8].(string))
 	})
 	return _c
 }
@@ -76,13 +78,13 @@ func (_c *Client_GetLogs_Call) Return(_a0 *metrics.BranchLogs, _a1 error) *Clien
 	return _c
 }
 
-// GetMetric provides a mock function with given fields: ctx, start, end, metric, instances, aggregations
-func (_m *Client) GetMetric(ctx context.Context, start time.Time, end time.Time, metric string, instances []string, aggregations []string) (*metrics.BranchMetrics, error) {
-	ret := _m.Called(ctx, start, end, metric, instances, aggregations)
+// GetMetric provides a mock function with given fields: ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations
+func (_m *Client) GetMetric(ctx context.Context, organizationID string, cellID string, start time.Time, end time.Time, branchID string, metric string, instances []string, aggregations []string) (*metrics.BranchMetrics, error) {
+	ret := _m.Called(ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations)
 
 	var r0 *metrics.BranchMetrics
-	if rf, ok := ret.Get(0).(func(context.Context, time.Time, time.Time, string, []string, []string) *metrics.BranchMetrics); ok {
-		r0 = rf(ctx, start, end, metric, instances, aggregations)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Time, time.Time, string, string, []string, []string) *metrics.BranchMetrics); ok {
+		r0 = rf(ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*metrics.BranchMetrics)
@@ -90,8 +92,8 @@ func (_m *Client) GetMetric(ctx context.Context, start time.Time, end time.Time,
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, time.Time, time.Time, string, []string, []string) error); ok {
-		r1 = rf(ctx, start, end, metric, instances, aggregations)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, time.Time, time.Time, string, string, []string, []string) error); ok {
+		r1 = rf(ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -106,18 +108,21 @@ type Client_GetMetric_Call struct {
 
 // GetMetric is a helper method to define mock.On call
 //   - ctx context.Context
+//   - organizationID string
+//   - cellID string
 //   - start time.Time
 //   - end time.Time
+//   - branchID string
 //   - metric string
 //   - instances []string
 //   - aggregations []string
-func (_e *Client_Expecter) GetMetric(ctx interface{}, start interface{}, end interface{}, metric interface{}, instances interface{}, aggregations interface{}) *Client_GetMetric_Call {
-	return &Client_GetMetric_Call{Call: _e.mock.On("GetMetric", ctx, start, end, metric, instances, aggregations)}
+func (_e *Client_Expecter) GetMetric(ctx interface{}, organizationID interface{}, cellID interface{}, start interface{}, end interface{}, branchID interface{}, metric interface{}, instances interface{}, aggregations interface{}) *Client_GetMetric_Call {
+	return &Client_GetMetric_Call{Call: _e.mock.On("GetMetric", ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations)}
 }
 
-func (_c *Client_GetMetric_Call) Run(run func(ctx context.Context, start time.Time, end time.Time, metric string, instances []string, aggregations []string)) *Client_GetMetric_Call {
+func (_c *Client_GetMetric_Call) Run(run func(ctx context.Context, organizationID string, cellID string, start time.Time, end time.Time, branchID string, metric string, instances []string, aggregations []string)) *Client_GetMetric_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(time.Time), args[2].(time.Time), args[3].(string), args[4].([]string), args[5].([]string))
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(time.Time), args[4].(time.Time), args[5].(string), args[6].(string), args[7].([]string), args[8].([]string))
 	})
 	return _c
 }

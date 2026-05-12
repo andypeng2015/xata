@@ -18,6 +18,9 @@ config:
     openebs:
       enabled: true
       namespace: openebs
+  observability:
+    victoriaMetricsURL: "http://victoria-metrics.xata-observability.svc.cluster.local:8428"
+    victoriaLogsURL: "http://victoria-logs.xata-observability.svc.cluster.local:9428"
 
 resources:
   limits:

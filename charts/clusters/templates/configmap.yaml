@@ -15,4 +15,10 @@ data:
   {{- if .Values.config.clusters.volumeSnapshotClass }}
   XATA_CLUSTERS_VOLUME_SNAPSHOT_CLASS: {{ .Values.config.clusters.volumeSnapshotClass | quote }}
   {{- end }}
+  {{- if .Values.config.observability.victoriaMetricsURL }}
+  VICTORIAMETRICS_URL: {{ .Values.config.observability.victoriaMetricsURL | quote }}
+  {{- end }}
+  {{- if .Values.config.observability.victoriaLogsURL }}
+  VICTORIALOGS_URL: {{ .Values.config.observability.victoriaLogsURL | quote }}
+  {{- end }}
   XATA_XATASTOR_ENABLED: {{ .Values.config.clusters.xatastor.enabled | default false | quote }}

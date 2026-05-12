@@ -3,17 +3,30 @@ package metrics
 import (
 	"context"
 	"time"
-
-	"xata/internal/signoz/filter"
 )
 
 //go:generate go run github.com/vektra/mockery/v3 --output metricsmock --outpkg metricsmock --with-expecter --name Client
 
 type Client interface {
 	// GetMetric returns the time serie(s) for the given metric and timeframe.
-	GetMetric(ctx context.Context, start, end time.Time, metric string, instances, aggregations []string) (*BranchMetrics, error)
-	// GetLogs returns the log entries for the given timeframe and filter expressions.
-	GetLogs(ctx context.Context, start, end time.Time, filters []filter.Expr, limit int, cursor string) (*BranchLogs, error)
+	// branchID is required by the per-cell backend to enforce branch scope on
+	// the pod label; the legacy SigNoz client ignores it.
+	GetMetric(ctx context.Context, organizationID, cellID string, start, end time.Time, branchID string, metric string, instances, aggregations []string) (*BranchMetrics, error)
+	// GetLogs returns the log entries for the given timeframe and filters.
+	GetLogs(ctx context.Context, organizationID, cellID string, start, end time.Time, branchID string, filters []LogFilter, limit int, cursor string) (*BranchLogs, error)
+}
+
+// LogFilter is a backend-neutral filter clause produced by the projects handler
+// and translated by each Client implementation into the backend's query language.
+type LogFilter struct {
+	// Field one of: "instance" | "level" | "process" | "body"
+	Field string
+	// Op one of: "in" | "contains" | "icontains" | "regex" | "iregex"
+	Op string
+	// Values used when Op == "in"
+	Values []string
+	// Value used when Op != "in"
+	Value string
 }
 
 type BranchMetrics struct {

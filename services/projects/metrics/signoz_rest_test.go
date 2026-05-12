@@ -363,7 +363,7 @@ func TestGetMetric(t *testing.T) {
 			client, err := NewSigNozClient(server.URL, apiKey, k8sNamespace)
 			require.NoError(t, err)
 
-			result, err := client.GetMetric(context.Background(), tt.startTime, tt.endTime, tt.metric, tt.instances, tt.aggregations)
+			result, err := client.GetMetric(context.Background(), "", "", tt.startTime, tt.endTime, "", tt.metric, tt.instances, tt.aggregations)
 
 			if tt.expectError {
 				assert.Error(t, err)

@@ -47,6 +47,12 @@ service ClustersService {
 
   // Delete IP filtering configuration for a branch
   rpc DeleteBranchIPFiltering(DeleteBranchIPFilteringRequest) returns (DeleteBranchIPFilteringResponse) {}
+
+  // Get time-series metrics for a branch (per-cell observability backend)
+  rpc GetBranchMetrics(GetBranchMetricsRequest) returns (GetBranchMetricsResponse) {}
+
+  // Get log entries for a branch (per-cell observability backend)
+  rpc GetBranchLogs(GetBranchLogsRequest) returns (GetBranchLogsResponse) {}
 }
 
 // CreatePostgresClusterRequest is the request object for CreatePostgresCluster
@@ -337,3 +343,90 @@ message DeleteBranchIPFilteringRequest {
 
 // DeleteBranchIPFilteringResponse is the response object for DeleteBranchIPFiltering
 message DeleteBranchIPFilteringResponse {}
+
+// GetBranchMetricsRequest is the request object for GetBranchMetrics
+message GetBranchMetricsRequest {
+  // The id of the branch
+  string branch_id = 1;
+  // Start of the queried time range
+  google.protobuf.Timestamp start = 2;
+  // End of the queried time range
+  google.protobuf.Timestamp end = 3;
+  // Metric name (e.g. cpu, memory, disk, connections_active, ...)
+  string metric = 4;
+  // Pod instance ids to include; each must start with "{branch_id}-"
+  repeated string instances = 5;
+  // Aggregations to compute (e.g. avg, max, min)
+  repeated string aggregations = 6;
+}
+
+// GetBranchMetricsResponse is the response object for GetBranchMetrics
+message GetBranchMetricsResponse {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string metric = 3;
+  // Unit of the metric (percentage, bytes, ms, etc.)
+  string unit = 4;
+  repeated MetricSeries series = 5;
+}
+
+// MetricSeries is a single aggregated time-series for one instance
+message MetricSeries {
+  string aggregation = 1;
+  string instance_id = 2;
+  repeated MetricValue values = 3;
+}
+
+// MetricValue is a single point in a time-series
+message MetricValue {
+  google.protobuf.Timestamp timestamp = 1;
+  float value = 2;
+}
+
+// GetBranchLogsRequest is the request object for GetBranchLogs
+message GetBranchLogsRequest {
+  // The id of the branch
+  string branch_id = 1;
+  // Start of the queried time range
+  google.protobuf.Timestamp start = 2;
+  // End of the queried time range
+  google.protobuf.Timestamp end = 3;
+  // Filters to apply (and-combined)
+  repeated LogFilter filters = 4;
+  // Maximum number of entries to return
+  int32 limit = 5;
+  // Opaque pagination cursor
+  string cursor = 6;
+}
+
+// LogFilter is a single filter clause
+message LogFilter {
+  // Field to filter on: "instance" | "level" | "process" | "body"
+  string field = 1;
+  // Operator: "in" | "contains" | "icontains" | "regex" | "iregex"
+  string op = 2;
+  // Values for op=in
+  repeated string values = 3;
+  // Value for op=contains/icontains/regex/iregex
+  string value = 4;
+}
+
+// GetBranchLogsResponse is the response object for GetBranchLogs
+message GetBranchLogsResponse {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  repeated LogEntry logs = 3;
+  // Cursor to fetch the next page; empty when no more entries
+  optional string next_cursor = 4;
+}
+
+// LogEntry is a single log record
+message LogEntry {
+  google.protobuf.Timestamp timestamp = 1;
+  string instance_id = 2;
+  // Severity level: debug|info|warning|error (when known)
+  optional string level = 3;
+  string message = 4;
+  // Originating PostgreSQL process (e.g. backend_type), when known
+  optional string process = 5;
+}

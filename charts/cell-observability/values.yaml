@@ -1,0 +1,201 @@
+# When true, the chart renders a Namespace object matching the release
+# namespace. Off by default so production deploys can pre-create the namespace
+# with their own labels/annotations; Tilt flips this on.
+createNamespace: false
+
+# Namespace where CNPG instance pods live. vmagent scrapes their :9187
+# metrics endpoint, so the cnpg-side NetworkPolicy needs to allow it.
+clustersNamespace: xata-clusters
+
+networkPolicy:
+  # Renders a NetworkPolicy in clustersNamespace allowing vmagent (release
+  # namespace, label app.kubernetes.io/name=victoria-metrics-agent) to reach
+  # CNPG instance pods on :9187.
+  enabled: true
+
+victoria-metrics:
+  server:
+    fullnameOverride: victoria-metrics
+    retentionPeriod: 30d
+    securityContext:
+      enabled: true
+      runAsNonRoot: true
+      runAsUser: 1000
+    tolerations:
+      - key: xata.io/workload
+        value: dataplane
+        effect: NoSchedule
+
+victoria-logs:
+  server:
+    fullnameOverride: victoria-logs
+    retentionPeriod: 30d
+    tolerations:
+      - key: xata.io/workload
+        value: dataplane
+        effect: NoSchedule
+
+# The metric_relabel keep-lists below are pinned to the entries in
+# services/clusters/observability/metrics.go (`metricCatalog`). Update both
+# together when adding or removing a metric.
+vmagent:
+  fullnameOverride: vmagent
+  remoteWrite:
+    - url: http://victoria-metrics:8428/api/v1/write
+
+  securityContext:
+    enabled: true
+    runAsNonRoot: true
+    runAsUser: 1000
+
+  tolerations:
+    - key: xata.io/workload
+      value: dataplane
+      effect: NoSchedule
+
+  # Chart's default ClusterRole grants nodes + nodes/metrics; cAdvisor scraping
+  # via the API server proxy additionally needs nodes/proxy.
+  rbac:
+    extraRules:
+      - apiGroups: [""]
+        resources: ["nodes/proxy"]
+        verbs: ["get"]
+      - nonResourceURLs: ["/metrics/cadvisor"]
+        verbs: ["get"]
+
+  config:
+    global:
+      scrape_interval: 30s
+    scrape_configs:
+      - job_name: cnpg
+        kubernetes_sd_configs: [{role: pod}]
+        scheme: https
+        tls_config: {insecure_skip_verify: true}
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_cnpg_io_podRole]
+            regex: instance
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            target_label: __address__
+            replacement: $1:9187
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'cnpg_pg_database_size_bytes|cnpg_pg_stat_activity_connections_(active|idle)|cnpg_pg_stat_io_total_(reads|writes|read_time_ms|write_time_ms)|cnpg_collector_wal_sync_time|cnpg_pg_replication_lag'
+            action: keep
+
+      - job_name: cadvisor
+        kubernetes_sd_configs: [{role: node}]
+        scheme: https
+        tls_config: {insecure_skip_verify: true}
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'container_(cpu_usage_seconds_total|memory_working_set_bytes|network_(receive|transmit)_bytes_total|fs_(reads|writes)_bytes_total)'
+            action: keep
+          - source_labels: [namespace]
+            regex: xata-clusters
+            action: keep
+
+vector:
+  role: Agent
+  fullnameOverride: vector
+
+  # Vector tails /var/log/pods which kubelet creates as 0750 root:root, so
+  # runAsGroup=0 keeps the group-readable bits accessible while the container
+  # itself runs as non-root.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 0
+
+  tolerations:
+    - key: xata.io/workload
+      value: dataplane
+      effect: NoSchedule
+
+  # Agent has no listening sources, so the chart's empty Service is just noise.
+  service: {enabled: false}
+  serviceHeadless: {enabled: false}
+
+  # Chart defaults also mount /proc, /sys, /var/lib for host metrics — vmagent
+  # scrapes cAdvisor for those, so vector only needs /var/log/pods.
+  defaultVolumes:
+    - {name: var-log, hostPath: {path: /var/log/}}
+  defaultVolumeMounts:
+    - {name: var-log, mountPath: /var/log/, readOnly: true}
+
+  # Chart's default /var/lib/vector hostPath is root-owned; emptyDir keeps the
+  # checkpoint dir writable regardless of who the container runs as.
+  persistence:
+    hostPath: {enabled: false}
+
+  # Mirror of observability.unwrapCNPGBody on the query side: pull the Postgres
+  # message out of CNPG's JSON wrapping, then rename to VictoriaLogs canonical
+  # fields (_msg, _time) so the elasticsearch sink ingests cleanly.
+  customConfig:
+    data_dir: /vector-data-dir
+    sources:
+      kubernetes_logs:
+        type: kubernetes_logs
+        extra_label_selector: cnpg.io/podRole=instance
+        auto_partial_merge: true
+        pod_annotation_fields:
+          pod_name: kubernetes.pod_name
+          pod_namespace: kubernetes.namespace_name
+          container_name: kubernetes.container_name
+    transforms:
+      cnpg_unwrap:
+        type: remap
+        inputs: [kubernetes_logs]
+        # Postgres CSV records arrive as
+        #   {"level":"info","logger":"postgres","msg":"record","record":{
+        #     "error_severity":"INFO","backend_type":"client backend",
+        #     "message":"...", ...}}
+        # CNPG instance-manager / barman lines as
+        #   {"level":"info","logger":"instance-manager","msg":"..."}
+        # The query side (observability/logs.go) filters on logger="postgres"
+        # and reads severity_text + backend_type, so capture all three here.
+        source: |
+          if starts_with(string!(.message), "{") && ends_with(string!(.message), "}") {
+            parsed, err = parse_json(.message)
+            if err == null {
+              if exists(parsed.record.message) {
+                .message = string!(parsed.record.message)
+              } else if exists(parsed.msg) {
+                .message = string!(parsed.msg)
+              }
+              if exists(parsed.record.error_severity) {
+                .severity_text = string!(parsed.record.error_severity)
+              } else if exists(parsed.level) {
+                .severity_text = upcase(string!(parsed.level))
+              }
+              if exists(parsed.record.backend_type) {
+                .backend_type = string!(parsed.record.backend_type)
+              }
+              if exists(parsed.logger) {
+                .logger = string!(parsed.logger)
+              }
+            }
+          }
+          ._msg = del(.message)
+          ._time = del(.timestamp)
+    sinks:
+      vl_logs:
+        type: elasticsearch
+        inputs: [cnpg_unwrap]
+        endpoints: [http://victoria-logs:9428/insert/elasticsearch/]
+        api_version: v8
+        mode: bulk
+        healthcheck: {enabled: false}
+        request:
+          headers: {AccountID: "0", ProjectID: "0"}

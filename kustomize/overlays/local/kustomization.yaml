@@ -34,6 +34,11 @@ helmCharts:
     releaseName: gateway
     namespace: xata
     valuesFile: gateway-values.yaml
+  - name: cell-observability
+    releaseName: cell-observability
+    namespace: xata-observability
+    valuesInline:
+      createNamespace: true
 
 helmGlobals:
   chartHome: ../../../charts

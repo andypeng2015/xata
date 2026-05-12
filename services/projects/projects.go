@@ -166,21 +166,27 @@ func (s *ProjectsService) RegisterHTTPHandlers(o *o11y.O, router *echo.Group) er
 	// require auth for all routes
 	group := router.Group("", capi.AuthMiddleware(s.authConn), openfeature.Middleware())
 
-	// metrics client
-	metricsClient, err := metrics.NewSigNozClient(s.config.SigNozAPIUrl, s.config.SignozAPIKey, s.config.ClustersNamespace)
+	// Legacy SigNoz-backed metrics client. Active when the
+	// BranchObservabilityPerCell flag is off (default).
+	signozMetricsClient, err := metrics.NewSigNozClient(s.config.SigNozAPIUrl, s.config.SignozAPIKey, s.config.ClustersNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to create metrics client: %w", err)
 	}
 
-	cellsClient := cells.New(s.store)
+	cellsConn := cells.New(s.store)
+
+	// Per-cell metrics client routes to clusters gRPC. Active when the
+	// BranchObservabilityPerCell flag is on.
+	cellsMetricsClient := metrics.NewCellsClient(cellsConn)
 
 	spec.RegisterHandlers(group,
 		api.NewAPIHandler(
 			s.feat,
 			s.store,
-			cellsClient,
+			cellsConn,
 			s.config.GatewayHostPort,
-			metricsClient,
+			signozMetricsClient,
+			cellsMetricsClient,
 			s.scheduler,
 			s.analytics,
 			&postgrescfg.DefaultPostgresConfigProvider{},

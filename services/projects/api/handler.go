@@ -81,8 +81,13 @@ type handler struct {
 	// defaultGatewayHostPort is the host:port of the gateway service, used to build connection strings
 	defaultGatewayHostPort string
 
-	// metricsClient is the client for the metrics service
+	// metricsClient is the legacy SigNoz-backed metrics client.
 	metricsClient metrics.Client
+
+	// cellsMetricsClient routes branch metric/log queries to the per-cell
+	// observability backend via the clusters gRPC service. Selected per
+	// request by the BranchObservabilityPerCell feature flag.
+	cellsMetricsClient metrics.Client
 
 	// postgresConfigProvider is the provider for PostgreSQL configuration operations
 	postgresConfigProvider postgrescfg.PostgresConfigProvider
@@ -91,18 +96,30 @@ type handler struct {
 	imageProvider postgresversions.ImageProvider
 }
 
-func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cells.Cells, gatewayHostPort string, metricsClient metrics.Client, scheduler *scheduler.Scheduler, analytics analytics.Client, postgresConfigProvider postgrescfg.PostgresConfigProvider, imageProvider postgresversions.ImageProvider) spec.ServerInterface {
+func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cells.Cells, gatewayHostPort string, metricsClient metrics.Client, cellsMetricsClient metrics.Client, scheduler *scheduler.Scheduler, analytics analytics.Client, postgresConfigProvider postgrescfg.PostgresConfigProvider, imageProvider postgresversions.ImageProvider) spec.ServerInterface {
 	return &handler{
 		feat:                   feat,
 		store:                  store,
 		cells:                  cells,
 		defaultGatewayHostPort: gatewayHostPort,
 		metricsClient:          metricsClient,
+		cellsMetricsClient:     cellsMetricsClient,
 		sched:                  scheduler,
 		analytics:              analytics,
 		postgresConfigProvider: postgresConfigProvider,
 		imageProvider:          imageProvider,
 	}
+}
+
+// selectMetricsClient returns the metrics client for the current request based
+// on the BranchObservabilityPerCell feature flag. When the flag is on, queries
+// are routed to the branch's cell over gRPC; otherwise we fall through to the
+// legacy central SigNoz instance.
+func (s *handler) selectMetricsClient(ctx context.Context) metrics.Client {
+	if s.feat.BoolValue(ctx, flags.BranchObservabilityPerCell) {
+		return s.cellsMetricsClient
+	}
+	return s.metricsClient
 }
 
 // Get list of regions available for the organization
@@ -1630,12 +1647,12 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 			return err
 		}
 
-		_, err = s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID)
+		branch, err := s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID)
 		if err != nil {
 			return err
 		}
 
-		branchMetrics, err := s.metricsClient.GetMetric(c.Request().Context(), req.Start, req.End, string(req.Metric), stringArrayValue(req.Instances), stringArrayValue(req.Aggregations))
+		branchMetrics, err := s.selectMetricsClient(c.Request().Context()).GetMetric(c.Request().Context(), organizationID, branch.CellID, req.Start, req.End, branchID, string(req.Metric), stringArrayValue(req.Instances), stringArrayValue(req.Aggregations))
 		if err != nil {
 			return fmt.Errorf("getting metrics for branch [%s]: %w", branchID, err)
 		}
@@ -1663,20 +1680,24 @@ func (s *handler) BranchLogs(c echo.Context, organizationID spec.OrganizationID,
 			return err
 		}
 
-		exprs, err := compileLogsFilters(branchID, ptr.Deref(req.Filters, nil))
+		userFilters, err := validateLogFilters(branchID, ptr.Deref(req.Filters, nil))
 		if err != nil {
 			return err
 		}
 
-		if _, err := s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID); err != nil {
+		branch, err := s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID)
+		if err != nil {
 			return err
 		}
 
-		logs, err := s.metricsClient.GetLogs(
+		logs, err := s.selectMetricsClient(c.Request().Context()).GetLogs(
 			c.Request().Context(),
+			organizationID,
+			branch.CellID,
 			req.Start,
 			req.End,
-			exprs,
+			branchID,
+			userFilters,
 			ptr.Deref(req.Limit, DefaultLogLimit),
 			ptr.Deref(req.Cursor, ""),
 		)

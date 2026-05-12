@@ -16,6 +16,14 @@ type Config struct {
 	EnablePooler                bool              `env:"XATA_ENABLE_POOLER" env-default:"true" env-description:"enable PgBouncer connection pooler for new branches"`
 	XVolChildStorageClass       string            `env:"XATA_XVOL_CHILD_STORAGE_CLASS" env-default:"xatastor-slot" env-description:"storage class assigned to child branches whose parent branch uses a wakeup pool"`
 	XatastorEnabled             bool              `env:"XATA_XATASTOR_ENABLED" env-default:"false" env-description:"whether the xatastor StorageClass is deployed in this cell"`
+
+	// VictoriaMetricsURL points at the cell-local VictoriaMetrics single-node
+	// instance used to back GetBranchMetrics. Empty means no metrics backend
+	// is configured and the RPC will fail fast.
+	VictoriaMetricsURL string `env:"VICTORIAMETRICS_URL" env-default:"" env-description:"base URL of the cell-local VictoriaMetrics instance"`
+	// VictoriaLogsURL points at the cell-local VictoriaLogs instance used to
+	// back GetBranchLogs.
+	VictoriaLogsURL string `env:"VICTORIALOGS_URL" env-default:"" env-description:"base URL of the cell-local VictoriaLogs instance"`
 }
 
 func (cfg *Config) Validate() error {

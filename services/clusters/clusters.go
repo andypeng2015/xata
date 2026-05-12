@@ -12,10 +12,12 @@ import (
 	"xata/internal/service"
 	"xata/services/clusters/internal/connectors/cnpg"
 	"xata/services/clusters/internal/connectors/openebs"
+	"xata/services/clusters/observability"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -65,6 +67,12 @@ type ClustersService struct {
 	clusterReader      client.Reader
 	clusterCacheOk     chan struct{}
 	clusterCacheCancel context.CancelFunc
+
+	// Observability queriers — nil when no per-cell backend is configured.
+	// In that case GetBranchMetrics/GetBranchLogs return Unimplemented and
+	// the projects service falls through to the legacy SigNoz path.
+	metricsQuerier *observability.MetricsQuerier
+	logsQuerier    *observability.LogsQuerier
 }
 
 // NewClustersService creates a new instance of the service.
@@ -164,6 +172,20 @@ func (c *ClustersService) Init(ctx context.Context) error {
 			close(c.clusterCacheOk)
 		}
 	}()
+
+	if c.config.VictoriaMetricsURL != "" {
+		vm, err := observability.NewVMClient(c.config.VictoriaMetricsURL, nil)
+		if err != nil {
+			return fmt.Errorf("init victoria-metrics client: %w", err)
+		}
+		c.metricsQuerier = observability.NewMetricsQuerier(vm, c.config.ClustersNamespace)
+	}
+	if c.config.VictoriaLogsURL != "" {
+		c.logsQuerier = observability.NewLogsQuerier(
+			observability.NewVLClient(c.config.VictoriaLogsURL, nil),
+			c.config.ClustersNamespace,
+		)
+	}
 
 	return nil
 }
@@ -634,6 +656,128 @@ func (c *ClustersService) DeleteBranchIPFiltering(ctx context.Context, request *
 	}
 
 	return &clustersv1.DeleteBranchIPFilteringResponse{}, nil
+}
+
+// GetBranchMetrics queries the cell's VictoriaMetrics instance for the named
+// metric and aggregations. The branch-scope is enforced server-side as
+// defense in depth even though the projects handler also validates instance
+// prefixes.
+func (c *ClustersService) GetBranchMetrics(ctx context.Context, request *clustersv1.GetBranchMetricsRequest) (*clustersv1.GetBranchMetricsResponse, error) {
+	if c.metricsQuerier == nil {
+		return nil, status.Errorf(codes.Unimplemented, "metrics backend not configured for this cell")
+	}
+	if request.GetBranchId() == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "branch_id is required")
+	}
+	if request.GetStart() == nil || request.GetEnd() == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "start and end are required")
+	}
+	for _, inst := range request.GetInstances() {
+		if !strings.HasPrefix(inst, request.GetBranchId()+"-") {
+			return nil, status.Errorf(codes.InvalidArgument, "instance %q is not in branch %q", inst, request.GetBranchId())
+		}
+	}
+
+	res, err := c.metricsQuerier.Query(ctx,
+		request.GetBranchId(),
+		request.GetMetric(),
+		request.GetInstances(),
+		request.GetAggregations(),
+		request.GetStart().AsTime(),
+		request.GetEnd().AsTime(),
+	)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "query metrics: %v", err)
+	}
+
+	resp := &clustersv1.GetBranchMetricsResponse{
+		Start:  request.GetStart(),
+		End:    request.GetEnd(),
+		Metric: request.GetMetric(),
+		Unit:   res.Unit,
+		Series: make([]*clustersv1.MetricSeries, 0, len(res.Series)),
+	}
+	for _, s := range res.Series {
+		series := &clustersv1.MetricSeries{
+			Aggregation: s.Aggregation,
+			InstanceId:  s.InstanceID,
+			Values:      make([]*clustersv1.MetricValue, 0, len(s.Values)),
+		}
+		for _, v := range s.Values {
+			series.Values = append(series.Values, &clustersv1.MetricValue{
+				Timestamp: timestamppb.New(v.Timestamp),
+				Value:     v.Value,
+			})
+		}
+		resp.Series = append(resp.Series, series)
+	}
+	return resp, nil
+}
+
+// GetBranchLogs queries the cell's VictoriaLogs instance.
+func (c *ClustersService) GetBranchLogs(ctx context.Context, request *clustersv1.GetBranchLogsRequest) (*clustersv1.GetBranchLogsResponse, error) {
+	if c.logsQuerier == nil {
+		return nil, status.Errorf(codes.Unimplemented, "logs backend not configured for this cell")
+	}
+	if request.GetBranchId() == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "branch_id is required")
+	}
+	if request.GetStart() == nil || request.GetEnd() == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "start and end are required")
+	}
+	limit := int(request.GetLimit())
+	if limit <= 0 {
+		limit = 100
+	}
+
+	filters := make([]observability.LogFilter, 0, len(request.GetFilters()))
+	for _, f := range request.GetFilters() {
+		filters = append(filters, observability.LogFilter{
+			Field:  f.GetField(),
+			Op:     f.GetOp(),
+			Values: f.GetValues(),
+			Value:  f.GetValue(),
+		})
+	}
+
+	res, err := c.logsQuerier.Query(ctx,
+		request.GetBranchId(),
+		request.GetStart().AsTime(),
+		request.GetEnd().AsTime(),
+		filters,
+		limit,
+		request.GetCursor(),
+	)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "query logs: %v", err)
+	}
+
+	resp := &clustersv1.GetBranchLogsResponse{
+		Start: request.GetStart(),
+		End:   request.GetEnd(),
+		Logs:  make([]*clustersv1.LogEntry, 0, len(res.Entries)),
+	}
+	if res.NextCursor != "" {
+		nc := res.NextCursor
+		resp.NextCursor = &nc
+	}
+	for _, e := range res.Entries {
+		entry := &clustersv1.LogEntry{
+			Timestamp:  timestamppb.New(e.Timestamp),
+			InstanceId: e.InstanceID,
+			Message:    e.Message,
+		}
+		if e.Level != "" {
+			lvl := e.Level
+			entry.Level = &lvl
+		}
+		if e.Process != "" {
+			p := e.Process
+			entry.Process = &p
+		}
+		resp.Logs = append(resp.Logs, entry)
+	}
+	return resp, nil
 }
 
 // getBranch retrieves the Branch CR for the given branch ID.

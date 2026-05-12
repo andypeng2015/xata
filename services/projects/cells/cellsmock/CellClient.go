@@ -432,6 +432,130 @@ func (_c *CellClient_GetBranchIPFiltering_Call) Return(_a0 *clustersv1.GetBranch
 	return _c
 }
 
+// GetBranchLogs provides a mock function with given fields: ctx, in, opts
+func (_m *CellClient) GetBranchLogs(ctx context.Context, in *clustersv1.GetBranchLogsRequest, opts ...grpc.CallOption) (*clustersv1.GetBranchLogsResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *clustersv1.GetBranchLogsResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *clustersv1.GetBranchLogsRequest, ...grpc.CallOption) *clustersv1.GetBranchLogsResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*clustersv1.GetBranchLogsResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *clustersv1.GetBranchLogsRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// CellClient_GetBranchLogs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBranchLogs'
+type CellClient_GetBranchLogs_Call struct {
+	*mock.Call
+}
+
+// GetBranchLogs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in *clustersv1.GetBranchLogsRequest
+//   - opts ...grpc.CallOption
+func (_e *CellClient_Expecter) GetBranchLogs(ctx interface{}, in interface{}, opts ...interface{}) *CellClient_GetBranchLogs_Call {
+	return &CellClient_GetBranchLogs_Call{Call: _e.mock.On("GetBranchLogs",
+		append([]interface{}{ctx, in}, opts...)...)}
+}
+
+func (_c *CellClient_GetBranchLogs_Call) Run(run func(ctx context.Context, in *clustersv1.GetBranchLogsRequest, opts ...grpc.CallOption)) *CellClient_GetBranchLogs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*clustersv1.GetBranchLogsRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *CellClient_GetBranchLogs_Call) Return(_a0 *clustersv1.GetBranchLogsResponse, _a1 error) *CellClient_GetBranchLogs_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+// GetBranchMetrics provides a mock function with given fields: ctx, in, opts
+func (_m *CellClient) GetBranchMetrics(ctx context.Context, in *clustersv1.GetBranchMetricsRequest, opts ...grpc.CallOption) (*clustersv1.GetBranchMetricsResponse, error) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, in)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	var r0 *clustersv1.GetBranchMetricsResponse
+	if rf, ok := ret.Get(0).(func(context.Context, *clustersv1.GetBranchMetricsRequest, ...grpc.CallOption) *clustersv1.GetBranchMetricsResponse); ok {
+		r0 = rf(ctx, in, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*clustersv1.GetBranchMetricsResponse)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *clustersv1.GetBranchMetricsRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(ctx, in, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// CellClient_GetBranchMetrics_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBranchMetrics'
+type CellClient_GetBranchMetrics_Call struct {
+	*mock.Call
+}
+
+// GetBranchMetrics is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in *clustersv1.GetBranchMetricsRequest
+//   - opts ...grpc.CallOption
+func (_e *CellClient_Expecter) GetBranchMetrics(ctx interface{}, in interface{}, opts ...interface{}) *CellClient_GetBranchMetrics_Call {
+	return &CellClient_GetBranchMetrics_Call{Call: _e.mock.On("GetBranchMetrics",
+		append([]interface{}{ctx, in}, opts...)...)}
+}
+
+func (_c *CellClient_GetBranchMetrics_Call) Run(run func(ctx context.Context, in *clustersv1.GetBranchMetricsRequest, opts ...grpc.CallOption)) *CellClient_GetBranchMetrics_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*clustersv1.GetBranchMetricsRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *CellClient_GetBranchMetrics_Call) Return(_a0 *clustersv1.GetBranchMetricsResponse, _a1 error) *CellClient_GetBranchMetrics_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
 // GetCellUtilization provides a mock function with given fields: ctx, in, opts
 func (_m *CellClient) GetCellUtilization(ctx context.Context, in *clustersv1.GetCellUtilizationRequest, opts ...grpc.CallOption) (*clustersv1.GetCellUtilizationResponse, error) {
 	_va := make([]interface{}, len(opts))

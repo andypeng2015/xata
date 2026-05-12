@@ -1,0 +1,25 @@
+{{- if .Values.networkPolicy.enabled }}
+# Allow vmagent (in the release namespace) to scrape CNPG instance metrics on
+# port 9187 in the clusters namespace. The cnpg-side NetworkPolicy default-
+# denies cross-namespace ingress, so this opens just the vmagent path.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-vmagent-to-cnpg
+  namespace: {{ .Values.clustersNamespace }}
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/podRole: instance
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: victoria-metrics-agent
+      ports:
+        - port: 9187
+          protocol: TCP
+{{- end }}

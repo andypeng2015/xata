@@ -3,5 +3,6 @@
 .DS_Store
 .tilt-build/
 kustomize/**/charts/
+charts/cell-observability/charts/
 coverage
 tmp/
