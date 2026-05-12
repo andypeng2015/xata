@@ -22,8 +22,6 @@ import (
 )
 
 func TestExtractPostgresMajor(t *testing.T) {
-	t.Parallel()
-
 	tests := map[string]struct {
 		image string
 		want  string
@@ -63,8 +61,6 @@ func TestExtractPostgresMajor(t *testing.T) {
 }
 
 func TestFindPoolCluster(t *testing.T) {
-	t.Parallel()
-
 	origTimeout := poolClusterWaitTimeout
 	origInterval := poolClusterPollInterval
 	poolClusterWaitTimeout = 100 * time.Millisecond
@@ -222,8 +218,6 @@ func TestFindPoolCluster(t *testing.T) {
 }
 
 func TestFindPoolClusterConcurrent(t *testing.T) {
-	t.Parallel()
-
 	origTimeout := poolClusterWaitTimeout
 	origInterval := poolClusterPollInterval
 	poolClusterWaitTimeout = 100 * time.Millisecond
@@ -324,8 +318,6 @@ func TestFindPoolClusterConcurrent(t *testing.T) {
 }
 
 func TestOrphanCluster(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	cluster := &apiv1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -352,8 +344,6 @@ func TestOrphanCluster(t *testing.T) {
 }
 
 func TestWakeupPoolName(t *testing.T) {
-	t.Parallel()
-
 	tests := map[string]struct {
 		input string
 		want  string
@@ -381,8 +371,6 @@ func TestWakeupPoolName(t *testing.T) {
 }
 
 func TestFindHealthyClusterInPool(t *testing.T) {
-	t.Parallel()
-
 	const namespace = "xata-clusters"
 	poolUID := types.UID("pool-uid-123")
 
@@ -496,8 +484,6 @@ func TestFindHealthyClusterInPool(t *testing.T) {
 }
 
 func TestWaitForClusterCache(t *testing.T) {
-	t.Parallel()
-
 	t.Run("returns nil when cache is ready", func(t *testing.T) {
 		ready := make(chan struct{})
 		close(ready)
