@@ -58,7 +58,7 @@ chart-info: # Print chart metadata as TSV. Override with CHARTS="auth projects".
 				printf 'path:%s\n' "$$rel"; \
 				printf 'content:\n'; \
 				if [[ "$$rel" == "Chart.yaml" ]]; then \
-					APP_VERSION="$(APP_VERSION)" yq eval 'del(.version) | .appVersion = strenv(APP_VERSION)' "$$file"; \
+					yq eval 'del(.version) | del(.appVersion)' "$$file"; \
 				else \
 					cat "$$file"; \
 				fi; \
