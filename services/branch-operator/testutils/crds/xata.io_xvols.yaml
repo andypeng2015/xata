@@ -67,6 +67,60 @@ spec:
             description: XvolSpec defines the volume's identity and backing storage.
               Fields are immutable after creation unless noted otherwise.
             properties:
+              nvme:
+                default:
+                  ctrlLossTimeoutSecs: 900
+                  ioQueues: 1
+                  keepAliveTimeoutSecs: 10
+                  queueSize: 128
+                  reconnectDelaySecs: 10
+                description: |-
+                  NVMe-oF connect parameters for this volume. Defaulted by the API
+                  server from the CRD schema when the client omits fields. New values
+                  apply on the next attach only.
+                properties:
+                  ctrlLossTimeoutSecs:
+                    default: 900
+                    description: CtrlLossTimeoutSecs is the max time in seconds before
+                      giving up on a controller.
+                    format: int32
+                    maximum: 86400
+                    minimum: 1
+                    type: integer
+                  ioQueues:
+                    default: 1
+                    description: IOQueues is the number of I/O queues per controller.
+                    format: int32
+                    maximum: 1024
+                    minimum: 1
+                    type: integer
+                  keepAliveTimeoutSecs:
+                    default: 10
+                    description: KeepAliveTimeoutSecs is the keepalive probe interval
+                      in seconds.
+                    format: int32
+                    maximum: 3600
+                    minimum: 1
+                    type: integer
+                  queueSize:
+                    default: 32
+                    description: |-
+                      QueueSize is the depth of each I/O queue (NVMe SQ/CQ entries). The
+                      kernel's built-in default is 128 (NVMF_DEF_QUEUE_SIZE); bounds match
+                      the kernel's NVMF_MIN_QUEUE_SIZE and NVMF_MAX_QUEUE_SIZE.
+                    format: int32
+                    maximum: 1024
+                    minimum: 16
+                    type: integer
+                  reconnectDelaySecs:
+                    default: 10
+                    description: ReconnectDelaySecs is the delay between reconnect
+                      attempts in seconds.
+                    format: int32
+                    maximum: 3600
+                    minimum: 1
+                    type: integer
+                type: object
               size:
                 anyOf:
                 - type: integer
@@ -96,10 +150,8 @@ spec:
               storageNode:
                 description: |-
                   Name of the Xatastor storage node that hosts this volume.
-                  Optional user preference — if set, the reconciler uses this node;
-                  if empty, placement selects a node automatically. Must not be set
-                  when spec.source is set: clone placement is pinned to the parent's
-                  storage node.
+                  Optional. If set, pins the volume to this node; if empty, a node is
+                  chosen automatically (or, for clones, inherited from the source).
                 type: string
               xvolReclaimPolicy:
                 default: Delete
@@ -111,6 +163,8 @@ spec:
                 - Delete
                 - Retain
                 type: string
+            required:
+            - nvme
             type: object
             x-kubernetes-validations:
             - fieldPath: .storageNode
@@ -130,12 +184,8 @@ spec:
             - message: spec.size must be set and non-zero for fresh volumes and unset
                 for clones
               rule: 'has(self.source) ? !has(self.size) : (has(self.size) && quantity(self.size).isGreaterThan(quantity(''0'')))'
-            - message: spec.storageNode must not be set when spec.source is set
-              rule: '!has(self.source) || !has(self.storageNode) || size(self.storageNode)
-                == 0'
           status:
-            description: XvolStatus is the observed state of the volume, managed by
-              reconcilers and the CSI node plugin.
+            description: XvolStatus is the observed state of the volume.
             properties:
               attach:
                 description: Active NVMe connection state. Present only when state
@@ -149,6 +199,53 @@ spec:
                       NQN is the NVMe Qualified Name used for the active connection.
                       Set during Connected, cleared on transition to Bound/Available.
                     type: string
+                  nvme:
+                    description: |-
+                      NVMe is the set of NVMe connect params actually live on the kernel
+                      controller. May differ from spec.nvme due to target-side clamps.
+                    properties:
+                      ctrlLossTimeoutSecs:
+                        default: 900
+                        description: CtrlLossTimeoutSecs is the max time in seconds
+                          before giving up on a controller.
+                        format: int32
+                        maximum: 86400
+                        minimum: 1
+                        type: integer
+                      ioQueues:
+                        default: 1
+                        description: IOQueues is the number of I/O queues per controller.
+                        format: int32
+                        maximum: 1024
+                        minimum: 1
+                        type: integer
+                      keepAliveTimeoutSecs:
+                        default: 10
+                        description: KeepAliveTimeoutSecs is the keepalive probe interval
+                          in seconds.
+                        format: int32
+                        maximum: 3600
+                        minimum: 1
+                        type: integer
+                      queueSize:
+                        default: 32
+                        description: |-
+                          QueueSize is the depth of each I/O queue (NVMe SQ/CQ entries). The
+                          kernel's built-in default is 128 (NVMF_DEF_QUEUE_SIZE); bounds match
+                          the kernel's NVMF_MIN_QUEUE_SIZE and NVMF_MAX_QUEUE_SIZE.
+                        format: int32
+                        maximum: 1024
+                        minimum: 16
+                        type: integer
+                      reconnectDelaySecs:
+                        default: 10
+                        description: ReconnectDelaySecs is the delay between reconnect
+                          attempts in seconds.
+                        format: int32
+                        maximum: 3600
+                        minimum: 1
+                        type: integer
+                    type: object
                 required:
                 - computeNode
                 - nqn
@@ -232,14 +329,14 @@ spec:
                 minimum: 1
                 type: integer
               observedGeneration:
-                description: Last spec generation reconciled by the controller.
+                description: Most recent .metadata.generation observed in this status.
                 format: int64
                 type: integer
               pvName:
                 description: |-
                   PVName is the PersistentVolume bound to this XVol during this attach
-                  cycle. Set on Bind (Available → Bound), preserved across Connected and
-                  force-detach, cleared on transition to Available.
+                  cycle. Set on transition to Bound, preserved while Connected and on
+                  return to Bound, cleared on transition to Available.
                 type: string
               stateTransitionTime:
                 description: |-
@@ -249,8 +346,8 @@ spec:
                 type: string
               storageNode:
                 description: |-
-                  Actual storage node where the volume was placed. Set by the reconciler
-                  after backend creation. Source of truth for all runtime reads.
+                  Actual storage node where the volume was placed. Written once the
+                  backend has been provisioned; source of truth for runtime reads.
                 type: string
               volumeState:
                 description: Lifecycle state of the volume.
