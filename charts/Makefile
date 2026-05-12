@@ -3,9 +3,8 @@ SHELL := /bin/bash
 CHARTS ?= $(patsubst %/Chart.yaml,%,$(wildcard */Chart.yaml))
 CHART_REGISTRY ?= oci://ghcr.io/xataio/maki/charts
 
-GIT_COMMIT_FULL := $(shell git rev-parse HEAD)
-GIT_COMMIT_SHORT := $(shell printf '%.7s' $(GIT_COMMIT_FULL))
-CHART_VERSION := 0.0.0-g$(GIT_COMMIT_SHORT)
+GIT_COMMIT_SHORT := $(shell git rev-parse --short=7 HEAD)
+APP_VERSION ?= $(GIT_COMMIT_SHORT)
 
 GO ?= go
 CUE ?= $(GO) run cuelang.org/go/cmd/cue
@@ -14,17 +13,15 @@ KUBE_LINTER ?= $(GO) run golang.stackrox.io/kube-linter/cmd/kube-linter
 env: # Print Makefile variables for debugging
 	@echo "CHARTS: $(CHARTS)"
 	@echo "CHART_REGISTRY: $(CHART_REGISTRY)"
-	@echo "GIT_COMMIT_FULL: $(GIT_COMMIT_FULL)"
-	@echo "GIT_COMMIT_SHORT: $(GIT_COMMIT_SHORT)"
-
-version: # Print the chart version for the current commit
-	@echo "$(CHART_VERSION)"
 
 git-commit-sha: # Print the short git commit SHA
 	@echo "$(GIT_COMMIT_SHORT)"
 
 registry: # Print the chart registry/repo
 	@echo "$(CHART_REGISTRY)"
+
+list-charts: # Print chart names, one per line
+	@printf '%s\n' $(CHARTS)
 
 # Inject tag for image into chart values.yaml files
 # Usage: make inject-tags IMAGE=ghcr.io/xataio/xata/auth TAG=1234567-abc
@@ -38,30 +35,58 @@ inject-tags:
 		fi; \
 	fi
 
-# Version a chart with git commit
-# Usage: make version-chart SERVICE=auth
-version-chart:
-	@echo "Setting $(SERVICE) version to $(CHART_VERSION), appVersion $(GIT_COMMIT_SHORT)"
-	@yq eval '.version = "$(CHART_VERSION)" | .appVersion = "$(GIT_COMMIT_SHORT)"' -i $(SERVICE)/Chart.yaml
-
-# Package and push a single chart
-# Usage: make push-chart SERVICE=auth
-push-chart: version-chart
-	@set -e; \
-	echo "Packaging $(SERVICE)"; \
-	helm package $(SERVICE); \
-	echo "Pushing $(SERVICE) to $(CHART_REGISTRY)"; \
-	helm push $(SERVICE)-$(CHART_VERSION).tgz $(CHART_REGISTRY); \
-	rm -f $(SERVICE)-$(CHART_VERSION).tgz
-
-# Push all charts (discovered via glob)
-push-charts:
-	@set -e; \
+chart-info: # Print chart metadata as TSV. Override with CHARTS="auth projects".
+	@set -euo pipefail; \
 	for chart in $(CHARTS); do \
-		$(MAKE) push-chart SERVICE=$$chart; \
+		if [ ! -d "$$chart" ]; then \
+			echo "Chart $$chart does not exist"; \
+			exit 1; \
+		fi; \
+		hash=$$( \
+			find "$$chart" -type f | LC_ALL=C sort | while IFS= read -r file; do \
+				rel="$${file#$$chart/}"; \
+				printf 'path:%s\n' "$$rel"; \
+				printf 'content:\n'; \
+				if [[ "$$rel" == "Chart.yaml" ]]; then \
+					APP_VERSION="$(APP_VERSION)" yq eval 'del(.version) | .appVersion = strenv(APP_VERSION)' "$$file"; \
+				else \
+					cat "$$file"; \
+				fi; \
+				printf '\n'; \
+			done | sha256sum | cut -c1-12 \
+		); \
+		printf '%s\t%s\t0.0.0-h%s\n' "$$chart" "$(CHART_REGISTRY)" "$$hash"; \
 	done
 
+# Version a chart with its content hash
+# Override with CHARTS="auth projects".
+set-chart-version:
+	@set -euo pipefail; \
+	info="$$( $(MAKE) --no-print-directory chart-info CHARTS="$(CHARTS)" )"; \
+	while IFS=$$'\t' read -r chart _ version; do \
+		app_version="$(APP_VERSION)"; \
+		echo "Setting $$chart version to $$version, appVersion $$app_version"; \
+		VERSION="$$version" APP_VERSION="$$app_version" \
+			yq eval '.version = strenv(VERSION) | .appVersion = strenv(APP_VERSION)' -i "$$chart/Chart.yaml"; \
+	done <<< "$$info"
 
+# Package and push charts
+# Override with CHARTS="auth projects".
+push-charts:
+	@set -euo pipefail; \
+	info="$$( $(MAKE) --no-print-directory chart-info CHARTS="$(CHARTS)" )"; \
+	while IFS=$$'\t' read -r chart _ version; do \
+		if helm show chart "$(CHART_REGISTRY)/$$chart" --version "$$version" >/dev/null 2>&1; then \
+			echo "Chart $$chart:$$version already exists - skip package/push"; \
+			continue; \
+		fi; \
+		$(MAKE) set-chart-version CHARTS="$$chart"; \
+		echo "Packaging $$chart"; \
+		helm package "$$chart"; \
+		echo "Pushing $$chart to $(CHART_REGISTRY)"; \
+		helm push "$$chart-$$version.tgz" $(CHART_REGISTRY); \
+		rm -f "$$chart-$$version.tgz"; \
+	done <<< "$$info"
 
 lint: lint-helm lint-kube lint-cue
 

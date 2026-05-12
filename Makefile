@@ -6,6 +6,8 @@ GOLANGCI := $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 DOCKER_FLAGS=--rm --user $(shell id -u):$(shell id -g)
 DOCKER_OPA := docker run $(DOCKER_FLAGS) -v $(PWD)/internal/opa:/policy openpolicyagent/opa:latest
 DOCKER_JQ := docker run $(DOCKER_FLAGS) -v $(PWD):/data -w /data jq-tools
+GIT_COMMIT_FULL := $(shell git rev-parse HEAD)
+SOURCE_URL := $(or $(GITHUB_SERVER_URL),https://github.com)/$(or $(GITHUB_REPOSITORY),xataio/maki)
 
 .PHONY: help
 help:  ## This help dialog.
@@ -168,6 +170,8 @@ build-image: ## Build and push image. Requires IMAGE and PATHS. Optional: DOCKER
 			-f "$$dockerfile" \
 			"$${extra_args[@]}" \
 			--platform linux/amd64,linux/arm64 \
+			--label "org.opencontainers.image.revision=$(GIT_COMMIT_FULL)" \
+			--label "org.opencontainers.image.source=$(SOURCE_URL)" \
 			--cache-from "type=registry,ref=$$image_name:buildcache" \
 			--cache-to "type=registry,ref=$$image_name:buildcache,mode=max" \
 			--progress=plain \
