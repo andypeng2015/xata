@@ -286,7 +286,7 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 			Str("poolName", poolName).
 			Msg("pool cluster search result")
 		if poolCluster != nil {
-			branchBuilder.WithClusterFromPool(poolCluster.Name, wakeupPoolName(poolName))
+			branchBuilder.WithClusterFromPool(poolCluster.Name, slotPoolName(poolName))
 		}
 	}
 

@@ -343,28 +343,24 @@ func TestOrphanCluster(t *testing.T) {
 	require.Empty(t, updated.OwnerReferences)
 }
 
-func TestWakeupPoolName(t *testing.T) {
+func TestSlotPoolName(t *testing.T) {
 	tests := map[string]struct {
 		input string
 		want  string
 	}{
-		"standard create pool": {
-			input: "pg18-tiny-create",
-			want:  "pg18-tiny-wakeup",
+		"standard pool": {
+			input: "pg18-micro",
+			want:  "pg18-micro-slot",
 		},
-		"already wakeup pool": {
-			input: "pg18-tiny-wakeup",
-			want:  "pg18-tiny-wakeup",
-		},
-		"no create suffix": {
-			input: "pg18-tiny",
-			want:  "pg18-tiny-wakeup",
+		"already slot pool": {
+			input: "pg18-micro-slot",
+			want:  "pg18-micro-slot",
 		},
 	}
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got := wakeupPoolName(tt.input)
+			got := slotPoolName(tt.input)
 			require.Equal(t, tt.want, got)
 		})
 	}
