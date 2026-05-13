@@ -8,10 +8,11 @@ import (
 )
 
 const (
-	MaxBranchesPerProject = 100
-	MaxNewOrgBranches     = 10
-	DefaultRegion         = "us-east-1"
-	BackupTypeContinuous  = "continuous"
+	MaxBranchesPerProject             = 100
+	MaxBranchesPerProjectWithXatastor = 1000
+	MaxNewOrgBranches                 = 10
+	DefaultRegion                     = "us-east-1"
+	BackupTypeContinuous              = "continuous"
 )
 
 // LimitKey identifies a project-level limit stored in the projects service.
@@ -327,6 +328,9 @@ type ProjectsStore interface {
 
 	// CountOrganizationBranches counts all branches ever created for an organization (including soft-deleted ones)
 	CountOrganizationBranches(ctx context.Context, organizationID string) (int64, error)
+
+	// CountActiveProjectBranches counts active (non-deleted) branches in a project.
+	CountActiveProjectBranches(ctx context.Context, projectID string) (int64, error)
 
 	// AcquireProjectLock acquires a PostgreSQL advisory lock for the given projectID.
 	// Returns a release function that must be called to release the lock. The release function

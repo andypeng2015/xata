@@ -721,16 +721,6 @@ func (s *sqlProjectStore) CreateBranch(ctx context.Context, organizationID, proj
 		}
 	}
 
-	// check it's less than MaxBranchesPerProject
-	projectBranchCount := 0
-	err = s.sql.QueryRowContext(ctx, "SELECT COUNT(id) FROM branches WHERE project_id = $1 AND status = $2", projectID, StatusActive).Scan(&projectBranchCount)
-	if err != nil {
-		return nil, err
-	}
-	if projectBranchCount >= store.MaxBranchesPerProject {
-		return nil, store.ErrTooManyBranches{ID: projectID}
-	}
-
 	branchDepth := int32(1)
 	if config.ParentID != nil {
 		// check whether a child branch can be added
@@ -1191,6 +1181,17 @@ func (s *sqlProjectStore) CleanupTerminatedProjects(ctx context.Context, termina
 	}
 
 	return result.RowsAffected()
+}
+
+func (s *sqlProjectStore) CountActiveProjectBranches(ctx context.Context, projectID string) (int64, error) {
+	var count int64
+	err := s.sql.QueryRowContext(ctx,
+		`SELECT COUNT(id) FROM branches WHERE project_id = $1 AND status = $2`,
+		projectID, StatusActive).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count active project branches: %w", err)
+	}
+	return count, nil
 }
 
 func (s *sqlProjectStore) CountOrganizationBranches(ctx context.Context, organizationID string) (int64, error) {

@@ -1752,6 +1752,7 @@ func TestCreateBranch(t *testing.T) {
 				tt.setupMocks(&capturedRequest)
 			}
 			mockStore.EXPECT().AcquireProjectLock(mock.Anything, "project_id").Return(func() error { return nil }, nil).Maybe()
+			mockStore.EXPECT().CountActiveProjectBranches(mock.Anything, "project_id").Return(0, nil).Maybe()
 
 			c, rec := e.POST("/organizations/" + apitest.TestOrganization + "/projects/project_id/branches").WithJSONBody(tt.jsonBody).Context()
 			err := handler.CreateBranch(c, apitest.TestOrganization, "project_id")
@@ -2127,6 +2128,8 @@ func TestRestoreFromBackup(t *testing.T) {
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 			tt.setupMocks(mockStore, mockClusters, mockPostgresConfig, mockImageProvider)
+			mockStore.EXPECT().AcquireProjectLock(mock.Anything, "project_id").Return(func() error { return nil }, nil).Maybe()
+			mockStore.EXPECT().CountActiveProjectBranches(mock.Anything, "project_id").Return(0, nil).Maybe()
 
 			var body map[string]any
 			if tt.body != nil {

@@ -252,7 +252,7 @@ func TestSQLStore(t *testing.T) {
 
 	fakeParentID := "fakeID"
 
-	branchLimitProject, cleanupBranchLimit := createProjectAndBranchesForLimitTest(t, ctx, sqlStore, "organizationID", "branchLimitProject")
+	_, cleanupBranchLimit := createProjectAndBranchesForLimitTest(t, ctx, sqlStore, "organizationID", "branchLimitProject")
 	defer cleanupBranchLimit()
 
 	depthProject, depthBranch, childrenBranch, cleanupDepthLimit := createProjectAndBranchesForDepthTest(t, ctx, sqlStore, "organizationID", "depthProject")
@@ -261,7 +261,6 @@ func TestSQLStore(t *testing.T) {
 	parentNotFoundErr := store.ErrBranchNotFound{ID: fakeParentID}
 	branchAlreadyExistsErr := store.ErrBranchAlreadyExists{Name: "branch4"}
 	projectNotFoundErr = store.ErrProjectNotFound{ID: altProject.ID}
-	tooManyBranchesErr := store.ErrTooManyBranches{ID: branchLimitProject.ID}
 
 	var gotBranch *store.Branch
 	branchCreateTests := []struct {
@@ -350,18 +349,6 @@ func TestSQLStore(t *testing.T) {
 			},
 			wantError:    true,
 			errorMessage: branchAlreadyExistsErr.Error(),
-		},
-		{
-			name:           "create branch fails project with too many branches",
-			branchName:     "branch5",
-			organizationID: "organizationID",
-			projectID:      branchLimitProject.ID,
-			description:    nil,
-			callbackFunc: func(b *store.Branch) error {
-				return nil
-			},
-			wantError:    true,
-			errorMessage: tooManyBranchesErr.Error(),
 		},
 		{
 			name:           "create branch fails due to max depth limit",
@@ -1340,7 +1327,7 @@ func TestSoftDeleteBehavior(t *testing.T) {
 		require.Equal(t, branch1.ID, branches[0].ID)
 	})
 
-	t.Run("terminated branches do not count toward branch limit", func(t *testing.T) {
+	t.Run("CountActiveProjectBranches excludes terminated branches", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 		sqlStore := setupSQLStore(ctx, t, maxDepth, maxChildren)
@@ -1350,16 +1337,18 @@ func TestSoftDeleteBehavior(t *testing.T) {
 		project, cleanup := createProjectAndBranchesForLimitTest(t, ctx, sqlStore, orgID, "branchLimitProject2")
 		defer cleanup()
 
-		_, err := sqlStore.CreateBranch(ctx, orgID, project.ID, "cell", createBranchConfig("oneMore", nil, nil), noopProvisionFunc)
-		require.Equal(t, store.ErrTooManyBranches{ID: project.ID}, err)
+		count, err := sqlStore.CountActiveProjectBranches(ctx, project.ID)
+		require.NoError(t, err)
+		require.Equal(t, int64(store.MaxBranchesPerProject), count)
 
 		branches, err := sqlStore.ListBranches(ctx, orgID, project.ID)
 		require.NoError(t, err)
 		err = sqlStore.DeleteBranch(ctx, orgID, project.ID, branches[0].ID, func(*store.Branch) error { return nil })
 		require.NoError(t, err)
 
-		_, err = sqlStore.CreateBranch(ctx, orgID, project.ID, "cell", createBranchConfig("newBranch", nil, nil), noopProvisionFunc)
+		count, err = sqlStore.CountActiveProjectBranches(ctx, project.ID)
 		require.NoError(t, err)
+		require.Equal(t, int64(store.MaxBranchesPerProject-1), count)
 	})
 
 	t.Run("terminated children branches do not count toward children limit", func(t *testing.T) {

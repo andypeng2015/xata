@@ -545,6 +545,23 @@ type ValidatableCreateRequest interface {
 	spec.CreateBranchJSONRequestBody | spec.RestoreFromBackupJSONRequestBody
 }
 
+// enforceProjectBranchLimit checks that the project hasn't reached its branch
+// cap. Projects with the UseXatastor flag get a higher cap.
+func (s *handler) enforceProjectBranchLimit(ctx context.Context, projectID string, useXatastor bool) error {
+	limit := int64(store.MaxBranchesPerProject)
+	if useXatastor {
+		limit = int64(store.MaxBranchesPerProjectWithXatastor)
+	}
+	count, err := s.store.CountActiveProjectBranches(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("count active project branches: %w", err)
+	}
+	if count >= limit {
+		return store.ErrTooManyBranches{ID: projectID}
+	}
+	return nil
+}
+
 func validateBranchRequestCommons[T ValidatableCreateRequest](body T) error {
 	v := any(body)
 	var desc *string
@@ -606,10 +623,11 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 		}
 
 		ctx := c.Request().Context()
+		useXatastor := s.feat.BoolValue(ctx, flags.UseXatastor)
 
 		claims := api.GetUserClaims(c)
-		if claims != nil {
-			if org, ok := claims.Organizations[string(organizationID)]; ok && org.IsNewOrganization() && string(organizationID) != "hrq60r" {
+		if claims != nil && !useXatastor {
+			if org, ok := claims.Organizations[string(organizationID)]; ok && org.IsNewOrganization() {
 				count, err := s.store.CountOrganizationBranches(ctx, string(organizationID))
 				if err != nil {
 					return fmt.Errorf("count organization branches: %w", err)
@@ -676,6 +694,10 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 			return fmt.Errorf("failed to acquire project lock: %w", err)
 		}
 		defer releaseLock()
+
+		if err := s.enforceProjectBranchLimit(ctx, projectID, useXatastor); err != nil {
+			return err
+		}
 
 		return s.withProject(c, organizationID, projectID, func(project *store.Project) error {
 			branch, err := s.store.CreateBranch(ctx, organizationID, projectID, createClusterPayload.CellID, &store.CreateBranchConfiguration{
@@ -1731,6 +1753,8 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 		var err error
 		ctx := c.Request().Context()
 
+		useXatastor := s.feat.BoolValue(ctx, flags.UseXatastor)
+
 		// restore must happen in the same cell where the backup exists
 		// otherwise we don't have access to the source object store
 		sourceBranch, err := s.store.DescribeBranch(ctx, organizationID, projectID, branchID)
@@ -1776,6 +1800,16 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 
 		if !createClusterPayload.BackupsEnabled && body.BackupConfiguration != nil {
 			return ErrorInvalidParam{BranchName: body.Name, Param: "backupConfiguration", Message: "backup configuration cannot be specified when backups are disabled in the selected region"}
+		}
+
+		releaseLock, err := s.store.AcquireProjectLock(ctx, projectID)
+		if err != nil {
+			return fmt.Errorf("failed to acquire project lock: %w", err)
+		}
+		defer releaseLock()
+
+		if err := s.enforceProjectBranchLimit(ctx, projectID, useXatastor); err != nil {
+			return err
 		}
 
 		return s.withProject(c, organizationID, projectID, func(project *store.Project) error {
