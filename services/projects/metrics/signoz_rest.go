@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
 	"strings"
@@ -187,9 +188,13 @@ func parseMetricValues(points *[]signoz.Querybuildertypesv5TimeSeriesValue) []Va
 		if point.Timestamp == nil || point.Value == nil {
 			continue
 		}
+		v := *point.Value
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			continue
+		}
 		values = append(values, Values{
 			Timestamp: time.UnixMilli(*point.Timestamp),
-			Value:     float32(*point.Value),
+			Value:     float32(v),
 		})
 	}
 

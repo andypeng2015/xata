@@ -54,7 +54,7 @@ func (c *VMClient) QueryRange(ctx context.Context, query string, start, end time
 		samples := make([]PromSample, 0, len(stream.Values))
 		for _, s := range stream.Values {
 			f := float64(s.Value)
-			if math.IsNaN(f) {
+			if math.IsNaN(f) || math.IsInf(f, 0) {
 				continue
 			}
 			samples = append(samples, PromSample{Timestamp: s.Timestamp.Time().UTC(), Value: f})
