@@ -93,7 +93,28 @@ func BuildClusterStatus(cluster *apiv1.Cluster) *clustersv1.ClusterStatus {
 		status.Instances[cluster.Status.TargetPrimary].TargetPrimary = true
 	}
 
+	// CNPG keeps cluster.Status.Phase at "Healthy" across hibernate/wake even
+	// while the pods are rolling, so per-instance statuses can still be
+	// Unknown the moment the phase flips back. Downgrade to TRANSIENT until
+	// every reported instance has a non-Unknown status and the ready count
+	// matches the desired instance count.
+	if status.StatusType == clustersv1.ClusterStatus_STATUS_TYPE_HEALTHY && !instancesReconciled(&status) {
+		status.StatusType = clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT
+	}
+
 	return &status
+}
+
+func instancesReconciled(status *clustersv1.ClusterStatus) bool {
+	if status.InstanceReadyCount < status.InstanceCount {
+		return false
+	}
+	for _, instance := range status.Instances {
+		if instance.Status == InstanceStatusUnknown {
+			return false
+		}
+	}
+	return true
 }
 
 func isTransientClusterState(value string) bool {
