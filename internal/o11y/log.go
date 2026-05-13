@@ -1,6 +1,7 @@
 package o11y
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	stdlog "log"
@@ -36,6 +37,37 @@ func init() {
 	// remove v-level from zerologr wrapper.
 	// The v-level is redundant with `level` emitted by zerolog.
 	zerologr.VerbosityFieldName = ""
+}
+
+// StdLogger returns a stdlib *log.Logger that routes all output through
+// zerolog at the given level. Use this when a third-party API requires a
+// *log.Logger (e.g. http.Server.ErrorLog) to avoid empty-level log entries
+// that result from zerolog's io.Writer path (which always emits at NoLevel).
+func StdLogger(logger *zerolog.Logger, level zerolog.Level) *stdlog.Logger {
+	return StdLoggerFunc(logger, func(string) zerolog.Level { return level })
+}
+
+// StdLoggerFunc is like StdLogger but derives the level from the message,
+// allowing callers to demote known-noisy messages without a separate writer type.
+func StdLoggerFunc(logger *zerolog.Logger, levelFn func(msg string) zerolog.Level) *stdlog.Logger {
+	if logger == nil {
+		panic("o11y.StdLoggerFunc: logger must not be nil")
+	}
+	if levelFn == nil {
+		panic("o11y.StdLoggerFunc: levelFn must not be nil")
+	}
+	return stdlog.New(&stdLevelWriter{logger: logger, levelFn: levelFn}, "", 0)
+}
+
+type stdLevelWriter struct {
+	logger  *zerolog.Logger
+	levelFn func(msg string) zerolog.Level
+}
+
+func (w *stdLevelWriter) Write(p []byte) (int, error) {
+	msg := string(bytes.TrimRight(p, "\n"))
+	w.logger.WithLevel(w.levelFn(msg)).Msg(msg)
+	return len(p), nil
 }
 
 // SetGlobalLogger sets the log output in the stdlib log package and the

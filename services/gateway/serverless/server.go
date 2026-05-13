@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	proxyproto "github.com/pires/go-proxyproto"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -139,6 +140,12 @@ func (s *Server) Run(ctx context.Context) error {
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		ErrorLog: o11y.StdLoggerFunc(logger, func(msg string) zerolog.Level {
+			if strings.HasPrefix(msg, "http: TLS handshake error") {
+				return zerolog.DebugLevel
+			}
+			return zerolog.WarnLevel
+		}),
 	}
 
 	errChan := make(chan error, 1)
