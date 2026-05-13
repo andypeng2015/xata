@@ -1159,6 +1159,7 @@ paths:
             - 'project:read'
       tags:
         - GitHub App
+      x-excluded: true
     post:
       operationId: createGithubAppInstallation
       summary: Create GitHub App installation
@@ -1198,6 +1199,7 @@ paths:
             - 'org:write'
       tags:
         - GitHub App
+      x-excluded: true
   '/organizations/{organizationID}/githubapp/installations/{githubInstallationID}':
     summary: GitHub App Installation Operations by ID
     description: Manage a specific GitHub App installation.
@@ -1248,6 +1250,7 @@ paths:
             - 'org:write'
       tags:
         - GitHub App
+      x-excluded: true
   '/organizations/{organizationID}/projects/{projectID}/branches/{branchID}/githubapp/repository':
     summary: GitHub App Repository Operations
     description: Manage GitHub repository to Xata branch mappings.
@@ -1301,6 +1304,7 @@ paths:
             - 'project:read'
       tags:
         - GitHub App
+      x-excluded: true
     post:
       operationId: createGithubRepository
       summary: Create GitHub repository mapping
@@ -1352,6 +1356,7 @@ paths:
             - 'project:write'
       tags:
         - GitHub App
+      x-excluded: true
     put:
       operationId: updateGithubRepository
       summary: Update GitHub repository mapping
@@ -1403,6 +1408,7 @@ paths:
             - 'project:write'
       tags:
         - GitHub App
+      x-excluded: true
     delete:
       operationId: deleteGithubRepository
       summary: Delete GitHub repository mapping
@@ -1444,6 +1450,7 @@ paths:
             - 'project:write'
       tags:
         - GitHub App
+      x-excluded: true
 components:
   schemas:
     GithubInstallation:

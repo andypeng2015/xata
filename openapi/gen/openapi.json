@@ -3272,7 +3272,8 @@
         ],
         "tags": [
           "GitHub App"
-        ]
+        ],
+        "x-excluded": true
       },
       "post": {
         "operationId": "createGithubAppInstallation",
@@ -3335,7 +3336,8 @@
         ],
         "tags": [
           "GitHub App"
-        ]
+        ],
+        "x-excluded": true
       }
     },
     "/organizations/{organizationID}/githubapp/installations/{githubInstallationID}": {
@@ -3414,7 +3416,8 @@
         ],
         "tags": [
           "GitHub App"
-        ]
+        ],
+        "x-excluded": true
       }
     },
     "/organizations/{organizationID}/projects/{projectID}/branches/{branchID}/githubapp/repository": {
@@ -3496,7 +3499,8 @@
         ],
         "tags": [
           "GitHub App"
-        ]
+        ],
+        "x-excluded": true
       },
       "post": {
         "operationId": "createGithubRepository",
@@ -3577,7 +3581,8 @@
         ],
         "tags": [
           "GitHub App"
-        ]
+        ],
+        "x-excluded": true
       },
       "put": {
         "operationId": "updateGithubRepository",
@@ -3658,7 +3663,8 @@
         ],
         "tags": [
           "GitHub App"
-        ]
+        ],
+        "x-excluded": true
       },
       "delete": {
         "operationId": "deleteGithubRepository",
@@ -3722,7 +3728,8 @@
         ],
         "tags": [
           "GitHub App"
-        ]
+        ],
+        "x-excluded": true
       }
     },
     "/webhooks/orb": {
