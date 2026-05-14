@@ -1,0 +1,29 @@
+# This file lives in maki under oss/.github/workflows/ and is overlaid onto
+# xataio/xata/.github/workflows/notify-source.yml by the outbound sync. It
+# runs in xataio/xata and pings maki's "Sync from OSS" workflow.
+#
+# Requires the GIT_TOKEN secret to be set on xataio/xata (PAT with repo scope
+# on xataio/maki).
+name: Notify source
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    name: Dispatch to source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger inbound sync in source repo
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: token ${{ secrets.GIT_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/xataio/maki/dispatches" \
+            -d '{
+              "event_type": "oss-pr-merged",
+              "client_payload": {
+                "sha": "${{ github.sha }}"
+              }
+            }'
