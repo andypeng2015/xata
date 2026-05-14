@@ -29,19 +29,6 @@ func TestValidate(t *testing.T) {
 			},
 			wantErr: "volume snapshot class is required",
 		},
-		"xvol child storage class not configured": {
-			cfg: Config{
-				ClustersStorageClass:        "xatastor",
-				ClustersVolumeSnapshotClass: "xatastor",
-			},
-		},
-		"xvol child storage class configured": {
-			cfg: Config{
-				ClustersStorageClass:        "xatastor",
-				ClustersVolumeSnapshotClass: "xatastor",
-				XVolChildStorageClass:       "xatastor-slot",
-			},
-		},
 	}
 
 	for name, tt := range tests {

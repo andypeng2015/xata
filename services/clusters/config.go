@@ -14,7 +14,6 @@ type Config struct {
 	ClustersVolumeSnapshotClass string            `env:"XATA_CLUSTERS_VOLUME_SNAPSHOT_CLASS" env-description:"volumesnapshotclass to use for clusters"`
 	DiskPoolNamespace           string            `env:"XATA_DISKPOOL_NAMESPACE" env-default:"openebs" env-description:"namespace where DiskPool resources are created"`
 	EnablePooler                bool              `env:"XATA_ENABLE_POOLER" env-default:"true" env-description:"enable PgBouncer connection pooler for new branches"`
-	XVolChildStorageClass       string            `env:"XATA_XVOL_CHILD_STORAGE_CLASS" env-default:"xatastor-slot" env-description:"storage class assigned to child branches whose parent branch uses a wakeup pool"`
 	XatastorEnabled             bool              `env:"XATA_XATASTOR_ENABLED" env-default:"false" env-description:"whether the xatastor StorageClass is deployed in this cell"`
 
 	// VictoriaMetricsURL points at the cell-local VictoriaMetrics single-node

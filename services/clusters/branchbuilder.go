@@ -22,16 +22,12 @@ const (
 
 // BranchBuilder builds Branch resources.
 type BranchBuilder struct {
-	branch                *v1alpha1.Branch
-	xvolChildStorageClass string
+	branch *v1alpha1.Branch
 }
 
-// NewBranchBuilder creates a new BranchBuilder. xvolChildStorageClass is the
-// storage class assigned to child branches whose parent uses a wakeup pool.
-func NewBranchBuilder(xvolChildStorageClass string) *BranchBuilder {
-	return &BranchBuilder{
-		xvolChildStorageClass: xvolChildStorageClass,
-	}
+// NewBranchBuilder creates a new BranchBuilder
+func NewBranchBuilder() *BranchBuilder {
+	return &BranchBuilder{}
 }
 
 // resourceConfigurer defines an interface for types that provide resource
@@ -113,7 +109,6 @@ func (b *BranchBuilder) WithOverridesFromParent(parent *v1alpha1.Branch) *Branch
 
 	// If the parent branch has a wakeup pool annotation:
 	// * Annotate the child with the same wakeup pool annotation
-	// * Set the child to use the configured XVol child class
 	// * Upgrade the restore type from VolumeSnapshot to XVolClone
 	// * Clear the cluster name from the child Branch
 	if parent.HasWakeupPoolAnnotation() {
@@ -121,7 +116,6 @@ func (b *BranchBuilder) WithOverridesFromParent(parent *v1alpha1.Branch) *Branch
 			b.branch.Annotations = make(map[string]string)
 		}
 		b.branch.Annotations[v1alpha1.WakeupPoolAnnotation] = parent.Annotations[v1alpha1.WakeupPoolAnnotation]
-		clusterSpec.Storage.StorageClass = &b.xvolChildStorageClass
 		b.branch.Spec.Restore.Type = v1alpha1.RestoreTypeXVolClone
 		b.branch.Spec.ClusterSpec.Name = nil
 	}
