@@ -168,10 +168,9 @@ func (c *ClustersService) Init(ctx context.Context) error {
 		_ = clusterCache.Start(cacheCtx) //nolint:errcheck
 	}()
 	go func() {
-		if !clusterCache.WaitForCacheSync(cacheCtx) {
-			log.Ctx(cacheCtx).Error().Msg("cluster cache sync failed")
+		if clusterCache.WaitForCacheSync(cacheCtx) {
+			close(c.clusterCacheOk)
 		}
-		close(c.clusterCacheOk)
 	}()
 
 	if c.config.VictoriaMetricsURL != "" {

@@ -46,6 +46,7 @@ var DefaultAllowHeaders = []string{
 	"X-Xata-Client-ID",
 	"X-Xata-Session-ID",
 	"X-Xata-Agent",
+	"X-Xata-Observability-Backend",
 	"X-Features",
 	"Timing-Allow-Origin",
 }

@@ -3226,9 +3226,13 @@ func TestBranchMetrics(t *testing.T) {
 	}
 }
 
-// TestBranchObservabilityPerCellFlag asserts that the BranchObservabilityPerCell
-// flag picks the per-cell metrics client; when off, the legacy SigNoz client
-// is used. We pass two distinct mock clients and assert which one is invoked.
+// TestBranchObservabilityPerCellFlag asserts the per-cell observability
+// rollout selection logic. Without the BranchObservabilityPerCell flag, the
+// legacy SigNoz client is always used and the override header is ignored.
+// With the flag on, the default stays on SigNoz so production traffic shape
+// is unchanged; only an explicit X-Xata-Observability-Backend: victoria
+// header swaps in the per-cell client. The flag-on/header-on case is what
+// the console will use to render the side-by-side rollout comparison.
 func TestBranchObservabilityPerCellFlag(t *testing.T) {
 	branchID := "branchID"
 	cellID := "cell-A"
@@ -3253,10 +3257,16 @@ func TestBranchObservabilityPerCellFlag(t *testing.T) {
 
 	tests := map[string]struct {
 		flagOn       bool
+		header       string // empty == header not set
 		expectClient string // "signoz" or "cells"
 	}{
-		"flag off → legacy signoz client": {flagOn: false, expectClient: "signoz"},
-		"flag on  → per-cell client":      {flagOn: true, expectClient: "cells"},
+		"flag off, no header                            → signoz": {flagOn: false, expectClient: "signoz"},
+		"flag off, header=victoria (override ignored)   → signoz": {flagOn: false, header: "victoria", expectClient: "signoz"},
+		"flag on,  no header (default unchanged)        → signoz": {flagOn: true, expectClient: "signoz"},
+		"flag on,  header=signoz (explicit default)     → signoz": {flagOn: true, header: "signoz", expectClient: "signoz"},
+		"flag on,  header=victoria (opt-in override)    → cells":  {flagOn: true, header: "victoria", expectClient: "cells"},
+		"flag on,  header=Victoria (case-insensitive)   → cells":  {flagOn: true, header: "Victoria", expectClient: "cells"},
+		"flag on,  header=garbage (unknown → default)   → signoz": {flagOn: true, header: "garbage", expectClient: "signoz"},
 	}
 
 	for name, tt := range tests {
@@ -3282,7 +3292,11 @@ func TestBranchObservabilityPerCellFlag(t *testing.T) {
 				cellsClient.EXPECT().GetMetric(mock.Anything, apitest.TestOrganization, cellID, start, end, branchID, string(spec.Cpu), req.Instances, []string{"avg"}).Return(respShape("cells"), nil).Once()
 			}
 
-			c, rec := e.POST("/organizations/" + apitest.TestOrganization + "/projects/project_id/branches/" + branchID + "/metrics").WithJSONBody(req).Context()
+			rb := e.POST("/organizations/" + apitest.TestOrganization + "/projects/project_id/branches/" + branchID + "/metrics").WithJSONBody(req)
+			if tt.header != "" {
+				rb = rb.WithHeader("X-Xata-Observability-Backend", tt.header)
+			}
+			c, rec := rb.Context()
 			require.NoError(t, apiHandler.BranchMetrics(c, apitest.TestOrganization, "project_id", branchID))
 			rec.MustCode(http.StatusOK)
 		})

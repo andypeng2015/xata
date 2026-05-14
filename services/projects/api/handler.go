@@ -111,12 +111,31 @@ func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cel
 	}
 }
 
-// selectMetricsClient returns the metrics client for the current request based
-// on the BranchObservabilityPerCell feature flag. When the flag is on, queries
-// are routed to the branch's cell over gRPC; otherwise we fall through to the
-// legacy central SigNoz instance.
-func (s *handler) selectMetricsClient(ctx context.Context) metrics.Client {
-	if s.feat.BoolValue(ctx, flags.BranchObservabilityPerCell) {
+// observabilityBackendHeader is an internal, undocumented HTTP header the
+// console uses to compare backends side-by-side during the per-cell
+// observability rollout. It is intentionally absent from the OpenAPI spec.
+// Recognised values: "signoz" (default) and "victoria". Honoured only when
+// the BranchObservabilityPerCell feature flag is enabled for the org; for
+// every other caller the legacy SigNoz path is used and the header is
+// ignored. The default stays SigNoz so flipping the flag on does not
+// silently change a production response.
+const observabilityBackendHeader = "X-Xata-Observability-Backend"
+
+const (
+	observabilityBackendSigNoz   = "signoz"
+	observabilityBackendVictoria = "victoria"
+)
+
+// selectMetricsClient returns the metrics client for the current request.
+// Without the BranchObservabilityPerCell flag the legacy SigNoz client is
+// always used. With the flag on, the caller may opt-in to the per-cell
+// VictoriaMetrics/VictoriaLogs backend via the observabilityBackendHeader;
+// the default remains SigNoz so default traffic shape is unchanged.
+func (s *handler) selectMetricsClient(c echo.Context) metrics.Client {
+	if !s.feat.BoolValue(c.Request().Context(), flags.BranchObservabilityPerCell) {
+		return s.metricsClient
+	}
+	if strings.EqualFold(c.Request().Header.Get(observabilityBackendHeader), observabilityBackendVictoria) {
 		return s.cellsMetricsClient
 	}
 	return s.metricsClient
@@ -1674,7 +1693,7 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 			return err
 		}
 
-		branchMetrics, err := s.selectMetricsClient(c.Request().Context()).GetMetric(c.Request().Context(), organizationID, branch.CellID, req.Start, req.End, branchID, string(req.Metric), stringArrayValue(req.Instances), stringArrayValue(req.Aggregations))
+		branchMetrics, err := s.selectMetricsClient(c).GetMetric(c.Request().Context(), organizationID, branch.CellID, req.Start, req.End, branchID, string(req.Metric), stringArrayValue(req.Instances), stringArrayValue(req.Aggregations))
 		if err != nil {
 			return fmt.Errorf("getting metrics for branch [%s]: %w", branchID, err)
 		}
@@ -1712,7 +1731,7 @@ func (s *handler) BranchLogs(c echo.Context, organizationID spec.OrganizationID,
 			return err
 		}
 
-		logs, err := s.selectMetricsClient(c.Request().Context()).GetLogs(
+		logs, err := s.selectMetricsClient(c).GetLogs(
 			c.Request().Context(),
 			organizationID,
 			branch.CellID,
