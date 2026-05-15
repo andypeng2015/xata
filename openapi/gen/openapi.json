@@ -958,6 +958,49 @@
         ]
       }
     },
+    "/organizations/{organizationID}/membership-limits": {
+      "get": {
+        "operationId": "getOrganizationMembershipLimits",
+        "summary": "Get organization membership limits",
+        "description": "Retrieves the membership limits for the specified organization (maximum members and invitations).",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationIDParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Membership limits for the organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationMembershipLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthError"
+          },
+          "5XX": {
+            "description": "Unexpected Error"
+          }
+        },
+        "security": [
+          {
+            "xata": [
+              "org:read"
+            ]
+          }
+        ],
+        "tags": [
+          "Organizations"
+        ]
+      }
+    },
     "/marketplace/register": {
       "post": {
         "operationId": "registerMarketplace",
@@ -1824,6 +1867,57 @@
         "x-internal": true
       }
     },
+    "/organizations/{organizationID}/limits": {
+      "summary": "Organization Limits",
+      "description": "Endpoint for retrieving the effective resource limits for an organization. Call this before creating a project or branch to know what constraints apply.",
+      "get": {
+        "operationId": "getOrganizationLimits",
+        "summary": "Get organization resource limits",
+        "description": "Retrieves the effective org-level limits, including project creation limits and branch configuration defaults. Project-specific overrides are not applied here.",
+        "parameters": [
+          {
+            "name": "organizationID",
+            "in": "path",
+            "description": "Unique identifier of the organization",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Effective resource limits for the organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthorizationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationError"
+          },
+          "5XX": {
+            "description": "Unexpected Error"
+          }
+        },
+        "security": [
+          {
+            "xata": [
+              "org:read"
+            ]
+          }
+        ],
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
     "/organizations/{organizationID}/projects/limits": {
       "summary": "Project Limits",
       "description": "Endpoint for retrieving the default resource limits for projects within an organization.",
@@ -2198,6 +2292,66 @@
           {
             "xata": [
               "project:write"
+            ]
+          }
+        ],
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/organizations/{organizationID}/projects/{projectID}/limits": {
+      "summary": "Project Limits",
+      "description": "Endpoint for retrieving the effective resource limits for a specific project.",
+      "get": {
+        "operationId": "getProjectLimits",
+        "summary": "Get project resource limits",
+        "description": "Retrieves the effective resource limits for the specified project, merging organization-level overrides with any project-specific overrides.",
+        "parameters": [
+          {
+            "name": "organizationID",
+            "in": "path",
+            "description": "Unique identifier of the organization",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationID"
+            }
+          },
+          {
+            "name": "projectID",
+            "in": "path",
+            "description": "Unique identifier of the project to get limits for",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Effective resource limits for the project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveProjectLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthorizationError"
+          },
+          "5XX": {
+            "description": "Unexpected Error"
+          },
+          "default": {
+            "description": "Unexpected Error"
+          }
+        },
+        "security": [
+          {
+            "xata": [
+              "project:read"
             ]
           }
         ],
@@ -4320,6 +4474,28 @@
           "branches"
         ]
       },
+      "OrganizationMembershipLimits": {
+        "description": "Membership limits for an organization",
+        "type": "object",
+        "properties": {
+          "maxMembers": {
+            "description": "Maximum number of members allowed in the organization",
+            "type": "integer",
+            "minimum": 1,
+            "title": "Maximum number of organization members"
+          },
+          "maxInvites": {
+            "description": "Maximum number of pending invitations allowed at once",
+            "type": "integer",
+            "minimum": 1,
+            "title": "Maximum number of pending invitations"
+          }
+        },
+        "required": [
+          "maxMembers",
+          "maxInvites"
+        ]
+      },
       "OrganizationID": {
         "title": "OrganizationID",
         "type": "string",
@@ -5529,6 +5705,90 @@
           "minInstances",
           "maxDescriptionLength",
           "maxBranches"
+        ]
+      },
+      "OrganizationLimits": {
+        "description": "Effective resource limits for an organization, covering org-level defaults for all projects plus organization-specific constraints",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EffectiveProjectLimits"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "maxProjects": {
+                "description": "Maximum number of projects allowed in the organization",
+                "type": "integer",
+                "minimum": 1,
+                "title": "Maximum number of projects"
+              },
+              "maxProjectsPerHour": {
+                "description": "Maximum number of projects that can be created in a rolling one-hour window",
+                "type": "integer",
+                "minimum": 1,
+                "title": "Maximum project creation rate per hour"
+              }
+            },
+            "required": [
+              "maxProjects",
+              "maxProjectsPerHour"
+            ]
+          }
+        ]
+      },
+      "EffectiveProjectLimits": {
+        "description": "Full set of resource limits applicable to a project and its branches",
+        "type": "object",
+        "properties": {
+          "maxDescriptionLength": {
+            "description": "Maximum character length allowed for project descriptions",
+            "type": "integer",
+            "minimum": 25,
+            "title": "Maximum length of a project description"
+          },
+          "maxBranchesPerProject": {
+            "description": "Maximum number of branches allowed per project",
+            "type": "integer",
+            "title": "Maximum number of branches per project"
+          },
+          "maxInstancesPerBranch": {
+            "description": "Maximum number of database instances allowed per branch",
+            "type": "integer",
+            "minimum": 1,
+            "title": "Maximum number of instances per branch"
+          },
+          "minInstancesPerBranch": {
+            "description": "Minimum number of database instances required per branch",
+            "type": "integer",
+            "minimum": 1,
+            "title": "Minimum number of instances per branch"
+          },
+          "maxStorageGbPerBranch": {
+            "description": "Maximum storage in GB allowed per branch",
+            "type": "integer",
+            "minimum": 1,
+            "title": "Maximum storage per branch (GB)"
+          },
+          "maxAllowedInstanceType": {
+            "description": "Highest instance type allowed (e.g. xata.large); instances with a higher hourly cost are unavailable",
+            "type": "string",
+            "title": "Maximum allowed instance type"
+          },
+          "maxBranchesPerHour": {
+            "description": "Maximum number of branches that can be created in a rolling one-hour window",
+            "type": "integer",
+            "minimum": 1,
+            "title": "Maximum branch creation rate per hour"
+          }
+        },
+        "required": [
+          "maxDescriptionLength",
+          "maxBranchesPerProject",
+          "maxInstancesPerBranch",
+          "minInstancesPerBranch",
+          "maxStorageGbPerBranch",
+          "maxAllowedInstanceType",
+          "maxBranchesPerHour"
         ]
       },
       "BranchMetricsRequest": {

@@ -534,6 +534,31 @@ paths:
             - 'org:write'
       tags:
         - Organizations
+  '/organizations/{organizationID}/membership-limits':
+    get:
+      operationId: getOrganizationMembershipLimits
+      summary: Get organization membership limits
+      description: Retrieves the membership limits for the specified organization (maximum members and invitations).
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIDParam'
+      responses:
+        '200':
+          description: Membership limits for the organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMembershipLimits'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        5XX:
+          description: Unexpected Error
+      security:
+        - xata:
+            - 'org:read'
+      tags:
+        - Organizations
   /marketplace/register:
     post:
       operationId: registerMarketplace
@@ -1031,6 +1056,23 @@ components:
         - scopes
         - projects
         - branches
+    OrganizationMembershipLimits:
+      description: Membership limits for an organization
+      type: object
+      properties:
+        maxMembers:
+          description: Maximum number of members allowed in the organization
+          type: integer
+          minimum: 1
+          title: Maximum number of organization members
+        maxInvites:
+          description: Maximum number of pending invitations allowed at once
+          type: integer
+          minimum: 1
+          title: Maximum number of pending invitations
+      required:
+        - maxMembers
+        - maxInvites
   responses:
     BadRequestError:
       description: Error returned when the request is malformed or contains invalid parameters

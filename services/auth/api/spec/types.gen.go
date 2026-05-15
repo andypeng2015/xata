@@ -204,6 +204,15 @@ type OrganizationInvitation struct {
 // OrganizationInvitationStatus Current status of the invitation
 type OrganizationInvitationStatus string
 
+// OrganizationMembershipLimits Membership limits for an organization
+type OrganizationMembershipLimits struct {
+	// MaxInvites Maximum number of pending invitations allowed at once
+	MaxInvites int `json:"maxInvites"`
+
+	// MaxMembers Maximum number of members allowed in the organization
+	MaxMembers int `json:"maxMembers"`
+}
+
 // OrganizationStatus defines model for OrganizationStatus.
 type OrganizationStatus struct {
 	// AdminReason Reason for the current admin status

@@ -166,6 +166,14 @@ func (s *publicHandler) DeleteOrganization(ctx echo.Context, organizationID spec
 	return echo.NewHTTPError(http.StatusForbidden, "organization deletion not allowed")
 }
 
+// GetOrganizationMembershipLimits returns the membership limits for an organization
+// (GET /organizations/{organizationID}/membership-limits)
+func (s *publicHandler) GetOrganizationMembershipLimits(ctx echo.Context, organizationID spec.OrganizationIDParam) error {
+	return s.withOrganizationAccess(ctx, organizationID, func() error {
+		return echo.ErrNotImplemented
+	})
+}
+
 // (POST /organizations/{organization_id}/deletion-request)
 func (s *publicHandler) RequestOrganizationDeletion(ctx echo.Context, organizationID spec.OrganizationIDParam) error {
 	return echo.NewHTTPError(http.StatusForbidden, "organization deletion not allowed")

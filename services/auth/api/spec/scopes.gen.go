@@ -48,7 +48,11 @@ func GetScopes(method, path string) []string {
 			return []string{"invite:read"}
 		case "/organizations/:organizationID/invitations/:invitationID":
 			return []string{"invite:read"}
+		case "/organizations/:organizationID/limits":
+			return []string{"org:read"}
 		case "/organizations/:organizationID/members":
+			return []string{"org:read"}
+		case "/organizations/:organizationID/membership-limits":
 			return []string{"org:read"}
 		case "/organizations/:organizationID/projects":
 			return []string{"project:read"}
@@ -68,6 +72,8 @@ func GetScopes(method, path string) []string {
 			return []string{"project:read"}
 		case "/organizations/:organizationID/projects/:projectID/branches/:branchID/postgres-config":
 			return []string{"branch:read"}
+		case "/organizations/:organizationID/projects/:projectID/limits":
+			return []string{"project:read"}
 		case "/organizations/:organizationID/projects/limits":
 			return []string{"project:read"}
 		case "/organizations/:organizationID/regions":

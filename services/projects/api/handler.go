@@ -1657,6 +1657,24 @@ func (s *handler) DeleteBranch(c echo.Context, organizationID spec.OrganizationI
 	})
 }
 
+// GetOrganizationLimits returns the effective resource limits for an organization
+// (GET /organizations/{organizationID}/limits)
+func (s *handler) GetOrganizationLimits(c echo.Context, organizationID spec.OrganizationID) error {
+	return s.withOrganizationAccess(c, organizationID, All, func() error {
+		return echo.ErrNotImplemented
+	})
+}
+
+// GetProjectLimits returns the effective resource limits for a project
+// (GET /organizations/{organizationID}/projects/{projectID}/limits)
+func (s *handler) GetProjectLimits(c echo.Context, organizationID spec.OrganizationID, projectID string) error {
+	return s.withOrganizationAccess(c, organizationID, All, func() error {
+		return s.withProject(c, organizationID, projectID, func(_ *store.Project) error {
+			return echo.ErrNotImplemented
+		})
+	})
+}
+
 // GetDefaultProjectLimits returns the default project limits in the organization
 // (GET /organizations/{organizationID}/projects/limits)
 func (s *handler) GetDefaultProjectLimits(c echo.Context, organizationID spec.OrganizationID) error {
