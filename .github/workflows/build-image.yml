@@ -3,6 +3,11 @@ name: Build and Push Docker Image
 on:
   workflow_call:
     inputs:
+      service_path:
+        description: "Path to the service source dir (overrides Dockerfile default of services/<service_name>)"
+        required: false
+        default: ""
+        type: string
       service_name:
         description: "Service to build and push"
         required: true
@@ -40,6 +45,11 @@ on:
         description: "Newline-separated list of paths for content hash"
         required: true
         type: string
+      destinations:
+        description: "Whitespace-separated list of registry paths to publish the image to"
+        required: false
+        default: "ghcr.io/xataio/xata"
+        type: string
     outputs:
       image:
         description: "Docker image name"
@@ -55,9 +65,6 @@ permissions:
 defaults:
   run:
     shell: bash
-
-env:
-  REGISTRY: ghcr.io/xataio/xata
 
 jobs:
   docker:
@@ -89,21 +96,25 @@ jobs:
       - name: Build and push image
         id: build-image
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ inputs.service_name }}
+          IMAGE: ${{ inputs.service_name }}
+          DESTINATIONS: ${{ inputs.destinations }}
           PATHS: ${{ inputs.paths }}
           DOCKERFILE: ${{ inputs.dockerfile }}
           BUILD_PATH: ${{ inputs.path }}
           SERVICE_NAME: ${{ inputs.service_name }}
+          SERVICE_PATH: ${{ inputs.service_path }}
           TAG_AS_LATEST: ${{ inputs.latest }}
           EXTRA_BUILD_ARGS: ${{ inputs.extra_build_args }}
           FORCE_BUILD: ${{ inputs.force_build }}
         run: |
-          reference=$(make build-image \
+          reference=$(make push-image \
             IMAGE="$IMAGE" \
+            DESTINATIONS="$DESTINATIONS" \
             PATHS="$PATHS" \
             DOCKERFILE="$DOCKERFILE" \
             BUILD_PATH="$BUILD_PATH" \
             SERVICE_NAME="$SERVICE_NAME" \
+            SERVICE_PATH="$SERVICE_PATH" \
             TAG_AS_LATEST="$TAG_AS_LATEST" \
             EXTRA_BUILD_ARGS="$EXTRA_BUILD_ARGS" \
             FORCE_BUILD="$FORCE_BUILD")

@@ -118,17 +118,102 @@ tools: $(shell find ./dev/docker/jq-tools -type f)  ## Install/Build tools
 	cd ./dev/docker/jq-tools && $(MAKE)
 
 .PHONY: build-image
-build-image: ## Build and push image. Requires IMAGE and PATHS. Optional: DOCKERFILE, BUILD_PATH, SERVICE_NAME, GIT_TOKEN, TAG_AS_LATEST, EXTRA_BUILD_ARGS.
+# Local dev build. Single-platform, --load into the local Docker
+# daemon, no registry auth required. Image is tagged as
+# $(TAG_NAMESPACE)/$(IMAGE):<content-hash> so the local tag matches
+# the tag CI would compute from the same PATHS.
+build-image: ## Build image locally. Requires IMAGE, PATHS. Optional: PLATFORMS (single platform), TAG_NAMESPACE, DOCKERFILE, BUILD_PATH, SERVICE_NAME, SERVICE_PATH, GIT_TOKEN, EXTRA_BUILD_ARGS, FORCE_BUILD.
 	@set -euo pipefail; \
 	image_name="$(IMAGE)"; \
+	paths="$$PATHS"; \
+	platforms="$(or $(PLATFORMS),)"; \
+	tag_namespace="$(or $(TAG_NAMESPACE),xatatech)"; \
+	dockerfile="$(or $(DOCKERFILE),Dockerfile)"; \
+	build_path="$(or $(BUILD_PATH),.)"; \
+	service_name="$(or $(SERVICE_NAME),)"; \
+	service_path="$(or $(SERVICE_PATH),)"; \
+	git_token="$(or $(GIT_TOKEN),)"; \
+	extra_build_args="$(or $(EXTRA_BUILD_ARGS),)"; \
+	force_build="$(or $(FORCE_BUILD),false)"; \
+	\
+	if [[ -z "$$image_name" || -z "$$paths" ]]; then \
+		echo "IMAGE and PATHS are required" >&2; exit 1; \
+	fi; \
+	if [[ "$$platforms" == *","* ]]; then \
+		echo "PLATFORMS must be a single platform for --load (got '$$platforms'). Use push-image for multi-arch." >&2; exit 1; \
+	fi; \
+	\
+	input_hash=$$( \
+		while IFS= read -r path; do \
+			[[ -z "$$path" ]] && continue; \
+			git rev-parse "HEAD:$$path"; \
+		done <<< "$$paths" \
+		| sha256sum | cut -c1-12 \
+	); \
+	\
+	ref="$$tag_namespace/$$image_name:$$input_hash"; \
+	\
+	extra_args=(); \
+	if [[ -n "$$platforms" ]]; then \
+		extra_args+=("--platform" "$$platforms"); \
+	fi; \
+	if [[ -n "$$git_token" ]]; then \
+		extra_args+=("--build-arg" "GIT_TOKEN=$$git_token"); \
+	fi; \
+	if [[ -n "$$service_name" ]]; then \
+		extra_args+=("--build-arg" "SERVICE_NAME=$$service_name"); \
+	fi; \
+	if [[ -n "$$service_path" ]]; then \
+		extra_args+=("--build-arg" "SERVICE_PATH=$$service_path"); \
+	fi; \
+	if [[ -n "$$extra_build_args" ]]; then \
+		while IFS= read -r arg; do \
+			[[ -n "$$arg" ]] && extra_args+=("--build-arg" "$$arg"); \
+		done <<< "$$extra_build_args"; \
+	fi; \
+	\
+	if [[ "$$force_build" != "true" ]] && docker image inspect "$$ref" >/dev/null 2>&1; then \
+		echo "Cache hit for $$ref — skip build" >&2; \
+	else \
+		(set -x; docker buildx build \
+			-f "$$dockerfile" \
+			"$${extra_args[@]}" \
+			--label "org.opencontainers.image.revision=$(GIT_COMMIT_FULL)" \
+			--label "org.opencontainers.image.source=$(SOURCE_URL)" \
+			--load \
+			-t "$$ref" \
+			"$$build_path"); \
+	fi; \
+	\
+	echo "$$ref"
+
+.PHONY: push-image
+# CI build: multi-platform manifest tagged with a content hash,
+# pushed to every entry in DESTINATIONS (whitespace-separated).
+# DESTINATIONS is a flat list of registry paths; no asymmetry
+# between primary and mirror — first entry is currently the
+# buildx --push target (an implementation detail that disappears
+# once build/push are fully separated).
+push-image: ## Build multi-arch and push to all destinations. Requires IMAGE, PATHS, DESTINATIONS. Optional: DOCKERFILE, BUILD_PATH, SERVICE_NAME, SERVICE_PATH, GIT_TOKEN, TAG_AS_LATEST, EXTRA_BUILD_ARGS, FORCE_BUILD.
+	@set -euo pipefail; \
+	image_name="$(IMAGE)"; \
+	destinations="$(DESTINATIONS)"; \
 	paths="$$PATHS"; \
 	dockerfile="$(or $(DOCKERFILE),Dockerfile)"; \
 	build_path="$(or $(BUILD_PATH),.)"; \
 	service_name="$(or $(SERVICE_NAME),)"; \
+	service_path="$(or $(SERVICE_PATH),)"; \
 	git_token="$(or $(GIT_TOKEN),)"; \
 	tag_as_latest="$(or $(TAG_AS_LATEST),false)"; \
 	extra_build_args="$(or $(EXTRA_BUILD_ARGS),)"; \
 	force_build="$(or $(FORCE_BUILD),false)"; \
+	\
+	if [[ -z "$$image_name" || -z "$$destinations" ]]; then \
+		echo "IMAGE and DESTINATIONS are required" >&2; exit 1; \
+	fi; \
+	\
+	dests=($$destinations); \
+	build_dest="$${dests[0]}"; \
 	\
 	input_hash=$$( \
 		while IFS= read -r path; do \
@@ -139,13 +224,8 @@ build-image: ## Build and push image. Requires IMAGE and PATHS. Optional: DOCKER
 	); \
 	\
 	image_tag="$$input_hash"; \
-	image_reference="$${image_name}:$${image_tag}"; \
-	\
-	SAAS_SERVICES="auth billing projects clusterpool-operator product-analytics"; \
-	service_path=""; \
-	if [[ " $$SAAS_SERVICES " == *" $$service_name "* ]]; then \
-		service_path="saas-services/$$service_name"; \
-	fi; \
+	build_ref="$$build_dest/$$image_name:$$image_tag"; \
+	buildcache_ref="$$build_dest/$$image_name:buildcache"; \
 	\
 	extra_args=(); \
 	if [[ -n "$$git_token" ]]; then \
@@ -163,8 +243,8 @@ build-image: ## Build and push image. Requires IMAGE and PATHS. Optional: DOCKER
 		done <<< "$$extra_build_args"; \
 	fi; \
 	\
-	if [[ "$$force_build" != "true" ]] && docker manifest inspect "$$image_reference" >/dev/null 2>&1; then \
-		echo "Cache hit for $$image_reference — skip build/push" >&2; \
+	if [[ "$$force_build" != "true" ]] && docker manifest inspect "$$build_ref" >/dev/null 2>&1; then \
+		echo "Cache hit for $$build_ref — skip build/push" >&2; \
 	else \
 		(set -x; docker buildx build \
 			-f "$$dockerfile" \
@@ -172,20 +252,30 @@ build-image: ## Build and push image. Requires IMAGE and PATHS. Optional: DOCKER
 			--platform linux/amd64,linux/arm64 \
 			--label "org.opencontainers.image.revision=$(GIT_COMMIT_FULL)" \
 			--label "org.opencontainers.image.source=$(SOURCE_URL)" \
-			--cache-from "type=registry,ref=$$image_name:buildcache" \
-			--cache-to "type=registry,ref=$$image_name:buildcache,mode=max" \
+			--cache-from "type=registry,ref=$$buildcache_ref" \
+			--cache-to "type=registry,ref=$$buildcache_ref,mode=max" \
 			--progress=plain \
 			--push \
-			-t "$$image_reference" \
+			-t "$$build_ref" \
 			"$$build_path" \
 		); \
 	fi; \
 	\
+	for dest in "$${dests[@]:1}"; do \
+		(set -x; docker buildx imagetools create \
+			--tag "$$dest/$$image_name:$$image_tag" \
+			"$$build_ref"); \
+	done; \
+	\
 	if [[ "$$tag_as_latest" == "true" ]]; then \
-		(set -x; docker buildx imagetools create --tag "$$image_name:latest" "$$image_reference"); \
+		for dest in "$${dests[@]}"; do \
+			(set -x; docker buildx imagetools create \
+				--tag "$$dest/$$image_name:latest" \
+				"$$build_ref"); \
+		done; \
 	fi; \
 	\
-	echo "$$image_name:$$image_tag"
+	echo "$$build_ref"
 
 .PHONY: get-pr-info
 get-pr-info: ## Get PR info for a commit (requires COMMIT=<sha> REPO=<owner/repo>)
