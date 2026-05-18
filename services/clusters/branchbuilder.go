@@ -17,6 +17,7 @@ import (
 const (
 	LabelOrgID           = "xata.io/organizationID"
 	LabelProjectID       = "xata.io/projectID"
+	LabelBranchID        = "xata.io/branchID"
 	XataUtilsPreloadName = "xatautils"
 )
 
@@ -54,6 +55,7 @@ func (b *BranchBuilder) FromCreateClusterRequest(r *clustersv1.CreatePostgresClu
 				Labels: map[string]string{
 					LabelOrgID:     r.GetOrganizationId(),
 					LabelProjectID: r.GetProjectId(),
+					LabelBranchID:  r.GetId(),
 				},
 			},
 			Restore: restoreSpec(r),

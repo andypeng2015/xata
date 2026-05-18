@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,7 +39,9 @@ func TestMetricsQuerier_BuildsPromQLPerMetric(t *testing.T) {
 			wantContains: []string{
 				"avg by (pod) (rate(container_cpu_usage_seconds_total{",
 				`namespace="xata-clusters"`,
-				`pod=~"^br-123-.*"`,
+				`branch_id="br-123"`,
+				`pod=~"^br-123-.*"`, // legacy fallback
+				" or ",
 				`pod=~"^(br-123-1)$"`,
 			},
 		},
@@ -48,7 +51,7 @@ func TestMetricsQuerier_BuildsPromQLPerMetric(t *testing.T) {
 			aggregations: []string{"max"},
 			wantContains: []string{
 				"avg by (pod) (max_over_time(container_memory_working_set_bytes{",
-				`pod=~"^br-123-.*"`,
+				`branch_id="br-123"`,
 			},
 		},
 		"counter network_ingress carries direction-equivalent metric name": {
@@ -80,6 +83,7 @@ func TestMetricsQuerier_BuildsPromQLPerMetric(t *testing.T) {
 			for _, fragment := range tt.wantContains {
 				require.Contains(t, backend.queries[0], fragment, "missing fragment in %s", backend.queries[0])
 			}
+			require.Equal(t, 1, strings.Count(backend.queries[0], " or "), "exactly one branch_id-vs-legacy OR per query")
 			require.Len(t, res.Series, 1)
 			require.Equal(t, "br-123-1", res.Series[0].InstanceID)
 		})
@@ -93,10 +97,10 @@ func TestBuildPromQL_RateWindowAppliesOnlyToCounters(t *testing.T) {
 	step := time.Minute
 	cpu, _ := LookupMetric("cpu")                  // counter
 	conns, _ := LookupMetric("connections_active") // gauge with fixed space agg
-	cpuQuery, err := buildPromQL(cpu, "avg", "ns=\"x\"", step)
+	cpuQuery, err := buildPromQLClause(cpu, "avg", "ns=\"x\"", step)
 	require.NoError(t, err)
 	require.Contains(t, cpuQuery, "[2m]", "counter rate window clamps up")
-	connsQuery, err := buildPromQL(conns, "avg", "ns=\"x\"", step)
+	connsQuery, err := buildPromQLClause(conns, "avg", "ns=\"x\"", step)
 	require.NoError(t, err)
 	require.Contains(t, connsQuery, "[1m]", "gauge over_time stays at step")
 }

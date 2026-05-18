@@ -139,7 +139,17 @@ otelCollector:
                   target_label: k8s_namespace_name
                 - source_labels: [__meta_kubernetes_pod_label_cnpg_io_poolerName]
                   target_label: pooler_name
-            # Scrape cAdvisor for container filesystem throughput metrics
+            # Scrape cAdvisor for container filesystem throughput metrics.
+            # role: node (one scrape per node via the API server proxy) keeps
+            # vmagent fan-out flat. /metrics/cadvisor exposes pod+namespace as
+            # series labels but no k8s.pod.uid, so the k8sattributes processor
+            # below can't enrich cadvisor by UID. The metric_relabel below
+            # renames pod/namespace to k8s.pod.name / k8s.namespace.name; the
+            # groupbyattrs/k8s processor then promotes those datapoint labels
+            # to resource attributes so k8sattributes' second pod_association
+            # rule (namespace, pod.name) can resolve the pod and attach the
+            # xata.io/branchID -> branch_id label. Mirrors the strategy used
+            # in infra-new (kustomize/infra-new/base/otel/values.yaml).
             - job_name: cadvisor
               scrape_interval: 30s
               scheme: https
@@ -147,7 +157,15 @@ otelCollector:
                 ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
               bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
               kubernetes_sd_configs:
+                # Restrict SD to the local node so each agent scrapes only its
+                # own cadvisor (1 target/agent). Without this, role: node SD
+                # returns every node and each agent ends up scraping every
+                # node's cadvisor via the apiserver proxy — N agents × N
+                # nodes per interval.
                 - role: node
+                  selectors:
+                    - role: node
+                      field: metadata.name=${env:K8S_NODE_NAME}
               relabel_configs:
                 - action: replace
                   target_label: __address__
@@ -316,12 +334,32 @@ otelCollector:
             - tag_name: app.label.component
               key: app.kubernetes.io/component
               from: pod
+            # branch_id scopes queries across branches that share a CNPG
+            # cluster in branch-pooled mode.
+            - tag_name: branch_id
+              key: xata.io/branchID
+              from: pod
         pod_association:
           - sources:
               - from: resource_attribute
                 name: k8s.pod.uid
+          # Fallback for cadvisor: /metrics/cadvisor exposes pod+namespace but
+          # not pod.uid, so we promote those to resource attrs via
+          # groupbyattrs/k8s and look up the pod by (namespace, name).
+          - sources:
+              - from: resource_attribute
+                name: k8s.namespace.name
+              - from: resource_attribute
+                name: k8s.pod.name
           - sources:
               - from: connection
+      # Promote pod-identifying labels from datapoint -> resource so the
+      # k8sattributes (namespace, pod.name) association rule above can match
+      # cadvisor series (which lack k8s.pod.uid).
+      groupbyattrs/k8s:
+        keys:
+          - k8s.namespace.name
+          - k8s.pod.name
       signozspanmetrics/delta:
         aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA
         dimensions:
@@ -389,6 +427,7 @@ otelCollector:
           processors:
             - resource
             - resourcedetection
+            - groupbyattrs/k8s
             - k8sattributes
             - batch
             - filter/drop-cnpg-settings

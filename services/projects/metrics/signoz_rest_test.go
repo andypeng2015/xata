@@ -25,6 +25,7 @@ func TestGetMetric(t *testing.T) {
 	tests := []struct {
 		name               string
 		metric             string
+		branchID           string
 		startTime          time.Time
 		endTime            time.Time
 		instances          []string
@@ -40,6 +41,7 @@ func TestGetMetric(t *testing.T) {
 		{
 			name:           "AVG CPU on single instance",
 			metric:         "cpu",
+			branchID:       "br-123",
 			startTime:      time.UnixMilli(1715000000000),
 			endTime:        time.UnixMilli(1715010000000),
 			instances:      []string{"pod-1"},
@@ -81,6 +83,8 @@ func TestGetMetric(t *testing.T) {
 				require.NotNil(t, spec.Filter.Expression)
 				assert.Contains(t, *spec.Filter.Expression, `k8s.pod.name IN ["pod-1"]`)
 				assert.Contains(t, *spec.Filter.Expression, `k8s.namespace.name = "xata-clusters"`)
+				assert.Contains(t, *spec.Filter.Expression, `branch_id = "br-123"`)
+				assert.Contains(t, *spec.Filter.Expression, `k8s.pod.name REGEXP "^br-123-"`, "legacy fallback for pre-branch_id rows")
 			},
 		},
 		{
@@ -363,7 +367,7 @@ func TestGetMetric(t *testing.T) {
 			client, err := NewSigNozClient(server.URL, apiKey, k8sNamespace)
 			require.NoError(t, err)
 
-			result, err := client.GetMetric(context.Background(), "", "", tt.startTime, tt.endTime, "", tt.metric, tt.instances, tt.aggregations)
+			result, err := client.GetMetric(context.Background(), "", "", tt.startTime, tt.endTime, tt.branchID, tt.metric, tt.instances, tt.aggregations)
 
 			if tt.expectError {
 				assert.Error(t, err)

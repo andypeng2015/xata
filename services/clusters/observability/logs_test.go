@@ -26,7 +26,8 @@ func TestBuildLogsQL_AppendsBranchScope(t *testing.T) {
 	require.Contains(t, q, `kubernetes.namespace_name:="xata-clusters"`)
 	require.Contains(t, q, `kubernetes.container_name:="postgres"`)
 	require.Contains(t, q, `logger:="postgres"`, "drops instance-manager / barman lines from the postgres container")
-	require.Contains(t, q, `kubernetes.pod_name:~"^br-1-.*"`)
+	require.Contains(t, q, `branch_id:="br-1"`)
+	require.Contains(t, q, `kubernetes.pod_name:~"^br-1-"`, "legacy fallback for pre-branch_id rows")
 	require.NotContains(t, q, "_time:<", "no resume clause when cursor is empty")
 }
 

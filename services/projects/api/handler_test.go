@@ -3015,14 +3015,6 @@ func TestBranchMetrics(t *testing.T) {
 		Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
 	}
 
-	wrongInstanceRequest := spec.BranchMetricsRequest{
-		Start:        time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC),
-		End:          time.Date(2025, 5, 20, 1, 0, 0, 0, time.UTC),
-		Metric:       "cpu",
-		Instances:    []string{"unknown-1"},
-		Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
-	}
-
 	emptyInstancesRequest := spec.BranchMetricsRequest{
 		Start:        time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC),
 		End:          time.Date(2025, 5, 20, 1, 0, 0, 0, time.UTC),
@@ -3031,13 +3023,8 @@ func TestBranchMetrics(t *testing.T) {
 		Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
 	}
 
-	branchIDPrefixCollisionRequest := spec.BranchMetricsRequest{
-		Start:        time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC),
-		End:          time.Date(2025, 5, 20, 1, 0, 0, 0, time.UTC),
-		Metric:       "cpu",
-		Instances:    []string{branchID + "extra-1"},
-		Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
-	}
+	unknownInstanceRequest := cpuMetricRequest
+	unknownInstanceRequest.Instances = []string{branchID + "-99"}
 
 	metricRequest2i2a := spec.BranchMetricsRequest{
 		Start:        time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC),
@@ -3045,6 +3032,17 @@ func TestBranchMetrics(t *testing.T) {
 		Metric:       "cpu",
 		Instances:    []string{branchID + "-1", branchID + "-2"},
 		Aggregations: []spec.BranchMetricsRequestAggregations{"min", "max"},
+	}
+
+	mockCluster := func(instanceNames ...string) {
+		instances := map[string]*clustersv1.InstanceStatus{}
+		for _, n := range instanceNames {
+			instances[n] = &clustersv1.InstanceStatus{}
+		}
+		mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: branchID}).Return(&clustersv1.DescribePostgresClusterResponse{
+			Id:     branchID,
+			Status: &clustersv1.ClusterStatus{Instances: instances},
+		}, nil).Once()
 	}
 
 	branchMetricsTests := []struct {
@@ -3074,7 +3072,8 @@ func TestBranchMetrics(t *testing.T) {
 						},
 					},
 				}, nil).Once()
-				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", branchID).Return(&store.Branch{ID: cpuMetricRequest.Instances[0]}, nil).Once()
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", branchID).Return(&store.Branch{ID: branchID}, nil).Once()
+				mockCluster(cpuMetricRequest.Instances...)
 			},
 			assertResponse: func(t *testing.T, got spec.BranchMetrics) {
 				assert.Equal(t, cpuMetricRequest.Start, got.Start)
@@ -3128,7 +3127,8 @@ func TestBranchMetrics(t *testing.T) {
 						},
 					},
 				}, nil).Once()
-				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", branchID).Return(&store.Branch{ID: cpuMetricRequest.Instances[0]}, nil).Once()
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", branchID).Return(&store.Branch{ID: branchID}, nil).Once()
+				mockCluster(metricRequest2i2a.Instances...)
 			},
 			assertResponse: func(t *testing.T, got spec.BranchMetrics) {
 				assert.Equal(t, metricRequest2i2a.Start, got.Start)
@@ -3177,27 +3177,24 @@ func TestBranchMetrics(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:           "wrong instance request fails",
-			branchID:       branchID,
-			req:            wrongInstanceRequest,
-			setupMocks:     func() {},
-			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "instances", Message: "invalid instance [unknown-1]"},
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
-			name:           "empty instances request fails",
-			branchID:       branchID,
-			req:            emptyInstancesRequest,
-			setupMocks:     func() {},
+			name:     "empty instances request fails",
+			branchID: branchID,
+			req:      emptyInstancesRequest,
+			setupMocks: func() {
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", branchID).Return(&store.Branch{ID: branchID}, nil).Once()
+			},
 			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "instances", Message: "at least one instance is required"},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:           "branch ID prefix collision is rejected",
-			branchID:       branchID,
-			req:            branchIDPrefixCollisionRequest,
-			setupMocks:     func() {},
-			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "instances", Message: fmt.Sprintf("invalid instance [%sextra-1]", branchID)},
+			name:     "unknown instance fails",
+			branchID: branchID,
+			req:      unknownInstanceRequest,
+			setupMocks: func() {
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", branchID).Return(&store.Branch{ID: branchID}, nil).Once()
+				mockCluster(branchID + "-1")
+			},
+			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "instances", Message: fmt.Sprintf("unknown instance [%s-99]", branchID)},
 			expectedStatus: http.StatusBadRequest,
 		},
 	}
@@ -3285,6 +3282,10 @@ func TestBranchObservabilityPerCellFlag(t *testing.T) {
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 			mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", branchID).Return(&store.Branch{ID: branchID, CellID: cellID}, nil).Once()
+			mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: branchID}).Return(&clustersv1.DescribePostgresClusterResponse{
+				Id:     branchID,
+				Status: &clustersv1.ClusterStatus{Instances: map[string]*clustersv1.InstanceStatus{branchID + "-1": {}}},
+			}, nil).Once()
 
 			if tt.expectClient == "signoz" {
 				signozClient.EXPECT().GetMetric(mock.Anything, apitest.TestOrganization, cellID, start, end, branchID, string(spec.Cpu), req.Instances, []string{"avg"}).Return(respShape("signoz"), nil).Once()
@@ -3656,17 +3657,6 @@ func TestBranchLogs(t *testing.T) {
 				require.Len(t, got.Logs, 0)
 			},
 			expectedStatus: http.StatusOK,
-		},
-		"validation error: instance value missing branchID prefix": {
-			branchID: branchID,
-			req: spec.BranchLogsRequest{
-				Start:   start,
-				End:     end,
-				Filters: &[]spec.LogFilter{instanceFilter("wrongBranch-1")},
-			},
-			setupMocks:     func() {},
-			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "filters[0].values", Message: "invalid instance [wrongBranch-1]"},
-			expectedStatus: http.StatusBadRequest,
 		},
 		"validation error: invalid level value": {
 			branchID: branchID,

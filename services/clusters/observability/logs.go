@@ -50,8 +50,8 @@ type LogsResult struct {
 }
 
 // LogsQuerier resolves a branch logs query into a single LogsQL expression,
-// runs it, and decodes the result. The branch-scope predicate on pod is
-// always added server-side as defense in depth.
+// runs it, and decodes the result. The branch-scope predicate on branch_id
+// is always added server-side as defense in depth.
 type LogsQuerier struct {
 	backend   LogsBackend
 	namespace string
@@ -140,10 +140,10 @@ func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end tim
 }
 
 // buildLogsQL renders the LogsQL expression. It starts with the namespace
-// and container scopes, then appends the branch pod regex (defense in depth)
-// and finally each user-supplied filter. We use the LogsQL field-filter
-// syntax (`field:value`, `field:in (a,b)`, `field:~"regex"`) which is the
-// stable subset supported by VictoriaLogs.
+// and container scopes, then appends an exact-match branch_id predicate
+// (defense in depth) and finally each user-supplied filter. We use the
+// LogsQL field-filter syntax (`field:value`, `field:in (a,b)`,
+// `field:~"regex"`) which is the stable subset supported by VictoriaLogs.
 //
 // resumeBeforeNanos > 0 adds `_time:<{ns}` so paginated queries pick up
 // strictly older rows than the previous page's oldest timestamp.
@@ -155,7 +155,10 @@ func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeBeforeNa
 	// (logger="backup") and actual postgres records (logger="postgres").
 	// Match SigNoz behaviour and only surface the latter.
 	b.WriteString(` AND logger:="postgres"`)
-	fmt.Fprintf(&b, ` AND kubernetes.pod_name:~%q`, "^"+regexp.QuoteMeta(branchID)+"-.*")
+	// TODO(cleanup after one month): drop the pod_name regex disjunct once
+	// VictoriaLogs retentionPeriod (30d) has aged past the branch_id
+	// rollout; rows from before then carry no branch_id field.
+	fmt.Fprintf(&b, ` AND (branch_id:=%q OR kubernetes.pod_name:~%q)`, branchID, "^"+regexp.QuoteMeta(branchID)+"-")
 	if resumeBeforeNanos > 0 {
 		fmt.Fprintf(&b, " AND _time:<%d", resumeBeforeNanos)
 	}

@@ -662,9 +662,7 @@ func (c *ClustersService) DeleteBranchIPFiltering(ctx context.Context, request *
 }
 
 // GetBranchMetrics queries the cell's VictoriaMetrics instance for the named
-// metric and aggregations. The branch-scope is enforced server-side as
-// defense in depth even though the projects handler also validates instance
-// prefixes.
+// metric and aggregations.
 func (c *ClustersService) GetBranchMetrics(ctx context.Context, request *clustersv1.GetBranchMetricsRequest) (*clustersv1.GetBranchMetricsResponse, error) {
 	if c.metricsQuerier == nil {
 		return nil, status.Errorf(codes.Unimplemented, "metrics backend not configured for this cell")
@@ -674,11 +672,6 @@ func (c *ClustersService) GetBranchMetrics(ctx context.Context, request *cluster
 	}
 	if request.GetStart() == nil || request.GetEnd() == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "start and end are required")
-	}
-	for _, inst := range request.GetInstances() {
-		if !strings.HasPrefix(inst, request.GetBranchId()+"-") {
-			return nil, status.Errorf(codes.InvalidArgument, "instance %q is not in branch %q", inst, request.GetBranchId())
-		}
 	}
 
 	res, err := c.metricsQuerier.Query(ctx,

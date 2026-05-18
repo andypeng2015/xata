@@ -88,22 +88,47 @@ vmagent:
             target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
+          - source_labels: [__meta_kubernetes_pod_label_xata_io_branchID]
+            target_label: branch_id
         metric_relabel_configs:
           - source_labels: [__name__]
             regex: 'cnpg_pg_database_size_bytes|cnpg_pg_stat_activity_connections_(active|idle)|cnpg_pg_stat_io_total_(reads|writes|read_time_ms|write_time_ms)|cnpg_collector_wal_sync_time|cnpg_pg_replication_lag'
             action: keep
 
+      # role:pod (not role:node) so pod labels are available to the relabel
+      # step and branch_id can be attached at scrape time. The pod-equality
+      # metric_relabel below drops other pods on the same node returned by
+      # the shared kubelet scrape. The cnpg_io_podRole=instance keep filter
+      # bounds the fan-out to typically 1-3 scrapes per node.
+      #
+      # This deliberately diverges from the SigNoz OTel path
+      # (kustomize/overlays/local/signoz-values.yaml) and infra-new
+      # PR #1682, which keep role:node and enrich cadvisor series after the
+      # fact via OTel's groupbyattrs + k8sattributes processors. vmagent has
+      # no equivalent post-scrape enrichment, so the only ways to attach
+      # branch_id with role:node would be a query-time group_left join with
+      # a separate pod_info series, or a custom relabel pipeline keyed on a
+      # pod-info cache. Both are higher-friction than the keepequal trick
+      # for the current cnpg-instance-only scrape; revisit if vmagent CPU
+      # /memory becomes the bottleneck or if scrape coverage broadens.
       - job_name: cadvisor
-        kubernetes_sd_configs: [{role: node}]
+        kubernetes_sd_configs: [{role: pod}]
         scheme: https
         tls_config: {insecure_skip_verify: true}
         bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
         relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_cnpg_io_podRole]
+            regex: instance
+            action: keep
           - target_label: __address__
             replacement: kubernetes.default.svc:443
-          - source_labels: [__meta_kubernetes_node_name]
+          - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: __metrics_path__
             replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: scrape_target_pod
+          - source_labels: [__meta_kubernetes_pod_label_xata_io_branchID]
+            target_label: branch_id
         metric_relabel_configs:
           - source_labels: [__name__]
             regex: 'container_(cpu_usage_seconds_total|memory_working_set_bytes|network_(receive|transmit)_bytes_total|fs_(reads|writes)_bytes_total)'
@@ -111,6 +136,15 @@ vmagent:
           - source_labels: [namespace]
             regex: xata-clusters
             action: keep
+          - source_labels: [pod]
+            target_label: scrape_target_pod
+            action: keepequal
+          - regex: scrape_target_pod
+            action: labeldrop
+          # `container` is intentionally retained so multi-container pods
+          # don't collide at write time.
+          - regex: 'id|image|name|boot_id|system_uuid|machine_id|kernelVersion|failure_type'
+            action: labeldrop
 
 vector:
   role: Agent
@@ -171,6 +205,7 @@ vector:
         #   {"level":"info","logger":"instance-manager","msg":"..."}
         # The query side (observability/logs.go) filters on logger="postgres"
         # and reads severity_text + backend_type, so capture all three here.
+        # Also promote xata.io/branchID to a top-level branch_id field.
         source: |
           if starts_with(string!(.message), "{") && ends_with(string!(.message), "}") {
             parsed, err = parse_json(.message)
@@ -192,6 +227,10 @@ vector:
                 .logger = string!(parsed.logger)
               }
             }
+          }
+          branch_id = get(value: ., path: ["kubernetes", "pod_labels", "xata.io/branchID"]) ?? null
+          if branch_id != null {
+            .branch_id = branch_id
           }
           ._msg = del(.message)
           ._time = del(.timestamp)

@@ -62,13 +62,13 @@ func NewSigNozClient(endpoint, apiKey, clustersNamespace string) (*SigNozClient,
 	}, nil
 }
 
-func (sc *SigNozClient) GetMetric(ctx context.Context, _organizationID, _cellID string, start, end time.Time, _branchID string, metric string, instances, aggregations []string) (*BranchMetrics, error) {
+func (sc *SigNozClient) GetMetric(ctx context.Context, _organizationID, _cellID string, start, end time.Time, branchID string, metric string, instances, aggregations []string) (*BranchMetrics, error) {
 	if _, exists := sigNozMetricName[metric]; !exists {
 		return nil, fmt.Errorf("metric %s not found", metric)
 	}
 
 	// Build request
-	reqBody, queryToAgg, err := buildMetricsReq(sc.clustersNamespace, start, end, metric, instances, aggregations)
+	reqBody, queryToAgg, err := buildMetricsReq(sc.clustersNamespace, branchID, start, end, metric, instances, aggregations)
 	if err != nil {
 		return nil, err
 	}
@@ -201,9 +201,9 @@ func parseMetricValues(points *[]signoz.Querybuildertypesv5TimeSeriesValue) []Va
 	return values
 }
 
-func buildMetricsReq(clustersNamespace string, start, end time.Time, metricName string, instances, aggregations []string) (signoz.QueryRangeV5JSONRequestBody, map[string]string, error) {
+func buildMetricsReq(clustersNamespace, branchID string, start, end time.Time, metricName string, instances, aggregations []string) (signoz.QueryRangeV5JSONRequestBody, map[string]string, error) {
 	step := calculateStep(start, end)
-	filterExpr := buildMetricsFilterExpression(clustersNamespace, instances, metricName)
+	filterExpr := buildMetricsFilterExpression(clustersNamespace, branchID, instances, metricName)
 
 	queries, queryToAgg, err := buildMetricQueries(metricName, step, aggregations, filterExpr)
 	if err != nil {
@@ -213,8 +213,9 @@ func buildMetricsReq(clustersNamespace string, start, end time.Time, metricName 
 	return buildRequestBody(start, end, queries, signoz.TimeSeries), queryToAgg, nil
 }
 
-func buildMetricsFilterExpression(namespace string, instances []string, metricName string) string {
+func buildMetricsFilterExpression(namespace, branchID string, instances []string, metricName string) string {
 	parts := buildPodFilters(namespace, instances)
+	parts = append(parts, branchScopeFilter(branchID))
 	if info := sigNozMetricName[metricName]; info.additionalFilters != nil {
 		for key, val := range info.additionalFilters {
 			parts = append(parts, filter.Eq(key, val))
@@ -222,6 +223,18 @@ func buildMetricsFilterExpression(namespace string, instances []string, metricNa
 	}
 
 	return filter.And(parts...).Render()
+}
+
+// branchScopeFilter returns the per-branch predicate, OR'd with the
+// pre-branch_id pod-name regex so queries still hit data emitted before the
+// branch_id attribute was added.
+// TODO(cleanup after one month): drop the Regexp fallback once SigNoz
+// retention has aged past the branch_id rollout.
+func branchScopeFilter(branchID string) filter.Expr {
+	return filter.Or(
+		filter.Eq("branch_id", branchID),
+		filter.Regexp("k8s.pod.name", "^"+regexp.QuoteMeta(branchID)+"-"),
+	)
 }
 
 func buildMetricQueries(metricName string, step int, aggregations []string, filterExpr string) ([]signoz.Querybuildertypesv5QueryEnvelope, map[string]string, error) {
@@ -552,11 +565,11 @@ func buildStepInterval(step int) (*signoz.Querybuildertypesv5Step, error) {
 
 // compileSigNozLogFilters translates the backend-neutral []LogFilter shape used
 // by the projects handler into SigNoz filter expressions. The branch-scope
-// regex on the pod name is always prepended so a caller cannot read other
-// branches' logs by omitting the instance filter.
+// predicate is always prepended so a caller cannot read other branches' logs
+// by omitting the instance filter.
 func compileSigNozLogFilters(branchID string, userFilters []LogFilter) ([]filter.Expr, error) {
 	exprs := make([]filter.Expr, 0, len(userFilters)+1)
-	exprs = append(exprs, filter.Regexp("k8s.pod.name", "^"+regexp.QuoteMeta(branchID)+"-"))
+	exprs = append(exprs, branchScopeFilter(branchID))
 	for _, f := range userFilters {
 		expr, err := compileSigNozLogFilter(f)
 		if err != nil {

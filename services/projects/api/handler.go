@@ -1702,12 +1702,12 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 			return err
 		}
 
-		if err = validateInstances(branchID, req.Instances); err != nil {
+		branch, err := s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID)
+		if err != nil {
 			return err
 		}
 
-		branch, err := s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID)
-		if err != nil {
+		if err := s.validateBranchInstances(c.Request().Context(), organizationID, branch, req.Instances); err != nil {
 			return err
 		}
 
@@ -1929,17 +1929,36 @@ func validateTimeRange(branchID string, start, end time.Time) error {
 	return nil
 }
 
-func validateInstances(branchID string, instances []string) error {
+// validateBranchInstances rejects instance names that don't belong to the
+// branch's cluster. Pool clusters carry pod names that don't share the
+// branchID prefix, so the check is against the actual cluster status keys
+// rather than a string prefix.
+func (s *handler) validateBranchInstances(ctx context.Context, organizationID spec.OrganizationID, branch *store.Branch, instances []string) error {
 	if len(instances) == 0 {
-		return ErrorInvalidParam{BranchName: branchID, Param: "instances", Message: "at least one instance is required"}
+		return ErrorInvalidParam{BranchName: branch.ID, Param: "instances", Message: "at least one instance is required"}
 	}
 
-	for _, instance := range instances {
-		if !strings.HasPrefix(instance, branchID+"-") {
-			return ErrorInvalidParam{BranchName: branchID, Param: "instances", Message: fmt.Sprintf("invalid instance [%s]", instance)}
+	client, err := s.cells.GetCellConnection(ctx, organizationID, branch.CellID)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	cluster, err := client.DescribePostgresCluster(ctx, &clustersv1.DescribePostgresClusterRequest{Id: branch.ID})
+	if err != nil {
+		st, _ := status.FromError(err)
+		if st.Code() == codes.NotFound {
+			return ErrorBranchNotFound{BranchID: branch.ID}
+		}
+		return err
+	}
+
+	valid := cluster.GetStatus().GetInstances()
+	for _, inst := range instances {
+		if _, ok := valid[inst]; !ok {
+			return ErrorInvalidParam{BranchName: branch.ID, Param: "instances", Message: fmt.Sprintf("unknown instance [%s]", inst)}
 		}
 	}
-
 	return nil
 }
 

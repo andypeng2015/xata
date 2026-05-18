@@ -158,9 +158,9 @@ type Result struct {
 	Series []MetricSeries
 }
 
-// Query runs the configured query against the backend. branchID is enforced as
-// an anchored regex on the pod label so results can never include other
-// branches' samples even if validation is bypassed upstream.
+// Query runs the configured query against the backend. branchID is enforced
+// as an exact match on the `branch_id` series label so results can never
+// include another branch's samples even if validation is bypassed upstream.
 func (q *MetricsQuerier) Query(ctx context.Context, branchID, metric string, instances, aggregations []string, start, end time.Time) (*Result, error) {
 	info, ok := LookupMetric(metric)
 	if !ok {
@@ -176,7 +176,11 @@ func (q *MetricsQuerier) Query(ctx context.Context, branchID, metric string, ins
 	}
 
 	step := CalculateStep(start, end)
-	matchers := buildMatchers(q.namespace, branchID, instances, info.AdditionalLabels)
+	scopedMatchers := buildMatchers(q.namespace, branchID, instances, info.AdditionalLabels)
+	// TODO(cleanup after one month): once retentionPeriod (30d) has elapsed
+	// from the deploy that introduced branch_id, drop legacyMatchers and the
+	// surrounding OR; series stamped before then carry no branch_id label.
+	legacyMatchers := buildLegacyPodMatchers(q.namespace, branchID, instances, info.AdditionalLabels)
 
 	// One backend round-trip per aggregation; fan out so e.g. min,avg,max
 	// finishes in one round-trip's worth of latency instead of three.
@@ -184,7 +188,7 @@ func (q *MetricsQuerier) Query(ctx context.Context, branchID, metric string, ins
 	g, gctx := errgroup.WithContext(ctx)
 	for i, agg := range aggregations {
 		g.Go(func() error {
-			query, err := buildPromQL(info, agg, matchers, step)
+			query, err := buildPromQL(info, agg, scopedMatchers, legacyMatchers, step)
 			if err != nil {
 				return fmt.Errorf("build promql (agg=%s): %w", agg, err)
 			}
@@ -218,8 +222,22 @@ func (q *MetricsQuerier) Query(ctx context.Context, branchID, metric string, ins
 // buildPromQL assembles the PromQL expression for a metric/aggregation pair.
 // Counters get `<spaceAgg> by (pod) (<temporalAgg>(<metric>{matchers}[window]))`;
 // gauges get `<spaceAgg> by (pod) (<metric>{matchers})` with the user-supplied
-// agg as the space aggregation when the metric has no fixed default.
-func buildPromQL(info MetricInfo, userAgg, matchers string, step time.Duration) (string, error) {
+// agg as the space aggregation when the metric has no fixed default. The
+// scoped and legacy matcher pairs are unioned with PromQL `or`; LHS wins per
+// label set, so post-deploy series shadow the legacy fallback automatically.
+func buildPromQL(info MetricInfo, userAgg, scopedMatchers, legacyMatchers string, step time.Duration) (string, error) {
+	scoped, err := buildPromQLClause(info, userAgg, scopedMatchers, step)
+	if err != nil {
+		return "", err
+	}
+	legacy, err := buildPromQLClause(info, userAgg, legacyMatchers, step)
+	if err != nil {
+		return "", err
+	}
+	return scoped + " or " + legacy, nil
+}
+
+func buildPromQLClause(info MetricInfo, userAgg, matchers string, step time.Duration) (string, error) {
 	switch info.Kind {
 	case Counter:
 		// Counter rate windows must clamp to >= 4 * scrape_interval so a
@@ -254,13 +272,24 @@ func rateWindow(step time.Duration) time.Duration {
 	return step
 }
 
-// buildMatchers renders the PromQL label matcher string. The branch-scope is
-// always added as an anchored regex so a buggy or malicious caller cannot
-// read another branch's samples by omitting the instance list.
+// buildMatchers renders the PromQL label matcher string. The branch scope
+// is always added so a buggy or malicious caller cannot read another
+// branch's samples by omitting the instance list.
 func buildMatchers(namespace, branchID string, instances []string, extra map[string]string) string {
+	return joinMatchers(namespace, fmt.Sprintf(`branch_id=%q`, branchID), instances, extra)
+}
+
+// buildLegacyPodMatchers renders the pre-branch_id matcher set, scoping by
+// pod-name prefix. TODO(cleanup after one month): remove once retention has
+// aged past the branch_id rollout.
+func buildLegacyPodMatchers(namespace, branchID string, instances []string, extra map[string]string) string {
+	return joinMatchers(namespace, fmt.Sprintf(`pod=~%q`, "^"+regexp.QuoteMeta(branchID)+"-.*"), instances, extra)
+}
+
+func joinMatchers(namespace, scope string, instances []string, extra map[string]string) string {
 	parts := []string{
 		fmt.Sprintf(`namespace=%q`, namespace),
-		fmt.Sprintf(`pod=~%q`, "^"+regexp.QuoteMeta(branchID)+"-.*"),
+		scope,
 	}
 	if len(instances) > 0 {
 		parts = append(parts, fmt.Sprintf(`pod=~%q`, "^("+strings.Join(quotedRegexAlts(instances), "|")+")$"))

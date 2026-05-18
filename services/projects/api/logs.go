@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"regexp"
-	"strings"
 
 	"k8s.io/utils/ptr"
 
@@ -60,11 +59,6 @@ func validateLogFilter(branchID string, idx int, f spec.LogFilter) (metrics.LogF
 		values, err := requireInValues(branchID, idx, f)
 		if err != nil {
 			return metrics.LogFilter{}, err
-		}
-		for _, v := range values {
-			if !strings.HasPrefix(v, branchID+"-") {
-				return metrics.LogFilter{}, ErrorInvalidParam{BranchName: branchID, Param: valuesParam(idx), Message: fmt.Sprintf("invalid instance [%s]", v)}
-			}
 		}
 		return metrics.LogFilter{Field: "instance", Op: "in", Values: values}, nil
 
