@@ -41,4 +41,4 @@ spec:
             value: /marketplace
         - path:
             type: RegularExpression
-            value: "^/organizations(/*)$|^/organizations/([^/]+)(/api-keys|/members.*|/invitations.*)?$"
+            value: "^/organizations(/*)$|^/organizations/([^/]+)(/api-keys|/members.*|/invitations.*|/deletion-request|/membership-limits)?$"

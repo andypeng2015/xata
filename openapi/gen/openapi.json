@@ -920,15 +920,18 @@
       "post": {
         "operationId": "requestOrganizationDeletion",
         "summary": "Request organization deletion",
-        "description": "Flags the organization for deletion. The request is rejected if the organization still has active projects or outstanding invoices. Once accepted the organization is immediately inaccessible.\n",
+        "description": "Flags the organization for deletion. The request is rejected if the organization still has active projects.\nIf there are no outstanding invoices the organization is deleted immediately (200).\nIf there are outstanding invoices the organization is wound down and deletion completes automatically once all invoices are paid (202).\n",
         "parameters": [
           {
             "$ref": "#/components/parameters/OrganizationIDParam"
           }
         ],
         "responses": {
+          "200": {
+            "description": "Organization has been deleted"
+          },
           "202": {
-            "description": "Deletion request accepted"
+            "description": "Deletion pending — outstanding invoices will be collected before the organization is removed"
           },
           "400": {
             "$ref": "#/components/responses/BadRequestError"
