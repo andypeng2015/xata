@@ -119,17 +119,11 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{RequeueAfter: r.WakeupRequestTTL}, nil
 	}
 
-	// Get the XVol name from the Branch status
-	xvolName, err := getXVolName(branch)
-	if err != nil {
-		return ctrl.Result{}, ignoreTerminal(err)
-	}
-
 	// Validate that the XVol is in a state that can be used as the target of a
 	// wakeup operation
-	err = r.validateXVolStatus(ctx, xvolName)
+	err = r.validateXVolStatus(ctx, wr.Spec.XVolName)
 	if err != nil {
-		log.Error(err, "validating XVol status", "xvolName", xvolName)
+		log.Error(err, "validating XVol status", "xvolName", wr.Spec.XVolName)
 		return ctrl.Result{}, ignoreTerminal(err)
 	}
 
@@ -172,14 +166,14 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Call the WakeUp RPC on the CSI node pod
-	err = r.wakeUp(ctx, csiNodePod, xvolName, pv.Name)
+	err = r.wakeUp(ctx, csiNodePod, wr.Spec.XVolName, pv.Name)
 	if err != nil {
 		log.Error(err, "calling WakeUp RPC", "clusterName", cluster.Name)
 		return ctrl.Result{}, ignoreTerminal(err)
 	}
 
 	// Annotate the PV with the name of the XVol used to wake it up
-	err = r.annotatePVWithXVol(ctx, pv, xvolName)
+	err = r.annotatePVWithXVol(ctx, pv, wr.Spec.XVolName)
 	if err != nil {
 		log.Error(err, "annotating PV with XVol name", "pvName", pv.Name)
 		return ctrl.Result{}, ignoreTerminal(err)

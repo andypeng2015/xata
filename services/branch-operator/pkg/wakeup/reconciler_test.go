@@ -352,40 +352,6 @@ func TestWakeupReconciler(t *testing.T) {
 		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionFalse, v1alpha1.CSINodePodNotFoundReason)
 	})
 
-	t.Run("sets BranchHasNoXVol when the branch has no XVol", func(t *testing.T) {
-		t.Parallel()
-		ctx := context.Background()
-
-		branchName := "branch-" + randomString(10)
-		wrName := "wur-" + randomString(10)
-
-		// Create a Branch with a pool annotation but without setting
-		// PrimaryXVolName in the status
-		branch := &v1alpha1.Branch{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: branchName,
-				Annotations: map[string]string{
-					v1alpha1.WakeupPoolAnnotation: "some-pool",
-				},
-			},
-			Spec: v1alpha1.BranchSpec{
-				ClusterSpec: v1alpha1.ClusterSpec{
-					Instances: 1,
-					Storage:   v1alpha1.StorageSpec{Size: "1Gi"},
-					Image:     "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.7",
-				},
-			},
-		}
-		require.NoError(t, k8sClient.Create(ctx, branch))
-
-		// Create a WakeupRequest
-		wr, err := createWakeupRequest(ctx, wrName, branch.Name)
-		require.NoError(t, err)
-
-		// Expect BranchHasNoXVol because PrimaryXVolName is empty
-		requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionUnknown, v1alpha1.BranchHasNoXVolReason)
-	})
-
 	t.Run("sets PVNotAvailable when cluster has no TargetPrimary", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
@@ -451,7 +417,7 @@ func TestWakeupReconciler(t *testing.T) {
 		require.NoError(t, err)
 
 		// Move the XVol into the Pending state
-		require.NoError(t, setXVolState(ctx, branch.Status.PrimaryXVolName, "Pending"))
+		require.NoError(t, setXVolState(ctx, "xvol-"+branch.Name, "Pending"))
 
 		// Create a WakeupRequest
 		wr, err := createWakeupRequest(ctx, wrName, branch.Name)
@@ -473,7 +439,7 @@ func TestWakeupReconciler(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete the XVol so the validation step finds nothing
-		require.NoError(t, deleteXVol(ctx, branch.Status.PrimaryXVolName))
+		require.NoError(t, deleteXVol(ctx, "xvol-"+branch.Name))
 
 		// Create a WakeupRequest
 		wr, err := createWakeupRequest(ctx, wrName, branch.Name)

@@ -22,7 +22,6 @@ const (
 	WakeupInProgressReason             = "InProgress"
 	WakeupAwaitingReconciliationReason = "AwaitingReconciliation"
 	BranchNotFoundReason               = "BranchNotFound"
-	BranchHasNoXVolReason              = "BranchHasNoXVol"
 	PoolExhaustedReason                = "WakeupPoolExhausted"
 	XVolNotReadyReason                 = "XVolNotReady"
 )
@@ -33,7 +32,6 @@ var WakeupConditionMessages = map[string]string{
 	WakeupReconciliationFailedReason:   "An error occurred during reconciliation",
 	WakeupAwaitingReconciliationReason: "The wakeup request is awaiting reconciliation",
 	BranchNotFoundReason:               "The specified branch was not found",
-	BranchHasNoXVolReason:              "The specified branch has no XVol",
 	NoPoolAnnotationReason:             "The branch has no wakeup pool annotation",
 	PoolNotFoundReason:                 "The specified wakeup pool was not found",
 	PoolExhaustedReason:                "The wakeup pool has no healthy clusters",

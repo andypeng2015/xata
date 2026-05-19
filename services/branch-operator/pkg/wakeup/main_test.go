@@ -238,7 +238,7 @@ func setupPoolCluster(ctx context.Context, pool *poolv1alpha1.ClusterPool, name,
 
 // createBranch creates a Branch with the given name, annotations, and the
 // default test spec. It also creates an XVol named "xvol-<name>" in the
-// Available state and sets PrimaryXVolName in the Branch status
+// Available state.
 func createBranch(ctx context.Context, name string, annotations map[string]string) (*v1alpha1.Branch, error) {
 	branch := &v1alpha1.Branch{
 		ObjectMeta: metav1.ObjectMeta{
@@ -259,14 +259,7 @@ func createBranch(ctx context.Context, name string, annotations map[string]strin
 	}
 
 	// Create an XVol in the Available state for the branch
-	xvolName := "xvol-" + name
-	if err := createXVol(ctx, xvolName, "Available"); err != nil {
-		return nil, err
-	}
-
-	// Set PrimaryXVolName in the Branch status
-	branch.Status.PrimaryXVolName = xvolName
-	if err := k8sClient.Status().Update(ctx, branch); err != nil {
+	if err := createXVol(ctx, "xvol-"+name, "Available"); err != nil {
 		return nil, err
 	}
 

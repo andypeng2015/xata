@@ -2,7 +2,6 @@ package wakeup
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"xata/services/branch-operator/api/v1alpha1"
@@ -69,19 +68,4 @@ func (r *WakeupReconciler) assignClusterToBranch(ctx context.Context, branch *v1
 	}
 
 	return nil
-}
-
-// getXVolName returns the primary XVol name from the Branch's status field. If
-// the Branch has no XVol associated with it then a ConditionError is returned
-func getXVolName(branch *v1alpha1.Branch) (string, error) {
-	xVolName := branch.Status.PrimaryXVolName
-
-	if xVolName == "" {
-		return "", &ConditionError{
-			ConditionReason: v1alpha1.BranchHasNoXVolReason,
-			Err:             errors.New("branch has no XVol"),
-		}
-	}
-
-	return xVolName, nil
 }

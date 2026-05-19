@@ -2211,7 +2211,7 @@ func TestCreateWakeupRequestFromUpdate(t *testing.T) {
 		{
 			name: "replaces failed WakeupRequest",
 			extraObjects: []client.Object{
-				existingWUR(metav1.ConditionFalse, v1alpha1.BranchHasNoXVolReason),
+				existingWUR(metav1.ConditionFalse, v1alpha1.CSINodePodNotFoundReason),
 			},
 			wantWUR: true,
 			wantNew: true,
