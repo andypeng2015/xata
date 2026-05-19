@@ -9,6 +9,10 @@ type WakeupRequestSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="branchName is immutable"
 	BranchName string `json:"branchName"`
+
+	// XVolName is the name of the XVol resource to use for waking up the Branch.
+	// +optional
+	XVolName string `json:"xVolName,omitempty"`
 }
 
 // WakeupRequestStatus defines the observed state of a WakeupRequest

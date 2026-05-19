@@ -62,6 +62,10 @@ spec:
                 x-kubernetes-validations:
                 - message: branchName is immutable
                   rule: self == oldSelf
+              xVolName:
+                description: XVolName is the name of the XVol resource to use for
+                  waking up the Branch.
+                type: string
             required:
             - branchName
             type: object

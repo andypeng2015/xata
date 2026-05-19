@@ -9,6 +9,8 @@ package v1alpha1
 type WakeupRequestSpecApplyConfiguration struct {
 	// BranchName is the name of the Branch resource to wake up
 	BranchName *string `json:"branchName,omitempty"`
+	// XVolName is the name of the XVol resource to use for waking up the Branch.
+	XVolName *string `json:"xVolName,omitempty"`
 }
 
 // WakeupRequestSpecApplyConfiguration constructs a declarative configuration of the WakeupRequestSpec type for use with
@@ -22,5 +24,13 @@ func WakeupRequestSpec() *WakeupRequestSpecApplyConfiguration {
 // If called multiple times, the BranchName field is set to the value of the last call.
 func (b *WakeupRequestSpecApplyConfiguration) WithBranchName(value string) *WakeupRequestSpecApplyConfiguration {
 	b.BranchName = &value
+	return b
+}
+
+// WithXVolName sets the XVolName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the XVolName field is set to the value of the last call.
+func (b *WakeupRequestSpecApplyConfiguration) WithXVolName(value string) *WakeupRequestSpecApplyConfiguration {
+	b.XVolName = &value
 	return b
 }
