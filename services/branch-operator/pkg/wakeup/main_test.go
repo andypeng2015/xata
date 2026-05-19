@@ -330,6 +330,7 @@ func createWakeupRequest(ctx context.Context, name, branchName string) (*v1alpha
 		},
 		Spec: v1alpha1.WakeupRequestSpec{
 			BranchName: branchName,
+			XVolName:   "xvol-" + branchName,
 		},
 	}
 

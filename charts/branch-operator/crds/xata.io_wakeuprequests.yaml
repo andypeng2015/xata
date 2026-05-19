@@ -65,9 +65,14 @@ spec:
               xVolName:
                 description: XVolName is the name of the XVol resource to use for
                   waking up the Branch.
+                minLength: 1
                 type: string
+                x-kubernetes-validations:
+                - message: xVolName is immutable
+                  rule: self == oldSelf
             required:
             - branchName
+            - xVolName
             type: object
           status:
             description: WakeupRequestStatus defines the observed state of a WakeupRequest
