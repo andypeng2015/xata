@@ -589,8 +589,6 @@ func validateBranchRequestCommons[T ValidatableCreateRequest](body T) error {
 
 	switch req := v.(type) {
 	case spec.CreateBranchJSONRequestBody:
-		// keep same backup time if backup configuration is being updated via branch creation from backup, otherwise validate the provided backup time
-		req.BackupConfiguration.BackupTime = backupConfig.BackupTime
 		desc = req.Description
 		name = req.Name
 		backupConfig = req.BackupConfiguration
