@@ -43,7 +43,7 @@ type ClusterDialer struct {
 	statusCheckInterval time.Duration
 }
 
-type reactivateClusterFn func(ctx context.Context, svc clustersService, clusterID string) error
+type reactivateClusterFn func(ctx context.Context, svc clustersService, clusterID, network, address string) (net.Conn, error)
 
 type dialerFn func(ctx context.Context, network, address string) (net.Conn, error)
 
@@ -114,12 +114,12 @@ func defaultClustersService() clustersServiceClientFn {
 func WithInstrumentation(gwMetrics *metrics.GatewayMetrics) ClusterDialerOption {
 	return func(d *ClusterDialer) {
 		reactivate := d.reactivateCluster
-		d.reactivateFn = func(ctx context.Context, svc clustersService, clusterID string) error {
+		d.reactivateFn = func(ctx context.Context, svc clustersService, clusterID, network, address string) (net.Conn, error) {
 			startTime := time.Now()
 			defer func() {
 				gwMetrics.RecordClusterReactivation(ctx, time.Since(startTime))
 			}()
-			return reactivate(ctx, svc, clusterID)
+			return reactivate(ctx, svc, clusterID, network, address)
 		}
 	}
 }
@@ -169,27 +169,30 @@ func (d *ClusterDialer) Dial(ctx context.Context, network string, branch *Branch
 	case d.isClusterHibernated(cluster.Status) && d.isScaleToZeroEnabled(cluster.Configuration):
 		dialLogger.Info().Msg("cluster is hibernated, reactivating...")
 
-		if err := d.reactivateFn(ctx, svc, branch.ID); err != nil {
+		conn, err := d.reactivateFn(ctx, svc, branch.ID, network, branch.Address)
+		if err != nil {
 			dialLogger.Error().Err(err).Msg("failed to reactivate cluster")
 			return nil, dialErr
 		}
 
 		dialLogger.Info().Msg("cluster reactivated successfully")
-		return d.dialer(ctx, network, branch.Address)
+		return conn, nil
 
 	case d.isClusterHibernated(cluster.Status):
 		return nil, ErrBranchHibernated
 
 	case d.isClusterReactivating(cluster.Status):
 		dialLogger.Info().Msg("cluster is reactivating, waiting for it to become available...")
-		if err := d.waitUntilClusterAvailable(ctx, svc, branch.ID); err != nil {
+		conn, err := d.waitUntilReachable(ctx, svc, branch.ID, network, branch.Address)
+		if err != nil {
 			dialLogger.Error().Err(err).Msg("failed to wait for cluster to be available")
 			return nil, dialErr
 		}
 
 		dialLogger.Info().Msg("cluster is now available after waiting for instances to become active")
-		return d.dialer(ctx, network, branch.Address)
+		return conn, nil
 	default:
+		dialLogger.Warn().Stringer("status_type", cluster.Status.StatusType).Msg("dial failed but cluster is not hibernated or reactivating")
 		return nil, dialErr
 	}
 }
@@ -206,7 +209,7 @@ func (d *ClusterDialer) isClusterReactivating(status *clustersv1.ClusterStatus) 
 	return status.StatusType == clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT && status.Status == apiv1.PhaseWaitingForInstancesToBeActive
 }
 
-func (d *ClusterDialer) reactivateCluster(ctx context.Context, svc clustersService, clusterID string) error {
+func (d *ClusterDialer) reactivateCluster(ctx context.Context, svc clustersService, clusterID, network, address string) (net.Conn, error) {
 	_, err := svc.UpdatePostgresCluster(ctx, &clustersv1.UpdatePostgresClusterRequest{
 		Id: clusterID,
 		UpdateConfiguration: &clustersv1.UpdateClusterConfiguration{
@@ -214,37 +217,54 @@ func (d *ClusterDialer) reactivateCluster(ctx context.Context, svc clustersServi
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("reactivating hibernated cluster %s: %w", clusterID, err)
+		return nil, fmt.Errorf("reactivating hibernated cluster %s: %w", clusterID, err)
 	}
 
-	return d.waitUntilClusterAvailable(ctx, svc, clusterID)
+	return d.waitUntilReachable(ctx, svc, clusterID, network, address)
 }
 
-func (d *ClusterDialer) waitUntilClusterAvailable(ctx context.Context, svc clustersService, clusterID string) error {
-	logger := log.Ctx(ctx).With().Str("cluster", clusterID).Logger()
+// waitUntilReachable waits until the cluster is reported available AND a TCP
+// connection to the dial target succeeds. The cluster status only reflects the
+// Postgres instances; the dial target may be a separate component (e.g. the
+// pooler Service) whose endpoints lag behind the cluster becoming healthy.
+// Returns the live connection on success so the caller doesn't have to redial.
+func (d *ClusterDialer) waitUntilReachable(ctx context.Context, svc clustersService, clusterID, network, address string) (net.Conn, error) {
+	logger := log.Ctx(ctx).With().Str("cluster", clusterID).Str("address", address).Logger()
 	reactivateTimeout := time.NewTimer(d.reactivateTimeout)
 	defer reactivateTimeout.Stop()
 	statusChecker := time.NewTicker(d.statusCheckInterval)
 	defer statusChecker.Stop()
+
+	clusterReady := false
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-reactivateTimeout.C:
-			return fmt.Errorf("timed out waiting for cluster %s to be reactivated after %s", clusterID, d.reactivateTimeout)
+			return nil, fmt.Errorf("timed out waiting for cluster %s to be reactivated after %s", clusterID, d.reactivateTimeout)
 		case <-statusChecker.C:
-			// periodically check for the cluster status until it's ready
-			cluster, err := svc.DescribePostgresCluster(ctx, &clustersv1.DescribePostgresClusterRequest{
-				Id: clusterID,
-			})
-			if err != nil {
-				return fmt.Errorf("checking cluster status: %w", err)
+			if !clusterReady {
+				cluster, err := svc.DescribePostgresCluster(ctx, &clustersv1.DescribePostgresClusterRequest{
+					Id: clusterID,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("checking cluster status: %w", err)
+				}
+				if !d.isClusterAvailable(cluster.Status) {
+					logger.Debug().Msgf("waiting for cluster to be available, current status: %s, next check: %s", cluster.Status.StatusType, d.statusCheckInterval)
+					continue
+				}
+				clusterReady = true
 			}
 
-			if d.isClusterAvailable(cluster.Status) {
-				return nil
+			conn, err := d.dialer(ctx, network, address)
+			if err == nil {
+				return conn, nil
 			}
-			logger.Debug().Msgf("waiting for cluster to be available, current status: %s, next check: %s", cluster.Status.StatusType, d.statusCheckInterval)
+			if !shouldAttemptReactivation(err) {
+				return nil, fmt.Errorf("dialing %s: %w", address, err)
+			}
+			logger.Debug().Err(err).Msgf("cluster ready but target not yet reachable, next check: %s", d.statusCheckInterval)
 		}
 	}
 }

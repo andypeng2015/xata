@@ -33,8 +33,9 @@ func TestClusterDialer_Dial(t *testing.T) {
 		clustersService clustersServiceClientFn
 		setupMocks      func(*protomocks.ClustersServiceClient)
 
-		wantDialCalls uint
-		wantErr       error
+		wantDialCalls    uint // exact expected dial count; ignored if wantMinDialCalls is set
+		wantMinDialCalls uint // for timeout-driven tests where the exact count depends on tick timing
+		wantErr          error
 	}{
 		"ok - no dial error": {
 			dialer: &mockDialer{
@@ -404,15 +405,14 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       syscall.ECONNREFUSED,
 		},
-		"error - connection refused with hibernated cluster and scale to zero enabled, error on dial after reactivation": {
+		// Simulates a hibernated cluster that reactivates successfully (Postgres
+		// instances come back) but the dial target (e.g. the pooler Service)
+		// stays unreachable. waitUntilReachable retries the probe-dial until
+		// reactivateTimeout, then surfaces the original dial error.
+		"error - hibernated cluster reactivates but target stays unreachable, returns dial error": {
 			dialer: &mockDialer{
-				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
-					switch i {
-					case 1, 2:
-						return nil, syscall.ECONNREFUSED
-					default:
-						return nil, errors.New("unexpected dial call")
-					}
+				dialFn: func(ctx context.Context, _ uint, network, address string) (net.Conn, error) {
+					return nil, syscall.ECONNREFUSED
 				},
 			},
 			setupMocks: func(mockClusters *protomocks.ClustersServiceClient) {
@@ -445,8 +445,8 @@ func TestClusterDialer_Dial(t *testing.T) {
 				}, nil).Once()
 			},
 
-			wantDialCalls: 2,
-			wantErr:       syscall.ECONNREFUSED,
+			wantMinDialCalls: 2,
+			wantErr:          syscall.ECONNREFUSED,
 		},
 		"error - connection refused, error describing cluster, returns dial error": {
 			dialer: &mockDialer{
@@ -649,7 +649,11 @@ func TestClusterDialer_Dial(t *testing.T) {
 				Address: "test-branch-address",
 			})
 			require.ErrorIs(t, err, tc.wantErr)
-			require.Equal(t, tc.wantDialCalls, tc.dialer.DialCalls(), "unexpected number of dial calls")
+			if tc.wantMinDialCalls > 0 {
+				require.GreaterOrEqual(t, tc.dialer.DialCalls(), tc.wantMinDialCalls, "unexpected number of dial calls")
+			} else {
+				require.Equal(t, tc.wantDialCalls, tc.dialer.DialCalls(), "unexpected number of dial calls")
+			}
 
 			mockClusters.AssertExpectations(t)
 		})

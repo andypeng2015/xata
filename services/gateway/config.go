@@ -21,7 +21,7 @@ type Config struct {
 	// ClusterReactivateTimeout is the timeout for reactivating a hibernated cluster on the first connection
 	ClusterReactivateTimeout time.Duration `env:"XATA_SQL_GW_CLUSTER_REACTIVATE_TIMEOUT" env-description:"SQL Gateway: timeout for reactivating a hibernated cluster on the first connection" env-default:"50s"`
 	// ClusterStatusCheckInterval is the interval for checking the status of a cluster during reactivation
-	ClusterStatusCheckInterval time.Duration `env:"XATA_SQL_GW_CLUSTER_STATUS_CHECK_INTERVAL" env-description:"SQL Gateway: interval for checking the status of a cluster during reactivation" env-default:"2s"`
+	ClusterStatusCheckInterval time.Duration `env:"XATA_SQL_GW_CLUSTER_STATUS_CHECK_INTERVAL" env-description:"SQL Gateway: interval for checking the status of a cluster during reactivation" env-default:"100ms"`
 	// HTTPEnabled enables the HTTP and WebSocket endpoints for the SQL Gateway.
 	HTTPEnabled bool `env:"XATA_SQL_GW_HTTP_ENABLED" env-description:"SQL Gateway: enable HTTP/WebSocket endpoints" env-default:"true"`
 	// HTTPListenAddress is the address and port to listen on for HTTP and WebSocket connections.
