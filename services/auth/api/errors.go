@@ -78,3 +78,29 @@ func (e ErrInvalidResourceRestrictions) Error() string {
 func (e ErrInvalidResourceRestrictions) StatusCode() int {
 	return http.StatusBadRequest
 }
+
+// ErrInvalidExpiry is returned when the requested API key expiry is invalid.
+type ErrInvalidExpiry struct {
+	Reason string
+}
+
+func (e ErrInvalidExpiry) Error() string {
+	return fmt.Sprintf("invalid expiry: %s", e.Reason)
+}
+
+func (e ErrInvalidExpiry) StatusCode() int {
+	return http.StatusBadRequest
+}
+
+// ErrInvalidName is returned when the API key name is invalid (e.g. too long).
+type ErrInvalidName struct {
+	Reason string
+}
+
+func (e ErrInvalidName) Error() string {
+	return fmt.Sprintf("invalid name: %s", e.Reason)
+}
+
+func (e ErrInvalidName) StatusCode() int {
+	return http.StatusBadRequest
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"xata/internal/token"
@@ -25,6 +26,10 @@ import (
 
 // MaxBulkDeleteAPIKeys is the maximum number of API keys that can be deleted in a single request
 const MaxBulkDeleteAPIKeys = 50
+
+// MaxAPIKeyNameLength caps the API key name field. Listings echo this back, so
+// an uncapped name is DoS-adjacent (1MB name × N keys × repeated reads).
+const MaxAPIKeyNameLength = 256
 
 type publicHandler struct {
 	keyCloak       keycloak.KeyCloak
@@ -284,6 +289,28 @@ func (s *publicHandler) createAPIKey(ctx echo.Context, targetType store.KeyTarge
 	if name == "" {
 		return ErrorMissingRequiredField{Field: "name"}
 	}
+	if len(name) > MaxAPIKeyNameLength {
+		return ErrInvalidName{Reason: fmt.Sprintf("must be at most %d characters", MaxAPIKeyNameLength)}
+	}
+
+	if expiry != nil && !expiry.After(time.Now()) {
+		return ErrInvalidExpiry{Reason: "expiry must be in the future"}
+	}
+
+	// Reject mixed wildcard + specific values rather than silently upgrading to
+	// "*", which would be the wrong direction for a least-privilege system.
+	for _, p := range []struct {
+		slice *[]string
+		field string
+	}{
+		{providedScopes, "scopes"},
+		{providedProjects, "projects"},
+		{providedBranches, "branches"},
+	} {
+		if err := rejectMixedWildcard(p.slice, p.field); err != nil {
+			return err
+		}
+	}
 
 	scopes := cleanPermissionArray(providedScopes)
 	projects := cleanPermissionArray(providedProjects)
@@ -294,37 +321,96 @@ func (s *publicHandler) createAPIKey(ctx echo.Context, targetType store.KeyTarge
 		return echo.NewHTTPError(http.StatusUnauthorized)
 	}
 
-	// Check if all scopes are valid
+	// Validate user-provided scopes against known scopes. Inherited scopes
+	// (set below) are trusted: they passed validation when the parent was
+	// created, and deprecating a scope must not break key rotation.
 	for _, scope := range scopes {
 		if scope != "*" && !slices.Contains(spec.GetAllScopes(), scope) {
-			return fmt.Errorf("invalid scope: %s", scope)
+			return ErrInvalidResourceRestrictions{Message: fmt.Sprintf("invalid scope: %s", scope)}
 		}
 	}
 
-	// Validate resource hierarchy exists
-	if len(projects) > 0 || len(branches) > 0 {
+	// allowedScopes/Projects/Branches are the upper bound on what the new
+	// key can hold. For user callers this is the unrestricted "*"; for API
+	// key callers it's the parent key's own restrictions, used both for
+	// inheriting omitted fields and for the subset check below — single
+	// source of truth.
+	allowedScopes := claims.Scopes
+	allowedProjects := claims.Projects
+	allowedBranches := claims.Branches
+
+	if claims.APIKeyID() != "" {
+		parent, err := s.store.GetAPIKey(ctx.Request().Context(), claims.APIKeyID())
+		if err != nil {
+			return fmt.Errorf("get parent api key: %w", err)
+		}
+
+		// A parent with empty permission lists would let the store-side
+		// default of ["*"] leak through to the child. Refuse to use such
+		// a parent rather than silently escalate.
+		if len(parent.Scopes) == 0 || len(parent.Projects) == 0 || len(parent.Branches) == 0 {
+			return ErrInvalidResourceRestrictions{Message: "parent API key has invalid permissions"}
+		}
+
+		allowedScopes = parent.Scopes
+		allowedProjects = parent.Projects
+		allowedBranches = parent.Branches
+
+		if len(scopes) == 0 {
+			scopes = slices.Clone(allowedScopes)
+		}
+		if len(projects) == 0 {
+			projects = slices.Clone(allowedProjects)
+		}
+		if len(branches) == 0 {
+			branches = slices.Clone(allowedBranches)
+		}
+
+		// The child must not outlive the parent: after the parent expires
+		// the child would still be usable, which is a privilege escalation
+		// in time.
+		if parent.Expiry != nil {
+			if expiry == nil || expiry.After(*parent.Expiry) {
+				return ErrInvalidExpiry{Reason: "expiry must not exceed parent API key expiry"}
+			}
+		}
+	}
+
+	// Validate resource hierarchy exists. Skip wildcards — those were validated
+	// at the parent level when the parent's permissions were granted.
+	concreteProjects := projects
+	if slices.Contains(concreteProjects, "*") {
+		concreteProjects = nil
+	}
+	concreteBranches := branches
+	if slices.Contains(concreteBranches, "*") {
+		concreteBranches = nil
+	}
+	if len(concreteProjects) > 0 || len(concreteBranches) > 0 {
 		_, err := s.projectsClient.ValidateHierarchy(ctx.Request().Context(), &projectsv1.ValidateHierarchyRequest{
 			OrganizationIds: organizationIDs(claims.Organizations),
-			ProjectIds:      projects,
-			BranchIds:       branches,
+			ProjectIds:      concreteProjects,
+			BranchIds:       concreteBranches,
 		})
 		if err != nil {
-			return &ErrInvalidResourceRestrictions{Message: err.Error()}
+			return ErrInvalidResourceRestrictions{Message: err.Error()}
 		}
 	}
 
 	// Validate scope access
-	if err := validateResourceList(scopes, claims.Scopes, "scope"); err != nil {
-		return err
+	for _, s := range scopes {
+		if !scopeAllowed(s, allowedScopes) {
+			return ErrInvalidResourceRestrictions{Message: fmt.Sprintf("insufficient access to scope: %s", s)}
+		}
 	}
 
 	// Validate project access
-	if err := validateResourceList(projects, claims.Projects, "project"); err != nil {
+	if err := validateResourceList(projects, allowedProjects, "project"); err != nil {
 		return err
 	}
 
 	// Validate branch access
-	if err := validateResourceList(branches, claims.Branches, "branch"); err != nil {
+	if err := validateResourceList(branches, allowedBranches, "branch"); err != nil {
 		return err
 	}
 
@@ -359,6 +445,24 @@ func organizationIDs(orgs map[string]token.Organization) []string {
 	return ids
 }
 
+// rejectMixedWildcard fails when a permission list mixes "*" with specific
+// values. cleanPermissionArray collapses such input to ["*"], silently
+// upgrading the caller's intent.
+func rejectMixedWildcard(slice *[]string, field string) error {
+	if slice == nil {
+		return nil
+	}
+	if !slices.Contains(*slice, "*") {
+		return nil
+	}
+	for _, s := range *slice {
+		if s != "*" && s != "" {
+			return ErrInvalidResourceRestrictions{Message: fmt.Sprintf("%s cannot mix '*' with specific values", field)}
+		}
+	}
+	return nil
+}
+
 // cleanPermissionArray removes duplicate permissions and handles wildcard entries
 func cleanPermissionArray(slice *[]string) []string {
 	if slice == nil {
@@ -374,6 +478,9 @@ func cleanPermissionArray(slice *[]string) []string {
 	result := make([]string, 0, len(*slice))
 
 	for _, s := range *slice {
+		if s == "" {
+			continue
+		}
 		if _, ok := seen[s]; !ok {
 			seen[s] = struct{}{}
 			result = append(result, s)
@@ -383,9 +490,21 @@ func cleanPermissionArray(slice *[]string) []string {
 	return result
 }
 
+// scopeAllowed mirrors policy.rego's scope_allowed: write implies read,
+// read does not imply write. Keep in sync with internal/opa/policy/policy.rego.
+func scopeAllowed(scope string, allowed []string) bool {
+	if slices.Contains(allowed, "*") || slices.Contains(allowed, scope) {
+		return true
+	}
+	if base, ok := strings.CutSuffix(scope, ":read"); ok {
+		return slices.Contains(allowed, base+":write")
+	}
+	return false
+}
+
 // validateResourceList validates access to a list of resources
 func validateResourceList(requested, userAccess []string, resourceType string) error {
-	if len(requested) == 0 || len(userAccess) == 0 {
+	if len(requested) == 0 {
 		return nil
 	}
 
@@ -394,14 +513,14 @@ func validateResourceList(requested, userAccess []string, resourceType string) e
 		return nil
 	}
 
-	userResourceMap := make(map[string]bool)
+	userResourceMap := make(map[string]bool, len(userAccess))
 	for _, resource := range userAccess {
 		userResourceMap[resource] = true
 	}
 
 	for _, resource := range requested {
 		if !userResourceMap[resource] {
-			return fmt.Errorf("insufficient access to %s: %s", resourceType, resource)
+			return ErrInvalidResourceRestrictions{Message: fmt.Sprintf("insufficient access to %s: %s", resourceType, resource)}
 		}
 	}
 

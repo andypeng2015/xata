@@ -221,6 +221,26 @@ func (s *sqlAuthStore) DeleteAPIKeys(ctx context.Context, targetType store.KeyTa
 	return nil
 }
 
+// GetAPIKey retrieves an API key by its ID.
+func (s *sqlAuthStore) GetAPIKey(ctx context.Context, id string) (*store.APIKey, error) {
+	row := s.sql.QueryRowContext(ctx, `
+		SELECT id, name, key_hash, key_preview, target_type, target_id, expiry, created_at, last_used,
+		       scopes, projects, branches, created_by, created_by_key
+		FROM api_keys
+		WHERE id = $1
+	`, id)
+
+	apiKey, err := scanAPIKey(row)
+	if err != nil {
+		var notFound *store.ErrAPIKeyNotFound
+		if errors.As(err, &notFound) {
+			return nil, &store.ErrAPIKeyNotFound{ID: id}
+		}
+		return nil, fmt.Errorf("get API key: %w", err)
+	}
+	return apiKey, nil
+}
+
 // ListAPIKeys retrieves all API keys for a specific target type and target ID.
 func (s *sqlAuthStore) ListAPIKeys(ctx context.Context, targetType store.KeyTargetType, targetID string) ([]store.APIKey, error) {
 	rows, err := s.sql.QueryContext(ctx, `

@@ -22,6 +22,7 @@ type AuthStore interface {
 
 	// API Key operations
 	ListAPIKeys(ctx context.Context, targetType KeyTargetType, targetID string) ([]APIKey, error)
+	GetAPIKey(ctx context.Context, id string) (*APIKey, error)
 	CreateAPIKey(ctx context.Context, targetType KeyTargetType, targetID string, key *APIKeyCreate) (key.Key, *APIKey, error)
 	DeleteAPIKeys(ctx context.Context, targetType KeyTargetType, targetID string, keyIDs []string) error
 

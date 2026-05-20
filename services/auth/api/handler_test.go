@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"xata/internal/apitest"
 	"xata/internal/apitest/validation"
 	openfeaturetest "xata/internal/openfeature/client/mocks"
+	"xata/internal/token"
 	"xata/services/auth/api/spec"
 	keycloakMocks "xata/services/auth/keycloak/mocks"
 	"xata/services/auth/store"
@@ -185,7 +188,7 @@ func TestAPIKeys(t *testing.T) {
 	// Test data
 	now := time.Now()
 	fixedTime := time.Date(2025, 6, 4, 12, 0, 0, 0, time.UTC)
-	fixedExpiry := fixedTime.Add(24 * time.Hour)
+	fixedExpiry := now.Add(24 * time.Hour)
 
 	t.Run("OrganizationAPIKeys", func(t *testing.T) {
 		// Test cases for creating organization API keys
@@ -1228,11 +1231,12 @@ func TestValidateResourceList(t *testing.T) {
 			wantErr:      false,
 		},
 		{
-			name:         "resources requested, no user access (but not empty requested list)",
-			requested:    []string{"resA"},
-			userAccess:   []string{},
-			resourceType: "project",
-			wantErr:      false, // This case is allowed by current logic; if len(userAccess) is 0, it passes.
+			name:           "resources requested, no user access (but not empty requested list)",
+			requested:      []string{"resA"},
+			userAccess:     []string{},
+			resourceType:   "project",
+			wantErr:        true,
+			expectedErrMsg: "insufficient access to project: resA",
 		},
 		{
 			name:         "no resources requested, user has specific access",
@@ -1308,11 +1312,12 @@ func TestValidateResourceList(t *testing.T) {
 			wantErr:      false,
 		},
 		{
-			name:         "empty user access list, non-empty requested list",
-			requested:    []string{"resA"},
-			userAccess:   []string{}, // If userAccess is empty, the loop for validation is skipped.
-			resourceType: "project",
-			wantErr:      false, // This is how the current code behaves.
+			name:           "empty user access list, non-empty requested list",
+			requested:      []string{"resA"},
+			userAccess:     []string{},
+			resourceType:   "project",
+			wantErr:        true,
+			expectedErrMsg: "insufficient access to project: resA",
 		},
 	}
 
@@ -1327,6 +1332,500 @@ func TestValidateResourceList(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+// TestScopeAllowed mirrors the scope cases in
+// internal/opa/policy/policy_test.rego so the createAPIKey subset check and
+// the runtime OPA evaluator stay in sync.
+func TestScopeAllowed(t *testing.T) {
+	tests := map[string]struct {
+		scope   string
+		allowed []string
+		want    bool
+	}{
+		"exact match":                  {"branch:read", []string{"branch:read"}, true},
+		"wildcard satisfies any scope": {"branch:write", []string{"*"}, true},
+		"write satisfies read":         {"branch:read", []string{"branch:write"}, true},
+		"read does not satisfy write":  {"branch:write", []string{"branch:read"}, false},
+		"unrelated scope is denied":    {"branch:read", []string{"keys:write"}, false},
+		"empty allowed denies":         {"branch:read", []string{}, false},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.want, scopeAllowed(tt.scope, tt.allowed))
+		})
+	}
+}
+
+func TestCreateAPIKeyPreventsPrivilegeEscalation(t *testing.T) {
+	const defaultOrgID = "default-org"
+	const defaultOrgName = "Default Organization"
+
+	parentExpiry := time.Now().Add(24 * time.Hour)
+	earlierExpiry := parentExpiry.Add(-1 * time.Hour)
+	laterExpiry := parentExpiry.Add(1 * time.Hour)
+
+	defaultParent := &store.APIKey{
+		ID:         "parent-key-id",
+		Name:       "parent",
+		TargetType: store.KeyTargetUser,
+		TargetID:   apitest.TestUserID,
+		Scopes:     []string{"keys:write", "branch:read"},
+		Projects:   []string{"proj1"},
+		Branches:   []string{"main"},
+	}
+	wildcardParent := &store.APIKey{
+		ID:         "parent-key-id",
+		TargetType: store.KeyTargetUser,
+		TargetID:   apitest.TestUserID,
+		Scopes:     []string{"*"},
+		Projects:   []string{"*"},
+		Branches:   []string{"*"},
+	}
+	multiResourceParent := &store.APIKey{
+		ID:         "parent-key-id",
+		TargetType: store.KeyTargetUser,
+		TargetID:   apitest.TestUserID,
+		Scopes:     []string{"keys:write", "branch:read", "project:read"},
+		Projects:   []string{"proj1", "proj2"},
+		Branches:   []string{"main", "dev"},
+	}
+	emptyScopesParent := &store.APIKey{
+		ID:         "parent-key-id",
+		TargetType: store.KeyTargetUser,
+		TargetID:   apitest.TestUserID,
+		Scopes:     []string{},
+		Projects:   []string{"*"},
+		Branches:   []string{"*"},
+	}
+
+	withExpiry := func(p *store.APIKey, e time.Time) *store.APIKey {
+		clone := *p
+		clone.Expiry = &e
+		return &clone
+	}
+
+	parentClaims := func(p *store.APIKey) token.Claims {
+		return token.Claims{
+			ID:            apitest.TestUserID,
+			Email:         apitest.TestUserEmail,
+			Organizations: map[string]token.Organization{apitest.TestOrganization: {ID: apitest.TestOrganization, Status: "enabled"}},
+			KeyID:         p.ID,
+			Scopes:        p.Scopes,
+			Projects:      p.Projects,
+			Branches:      p.Branches,
+		}
+	}
+
+	tests := map[string]struct {
+		parent         *store.APIKey
+		body           any
+		setupMocks     func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient)
+		wantErr        bool
+		expectedErrMsg string
+		wantStatus     int
+	}{
+		"child inherits parent restrictions when scopes/projects/branches omitted": {
+			parent: defaultParent,
+			body:   spec.CreateAPIKeyRequest{Name: "child-inherits"},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return c.Name == "child-inherits" &&
+							slices.Equal(c.Scopes, []string{"keys:write", "branch:read"}) &&
+							slices.Equal(c.Projects, []string{"proj1"}) &&
+							slices.Equal(c.Branches, []string{"main"}) &&
+							c.CreatedByKey != nil && *c.CreatedByKey == "parent-key-id"
+					})).Return(key.Key("child-token"), &store.APIKey{
+					ID: "child-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: []string{"keys:write", "branch:read"}, Projects: []string{"proj1"}, Branches: []string{"main"},
+				}, nil)
+			},
+		},
+		"child cannot request wildcard scopes when parent is restricted": {
+			parent: defaultParent,
+			body:   spec.CreateAPIKeyRequest{Name: "escalate-scopes", Scopes: &[]string{"*"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+			},
+			wantErr:        true,
+			expectedErrMsg: "insufficient access to scope: *",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"child cannot request a scope not held by the parent": {
+			parent: defaultParent,
+			body:   spec.CreateAPIKeyRequest{Name: "escalate-org-write", Scopes: &[]string{"org:write"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+			},
+			wantErr:        true,
+			expectedErrMsg: "insufficient access to scope: org:write",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"child cannot request a project not held by the parent": {
+			parent: defaultParent,
+			body:   spec.CreateAPIKeyRequest{Name: "escalate-project", Projects: &[]string{"other-proj"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+			},
+			wantErr:        true,
+			expectedErrMsg: "insufficient access to project: other-proj",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"child cannot request a branch not held by the parent": {
+			parent: defaultParent,
+			body:   spec.CreateAPIKeyRequest{Name: "escalate-branch", Branches: &[]string{"other-branch"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+			},
+			wantErr:        true,
+			expectedErrMsg: "insufficient access to branch: other-branch",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"child can downgrade parent write scope to read (mirrors OPA write-implies-read)": {
+			parent: &store.APIKey{
+				ID: "write-parent", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+				Scopes: []string{"branch:write"}, Projects: []string{"proj1"}, Branches: []string{"main"},
+			},
+			body: spec.CreateAPIKeyRequest{Name: "downgrade-child", Scopes: &[]string{"branch:read"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return slices.Equal(c.Scopes, []string{"branch:read"})
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "downgrade-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: []string{"branch:read"}, Projects: []string{"proj1"}, Branches: []string{"main"},
+				}, nil)
+			},
+		},
+		"child cannot upgrade parent read scope to write": {
+			parent: &store.APIKey{
+				ID: "read-parent", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+				Scopes: []string{"branch:read"}, Projects: []string{"proj1"}, Branches: []string{"main"},
+			},
+			body: spec.CreateAPIKeyRequest{Name: "upgrade-child", Scopes: &[]string{"branch:write"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+			},
+			wantErr:        true,
+			expectedErrMsg: "insufficient access to scope: branch:write",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"child with subset of parent scopes succeeds": {
+			parent: defaultParent,
+			body:   spec.CreateAPIKeyRequest{Name: "child-subset", Scopes: &[]string{"branch:read"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return c.Name == "child-subset" &&
+							slices.Equal(c.Scopes, []string{"branch:read"}) &&
+							slices.Equal(c.Projects, []string{"proj1"}) &&
+							slices.Equal(c.Branches, []string{"main"})
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "child-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: []string{"branch:read"}, Projects: []string{"proj1"}, Branches: []string{"main"},
+				}, nil)
+			},
+		},
+		"child cannot outlive parent (later expiry)": {
+			parent:         withExpiry(defaultParent, parentExpiry),
+			body:           spec.CreateAPIKeyRequest{Name: "child-later", Expiry: &laterExpiry},
+			wantErr:        true,
+			expectedErrMsg: "expiry must not exceed parent API key expiry",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"child cannot omit expiry when parent has expiry": {
+			parent:         withExpiry(defaultParent, parentExpiry),
+			body:           spec.CreateAPIKeyRequest{Name: "child-no-expiry"},
+			wantErr:        true,
+			expectedErrMsg: "expiry must not exceed parent API key expiry",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"child with earlier expiry than parent succeeds": {
+			parent: withExpiry(defaultParent, parentExpiry),
+			body:   spec.CreateAPIKeyRequest{Name: "child-earlier", Expiry: &earlierExpiry},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return c.Name == "child-earlier" && c.Expiry != nil && c.Expiry.Equal(earlierExpiry)
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "child-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: []string{"keys:write", "branch:read"}, Projects: []string{"proj1"}, Branches: []string{"main"},
+					Expiry: &earlierExpiry,
+				}, nil)
+			},
+		},
+		"child with equal expiry to parent succeeds": {
+			parent: withExpiry(defaultParent, parentExpiry),
+			body:   spec.CreateAPIKeyRequest{Name: "child-equal", Expiry: &parentExpiry},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return c.Name == "child-equal" && c.Expiry != nil && c.Expiry.Equal(parentExpiry)
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "child-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: []string{"keys:write", "branch:read"}, Projects: []string{"proj1"}, Branches: []string{"main"},
+					Expiry: &parentExpiry,
+				}, nil)
+			},
+		},
+		"wildcard parent allows specific scope subset": {
+			parent: wildcardParent,
+			body:   spec.CreateAPIKeyRequest{Name: "from-wildcard", Scopes: &[]string{"keys:write"}, Projects: &[]string{"proj1"}, Branches: &[]string{"main"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return slices.Equal(c.Scopes, []string{"keys:write"}) &&
+							slices.Equal(c.Projects, []string{"proj1"}) &&
+							slices.Equal(c.Branches, []string{"main"})
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "child-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: []string{"keys:write"}, Projects: []string{"proj1"}, Branches: []string{"main"},
+				}, nil)
+			},
+		},
+		"wildcard parent allows wildcard child": {
+			parent: wildcardParent,
+			body:   spec.CreateAPIKeyRequest{Name: "all-wildcard", Scopes: &[]string{"*"}, Projects: &[]string{"*"}, Branches: &[]string{"*"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return slices.Equal(c.Scopes, []string{"*"}) &&
+							slices.Equal(c.Projects, []string{"*"}) &&
+							slices.Equal(c.Branches, []string{"*"})
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "child-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: []string{"*"}, Projects: []string{"*"}, Branches: []string{"*"},
+				}, nil)
+			},
+		},
+		"partial overlap with parent scope set is rejected": {
+			parent: multiResourceParent,
+			body:   spec.CreateAPIKeyRequest{Name: "partial", Scopes: &[]string{"keys:write", "branch:read", "org:write"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+			},
+			wantErr:        true,
+			expectedErrMsg: "insufficient access to scope: org:write",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"multi-element subset of parent projects succeeds": {
+			parent: multiResourceParent,
+			body:   spec.CreateAPIKeyRequest{Name: "multi-proj", Projects: &[]string{"proj1", "proj2"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return slices.Equal(c.Projects, []string{"proj1", "proj2"})
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "child-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: multiResourceParent.Scopes, Projects: []string{"proj1", "proj2"}, Branches: multiResourceParent.Branches,
+				}, nil)
+			},
+		},
+		"multi-element subset of parent branches succeeds": {
+			parent: multiResourceParent,
+			body:   spec.CreateAPIKeyRequest{Name: "multi-branch", Branches: &[]string{"dev"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return slices.Equal(c.Branches, []string{"dev"})
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "child-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: multiResourceParent.Scopes, Projects: multiResourceParent.Projects, Branches: []string{"dev"},
+				}, nil)
+			},
+		},
+		"parent with empty scopes is rejected (no privilege leak through store default)": {
+			parent:         emptyScopesParent,
+			body:           spec.CreateAPIKeyRequest{Name: "from-empty"},
+			wantErr:        true,
+			expectedErrMsg: "parent API key has invalid permissions",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"empty strings in requested scopes are stripped": {
+			parent: wildcardParent,
+			body:   spec.CreateAPIKeyRequest{Name: "with-empty", Scopes: &[]string{"", "keys:write", ""}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetUser, apitest.TestUserID,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return slices.Equal(c.Scopes, []string{"keys:write"})
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "child-id", TargetType: store.KeyTargetUser, TargetID: apitest.TestUserID,
+					Scopes: []string{"keys:write"}, Projects: []string{"*"}, Branches: []string{"*"},
+				}, nil)
+			},
+		},
+		"mixed wildcard and specific scopes is rejected": {
+			parent:         wildcardParent,
+			body:           spec.CreateAPIKeyRequest{Name: "mixed", Scopes: &[]string{"*", "keys:read"}},
+			wantErr:        true,
+			expectedErrMsg: "scopes cannot mix '*' with specific values",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"mixed wildcard and specific projects is rejected": {
+			parent:         wildcardParent,
+			body:           spec.CreateAPIKeyRequest{Name: "mixed-proj", Projects: &[]string{"*", "proj1"}},
+			wantErr:        true,
+			expectedErrMsg: "projects cannot mix '*' with specific values",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"name longer than the max length is rejected": {
+			parent:         wildcardParent,
+			body:           spec.CreateAPIKeyRequest{Name: strings.Repeat("a", MaxAPIKeyNameLength+1)},
+			wantErr:        true,
+			expectedErrMsg: fmt.Sprintf("must be at most %d characters", MaxAPIKeyNameLength),
+			wantStatus:     http.StatusBadRequest,
+		},
+		"expiry in the past is rejected before any other check": {
+			parent:         wildcardParent,
+			body:           spec.CreateAPIKeyRequest{Name: "past", Expiry: new(time.Time)},
+			wantErr:        true,
+			expectedErrMsg: "expiry must be in the future",
+			wantStatus:     http.StatusBadRequest,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockKC := keycloakMocks.NewKeyCloak(t)
+			mockStore := storeMocks.NewAuthStore(t)
+			feat := openfeaturetest.NewClient(nil)
+			mockProjects := protomocks.NewProjectsServiceClient(t)
+			handler := NewPublicAPIHandler(feat, mockKC, apitest.TestRealm, mockStore, mockProjects, &billing.NoopBilling{}, analyticsmocks.NewClient(t), defaultOrgID, defaultOrgName)
+			e := apitest.New(t).WithOpenAPISpec(authSpec).WithClaims(parentClaims(tt.parent))
+
+			mockStore.EXPECT().GetAPIKey(mock.Anything, tt.parent.ID).Return(tt.parent, nil).Maybe()
+			if tt.setupMocks != nil {
+				tt.setupMocks(t, mockStore, mockProjects)
+			}
+
+			c, _ := e.POST("/api-keys").WithJSONBody(tt.body).Context()
+			err := handler.CreateUserAPIKey(c)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.expectedErrMsg)
+				}
+				if tt.wantStatus != 0 {
+					var coded interface{ StatusCode() int }
+					require.ErrorAs(t, err, &coded)
+					assert.Equal(t, tt.wantStatus, coded.StatusCode())
+				}
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestCreateOrganizationAPIKeyPreventsPrivilegeEscalation(t *testing.T) {
+	const defaultOrgID = "default-org"
+	const defaultOrgName = "Default Organization"
+
+	parent := &store.APIKey{
+		ID:         "org-parent-id",
+		TargetType: store.KeyTargetOrganization,
+		TargetID:   apitest.TestOrganization,
+		Scopes:     []string{"keys:write", "branch:read"},
+		Projects:   []string{"proj1"},
+		Branches:   []string{"main"},
+	}
+	parentClaims := token.Claims{
+		Organizations: map[string]token.Organization{apitest.TestOrganization: {ID: apitest.TestOrganization, Status: "enabled"}},
+		KeyID:         parent.ID,
+		Scopes:        parent.Scopes,
+		Projects:      parent.Projects,
+		Branches:      parent.Branches,
+	}
+
+	tests := map[string]struct {
+		body           any
+		setupMocks     func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient)
+		wantErr        bool
+		expectedErrMsg string
+		wantStatus     int
+	}{
+		"org child with subset of parent scopes succeeds": {
+			body: spec.CreateAPIKeyRequest{Name: "org-subset", Scopes: &[]string{"branch:read"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetOrganization, apitest.TestOrganization,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return slices.Equal(c.Scopes, []string{"branch:read"}) &&
+							c.CreatedByKey != nil && *c.CreatedByKey == "org-parent-id"
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "org-child", TargetType: store.KeyTargetOrganization, TargetID: apitest.TestOrganization,
+					Scopes: []string{"branch:read"}, Projects: parent.Projects, Branches: parent.Branches,
+				}, nil)
+			},
+		},
+		"org child cannot request scope not held by parent": {
+			body: spec.CreateAPIKeyRequest{Name: "org-escalate", Scopes: &[]string{"org:write"}},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+			},
+			wantErr:        true,
+			expectedErrMsg: "insufficient access to scope: org:write",
+			wantStatus:     http.StatusBadRequest,
+		},
+		"org child inherits parent restrictions when omitted": {
+			body: spec.CreateAPIKeyRequest{Name: "org-inherit"},
+			setupMocks: func(t *testing.T, mockStore *storeMocks.AuthStore, mockProjects *protomocks.ProjectsServiceClient) {
+				mockProjects.EXPECT().ValidateHierarchy(mock.Anything, mock.Anything).Return(nil, nil)
+				mockStore.EXPECT().CreateAPIKey(mock.Anything, store.KeyTargetOrganization, apitest.TestOrganization,
+					mock.MatchedBy(func(c *store.APIKeyCreate) bool {
+						return slices.Equal(c.Scopes, parent.Scopes) &&
+							slices.Equal(c.Projects, parent.Projects) &&
+							slices.Equal(c.Branches, parent.Branches)
+					})).Return(key.Key("t"), &store.APIKey{
+					ID: "org-child", TargetType: store.KeyTargetOrganization, TargetID: apitest.TestOrganization,
+					Scopes: parent.Scopes, Projects: parent.Projects, Branches: parent.Branches,
+				}, nil)
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockKC := keycloakMocks.NewKeyCloak(t)
+			mockStore := storeMocks.NewAuthStore(t)
+			feat := openfeaturetest.NewClient(nil)
+			mockProjects := protomocks.NewProjectsServiceClient(t)
+			handler := NewPublicAPIHandler(feat, mockKC, apitest.TestRealm, mockStore, mockProjects, &billing.NoopBilling{}, analyticsmocks.NewClient(t), defaultOrgID, defaultOrgName)
+			e := apitest.New(t).WithOpenAPISpec(authSpec).WithClaims(parentClaims)
+
+			mockStore.EXPECT().GetAPIKey(mock.Anything, parent.ID).Return(parent, nil)
+			if tt.setupMocks != nil {
+				tt.setupMocks(t, mockStore, mockProjects)
+			}
+
+			c, _ := e.POST("/organizations/" + apitest.TestOrganization + "/api-keys").WithJSONBody(tt.body).Context()
+			err := handler.CreateOrganizationAPIKey(c, apitest.TestOrganization)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.expectedErrMsg)
+				}
+				if tt.wantStatus != 0 {
+					var coded interface{ StatusCode() int }
+					require.ErrorAs(t, err, &coded)
+					assert.Equal(t, tt.wantStatus, coded.StatusCode())
+				}
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }
