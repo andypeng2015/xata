@@ -37,10 +37,11 @@ func TestMetricsQuerier_BuildsPromQLPerMetric(t *testing.T) {
 			instances:    []string{"br-123-1"},
 			aggregations: []string{"avg"},
 			wantContains: []string{
-				"avg by (pod) (rate(container_cpu_usage_seconds_total{",
+				"avg by (pod) (sum by (pod) (rate(container_cpu_usage_seconds_total{",
 				`namespace="xata-clusters"`,
 				`branch_id="br-123"`,
-				`pod=~"^br-123-.*"`, // legacy fallback
+				`container!=""`,
+				`pod=~"^br-123-.*"`,
 				" or ",
 				`pod=~"^(br-123-1)$"`,
 			},

@@ -79,6 +79,12 @@ func TestGetMetric(t *testing.T) {
 				require.NotNil(t, req.CompositeQuery.Queries)
 				require.Len(t, *req.CompositeQuery.Queries, 1)
 				spec := unwrapBuilderMetricSpec(t, (*req.CompositeQuery.Queries)[0])
+				require.NotNil(t, spec.Aggregations)
+				aggs := *spec.Aggregations
+				require.Len(t, aggs, 1)
+				require.Equal(t, "container.cpu.time", *aggs[0].MetricName)
+				require.Equal(t, signoz.MetrictypesTimeAggregation("rate"), *aggs[0].TimeAggregation)
+				require.Equal(t, signoz.MetrictypesSpaceAggregation("avg"), *aggs[0].SpaceAggregation)
 				require.NotNil(t, spec.Filter)
 				require.NotNil(t, spec.Filter.Expression)
 				assert.Contains(t, *spec.Filter.Expression, `k8s.pod.name IN ["pod-1"]`)
@@ -319,9 +325,9 @@ func TestGetMetric(t *testing.T) {
 				assert.Equal(t, "pod-1", result.Series[0].InstanceID)
 				require.Len(t, result.Series[0].Values, 2)
 				assert.Equal(t, int64(1715000000000), result.Series[0].Values[0].Timestamp.UnixMilli())
-				assert.InDelta(t, float32(1.0), result.Series[0].Values[0].Value, 0.00001)
-				assert.Equal(t, int64(1715000120000), result.Series[0].Values[1].Timestamp.UnixMilli())
-				assert.InDelta(t, float32(3.0), result.Series[0].Values[1].Value, 0.00001)
+				require.InDelta(t, float32(1.0), result.Series[0].Values[0].Value, 0.00001)
+				require.Equal(t, int64(1715000120000), result.Series[0].Values[1].Timestamp.UnixMilli())
+				require.InDelta(t, float32(3.0), result.Series[0].Values[1].Value, 0.00001)
 			},
 		},
 	}
@@ -409,6 +415,28 @@ func TestGetMetric(t *testing.T) {
 	}
 }
 
+func TestStepForMetric(t *testing.T) {
+	tests := map[string]struct {
+		metric string
+		stepIn int
+		want   int
+	}{
+		"gauge keeps caller step":            {metric: "memory", stepIn: 60, want: 60},
+		"gauge keeps long caller step":       {metric: "memory", stepIn: 3600, want: 3600},
+		"counter clamps short step":          {metric: "iops_write", stepIn: 60, want: 120},
+		"counter cpu clamps short step":      {metric: "cpu", stepIn: 60, want: 120},
+		"counter passes wider caller step":   {metric: "network_ingress", stepIn: 300, want: 300},
+		"unknown metric passes step through": {metric: "not_a_real_metric", stepIn: 60, want: 60},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := stepForMetric(tt.metric, tt.stepIn)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func labelValue(s string) *interface{} {
 	var v interface{} = s
 	return &v
@@ -447,7 +475,7 @@ func assertSeriesMatchResults(t *testing.T, got []MetricSeries, want []signoz.Qu
 				if ts.Values != nil {
 					require.Equal(t, len(*ts.Values), len(got[idx].Values))
 					for k, v := range *ts.Values {
-						assert.InDelta(t, float32(ptr.Deref(v.Value, 0)), got[idx].Values[k].Value, 0.00001)
+						require.InDelta(t, float32(ptr.Deref(v.Value, 0)), got[idx].Values[k].Value, 0.00001)
 						assert.Equal(t, ptr.Deref(v.Timestamp, 0), got[idx].Values[k].Timestamp.UnixMilli())
 					}
 				}

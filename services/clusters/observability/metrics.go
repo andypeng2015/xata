@@ -31,31 +31,29 @@ const scrapeInterval = 30 * time.Second
 // MetricInfo describes how a Xata-facing metric maps onto a Prometheus series
 // scraped by Vector inside the cell.
 type MetricInfo struct {
-	// PromName is the metric name as exposed to VictoriaMetrics. CNPG and
-	// kubelet-stat collectors emit underscore-separated names; Vector
-	// preserves them on its prometheus_remote_write sink.
+	// PromName is the metric name as exposed to VictoriaMetrics.
 	PromName string
 	// Unit is the user-visible unit label.
 	Unit string
 	Kind MetricKind
-	// SpaceAggDefault is applied for gauges when the user-supplied
-	// aggregation is taken as the time aggregation.
+	// SpaceAggDefault is the space aggregation for gauges (user agg becomes the time agg).
 	SpaceAggDefault string
-	// TemporalAggDefault is applied for counters; the user aggregation
-	// becomes the space aggregation.
+	// TemporalAggDefault is the time aggregation for counters (user agg becomes the space agg).
 	TemporalAggDefault string
-	// AdditionalLabels are added as label matchers in PromQL.
+	// AdditionalLabels are added as label matchers (label="value").
 	AdditionalLabels map[string]string
+	// ExcludeLabels are added as label exclusion matchers (label!="value") to drop unreliable series.
+	ExcludeLabels map[string]string
+	// WithinPodCombiner folds per-container series into one series per pod before the user aggregation.
+	WithinPodCombiner string
 }
 
-// metricCatalog maps Xata metric names to their PromQL definitions. The
-// underlying Prom names match what CNPG and kubelet exporters publish today;
-// the previous SigNoz mapping in services/projects/metrics/signoz_rest.go
-// used the OTel dotted form (container.cpu.usage etc.). Vector
-// remote-writes preserve underscore form, so the series names below are the
-// authoritative Prometheus identifiers.
+// metricCatalog maps Xata metric names to their PromQL definitions. Names use
+// the Prometheus underscore form preserved by Vector's remote_write sink; the
+// SigNoz catalog in services/projects/metrics/signoz_rest.go uses the OTel
+// dotted form for the same series.
 var metricCatalog = map[string]MetricInfo{
-	"cpu":                  {PromName: "container_cpu_usage_seconds_total", Unit: "percentage", Kind: Counter, TemporalAggDefault: "rate"},
+	"cpu":                  {PromName: "container_cpu_usage_seconds_total", Unit: "percentage", Kind: Counter, TemporalAggDefault: "rate", WithinPodCombiner: "sum", ExcludeLabels: map[string]string{"container": ""}},
 	"memory":               {PromName: "container_memory_working_set_bytes", Unit: "bytes", Kind: Gauge, SpaceAggDefault: "avg"},
 	"disk":                 {PromName: "cnpg_pg_database_size_bytes", Unit: "bytes", Kind: Gauge, SpaceAggDefault: "sum"},
 	"connections_active":   {PromName: "cnpg_pg_stat_activity_connections_active", Unit: "connections", Kind: Gauge, SpaceAggDefault: "sum"},
@@ -176,11 +174,11 @@ func (q *MetricsQuerier) Query(ctx context.Context, branchID, metric string, ins
 	}
 
 	step := CalculateStep(start, end)
-	scopedMatchers := buildMatchers(q.namespace, branchID, instances, info.AdditionalLabels)
+	scopedMatchers := buildMatchers(q.namespace, branchID, instances, info.AdditionalLabels, info.ExcludeLabels)
 	// TODO(cleanup after one month): once retentionPeriod (30d) has elapsed
 	// from the deploy that introduced branch_id, drop legacyMatchers and the
 	// surrounding OR; series stamped before then carry no branch_id label.
-	legacyMatchers := buildLegacyPodMatchers(q.namespace, branchID, instances, info.AdditionalLabels)
+	legacyMatchers := buildLegacyPodMatchers(q.namespace, branchID, instances, info.AdditionalLabels, info.ExcludeLabels)
 
 	// One backend round-trip per aggregation; fan out so e.g. min,avg,max
 	// finishes in one round-trip's worth of latency instead of three.
@@ -243,7 +241,13 @@ func buildPromQLClause(info MetricInfo, userAgg, matchers string, step time.Dura
 		// Counter rate windows must clamp to >= 4 * scrape_interval so a
 		// single missed scrape doesn't leave only one sample in the window
 		// and blank the cell.
-		return fmt.Sprintf("%s by (pod) (%s(%s{%s}[%s]))", userAgg, info.TemporalAggDefault, info.PromName, matchers, formatRange(rateWindow(step))), nil
+		inner := fmt.Sprintf("%s(%s{%s}[%s])", info.TemporalAggDefault, info.PromName, matchers, formatRange(rateWindow(step)))
+		if info.WithinPodCombiner != "" {
+			// Fold per-container series into one per pod before the user
+			// aggregation runs across pods.
+			inner = fmt.Sprintf("%s by (pod) (%s)", info.WithinPodCombiner, inner)
+		}
+		return fmt.Sprintf("%s by (pod) (%s)", userAgg, inner), nil
 	case Gauge:
 		spaceAgg := info.SpaceAggDefault
 		if spaceAgg == "" {
@@ -275,18 +279,18 @@ func rateWindow(step time.Duration) time.Duration {
 // buildMatchers renders the PromQL label matcher string. The branch scope
 // is always added so a buggy or malicious caller cannot read another
 // branch's samples by omitting the instance list.
-func buildMatchers(namespace, branchID string, instances []string, extra map[string]string) string {
-	return joinMatchers(namespace, fmt.Sprintf(`branch_id=%q`, branchID), instances, extra)
+func buildMatchers(namespace, branchID string, instances []string, extra, exclude map[string]string) string {
+	return joinMatchers(namespace, fmt.Sprintf(`branch_id=%q`, branchID), instances, extra, exclude)
 }
 
 // buildLegacyPodMatchers renders the pre-branch_id matcher set, scoping by
 // pod-name prefix. TODO(cleanup after one month): remove once retention has
 // aged past the branch_id rollout.
-func buildLegacyPodMatchers(namespace, branchID string, instances []string, extra map[string]string) string {
-	return joinMatchers(namespace, fmt.Sprintf(`pod=~%q`, "^"+regexp.QuoteMeta(branchID)+"-.*"), instances, extra)
+func buildLegacyPodMatchers(namespace, branchID string, instances []string, extra, exclude map[string]string) string {
+	return joinMatchers(namespace, fmt.Sprintf(`pod=~%q`, "^"+regexp.QuoteMeta(branchID)+"-.*"), instances, extra, exclude)
 }
 
-func joinMatchers(namespace, scope string, instances []string, extra map[string]string) string {
+func joinMatchers(namespace, scope string, instances []string, extra, exclude map[string]string) string {
 	parts := []string{
 		fmt.Sprintf(`namespace=%q`, namespace),
 		scope,
@@ -296,6 +300,9 @@ func joinMatchers(namespace, scope string, instances []string, extra map[string]
 	}
 	for k, v := range extra {
 		parts = append(parts, fmt.Sprintf(`%s=%q`, k, v))
+	}
+	for k, v := range exclude {
+		parts = append(parts, fmt.Sprintf(`%s!=%q`, k, v))
 	}
 	return strings.Join(parts, ",")
 }

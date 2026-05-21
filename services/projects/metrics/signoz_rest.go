@@ -21,7 +21,7 @@ var sigNozMetricName = map[string]struct {
 	additionalFilters                             map[string]string
 }{
 	// Maps Xata API metric names to SigNoz metric names
-	"cpu":                  {name: "container.cpu.usage", unit: "percentage", metricType: "gauge", spaceAgg: "avg"},
+	"cpu":                  {name: "container.cpu.time", unit: "percentage", metricType: "counter", temporalAgg: "rate"},
 	"memory":               {name: "container.memory.working_set", unit: "bytes", metricType: "gauge", spaceAgg: "avg"},
 	"disk":                 {name: "cnpg_pg_database_size_bytes", unit: "bytes", metricType: "gauge", spaceAgg: "sum"},
 	"connections_active":   {name: "cnpg_pg_stat_activity_connections_active", unit: "connections", metricType: "gauge", spaceAgg: "sum"},
@@ -202,7 +202,7 @@ func parseMetricValues(points *[]signoz.Querybuildertypesv5TimeSeriesValue) []Va
 }
 
 func buildMetricsReq(clustersNamespace, branchID string, start, end time.Time, metricName string, instances, aggregations []string) (signoz.QueryRangeV5JSONRequestBody, map[string]string, error) {
-	step := calculateStep(start, end)
+	step := stepForMetric(metricName, calculateStep(start, end))
 	filterExpr := buildMetricsFilterExpression(clustersNamespace, branchID, instances, metricName)
 
 	queries, queryToAgg, err := buildMetricQueries(metricName, step, aggregations, filterExpr)
@@ -211,6 +211,18 @@ func buildMetricsReq(clustersNamespace, branchID string, start, end time.Time, m
 	}
 
 	return buildRequestBody(start, end, queries, signoz.TimeSeries), queryToAgg, nil
+}
+
+// SigNoz v5 ties the counter rate window to the step, so clamp counter steps
+// up to 4×scrape (matches the Victoria path).
+const counterRateWindowSeconds = 120
+
+func stepForMetric(metricName string, step int) int {
+	info, ok := sigNozMetricName[metricName]
+	if !ok || info.metricType != "counter" {
+		return step
+	}
+	return max(step, counterRateWindowSeconds)
 }
 
 func buildMetricsFilterExpression(namespace, branchID string, instances []string, metricName string) string {
