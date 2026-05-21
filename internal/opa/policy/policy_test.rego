@@ -79,59 +79,102 @@ test_valid_organization_deny_no_match if {
 }
 
 # valid_project tests
-test_valid_project_allow_no_project_in_path if {
+test_valid_project_allow_no_project_in_path_unrelated_scope if {
 	policy.valid_project with input as {
-		"request": {"path": "/path"},
+		"request": {"path": "/path", "scopes": ["org:read"]},
 		"claims": {"projects": ["proj1"]},
 	}
 }
 
 test_valid_project_allow_wildcard if {
 	policy.valid_project with input as {
-		"request": {"path": "/projects/:projectID", "project": "proj1"},
+		"request": {"path": "/projects/:projectID", "project": "proj1", "scopes": ["project:read"]},
 		"claims": {"projects": ["*"]},
 	}
 }
 
 test_valid_project_allow_match if {
 	policy.valid_project with input as {
-		"request": {"path": "/projects/:projectID", "project": "proj1"},
+		"request": {"path": "/projects/:projectID", "project": "proj1", "scopes": ["project:read"]},
 		"claims": {"projects": ["proj1"]},
 	}
 }
 
 test_valid_project_deny_no_match if {
 	not policy.valid_project with input as {
-		"request": {"path": "/projects/:projectID", "project": "proj2"},
+		"request": {"path": "/projects/:projectID", "project": "proj2", "scopes": ["project:read"]},
+		"claims": {"projects": ["proj1"]},
+	}
+}
+
+# Write on collection routes (no :projectID) requires wildcard project access.
+test_valid_project_deny_write_collection_route_without_wildcard if {
+	not policy.valid_project with input as {
+		"request": {"path": "/organizations/:organizationID/projects", "scopes": ["project:write"]},
+		"claims": {"projects": ["proj1"]},
+	}
+}
+
+test_valid_project_allow_write_collection_route_with_wildcard if {
+	policy.valid_project with input as {
+		"request": {"path": "/organizations/:organizationID/projects", "scopes": ["project:write"]},
+		"claims": {"projects": ["*"]},
+	}
+}
+
+test_valid_project_allow_read_collection_route_with_restricted_key if {
+	policy.valid_project with input as {
+		"request": {"path": "/organizations/:organizationID/projects", "scopes": ["project:read"]},
 		"claims": {"projects": ["proj1"]},
 	}
 }
 
 # valid_branch tests
-test_valid_branch_allow_no_branch_in_path if {
+test_valid_branch_allow_no_branch_in_path_unrelated_scope if {
 	policy.valid_branch with input as {
-		"request": {"path": "/path"},
+		"request": {"path": "/path", "scopes": ["org:read"]},
 		"claims": {"branches": ["main"]},
 	}
 }
 
 test_valid_branch_allow_wildcard if {
 	policy.valid_branch with input as {
-		"request": {"path": "/branches/:branchID", "branch": "dev"},
+		"request": {"path": "/branches/:branchID", "branch": "dev", "scopes": ["branch:read"]},
 		"claims": {"branches": ["*"]},
 	}
 }
 
 test_valid_branch_allow_match if {
 	policy.valid_branch with input as {
-		"request": {"path": "/branches/:branchID", "branch": "main"},
+		"request": {"path": "/branches/:branchID", "branch": "main", "scopes": ["branch:read"]},
 		"claims": {"branches": ["main"]},
 	}
 }
 
 test_valid_branch_deny_no_match if {
 	not policy.valid_branch with input as {
-		"request": {"path": "/branches/:branchID", "branch": "dev"},
+		"request": {"path": "/branches/:branchID", "branch": "dev", "scopes": ["branch:read"]},
+		"claims": {"branches": ["main"]},
+	}
+}
+
+test_valid_branch_deny_write_collection_route_without_wildcard if {
+	not policy.valid_branch with input as {
+		"request": {"path": "/organizations/:organizationID/projects/:projectID/branches", "scopes": ["branch:write"]},
+		"claims": {"branches": ["main"]},
+	}
+}
+
+test_valid_branch_allow_write_collection_route_with_wildcard if {
+	policy.valid_branch with input as {
+		"request": {"path": "/organizations/:organizationID/projects/:projectID/branches", "scopes": ["branch:write"]},
+		"claims": {"branches": ["*"]},
+	}
+}
+
+test_valid_branch_allow_read_collection_route_with_restricted_key if {
+	policy.valid_branch with input as {
+		"request": {"path": "/organizations/:organizationID/projects/:projectID/branches", "scopes": ["branch:read"]},
 		"claims": {"branches": ["main"]},
 	}
 }
@@ -232,5 +275,93 @@ test_valid_scope_deny_partial_missing_write if {
 	not policy.valid_scope with input as {
 		"request": {"scopes": ["branch:read", "branch:write"]},
 		"claims": {"scopes": ["branch:read"]},
+	}
+}
+
+test_allow_restricted_key_listing_branches_in_allowed_project if {
+	policy.allow with input as {
+		"request": {
+			"method": "GET",
+			"path": "/organizations/:organizationID/projects/:projectID/branches",
+			"scopes": ["branch:read"],
+			"organization": "org1",
+			"project": "projA",
+		},
+		"claims": {
+			"scopes": ["branch:read"],
+			"organizations": {"org1": {"ID": "org1", "Status": "enabled"}},
+			"projects": ["projA"],
+			"branches": ["branchY"],
+		},
+	}
+}
+
+test_deny_restricted_key_creating_branch_in_allowed_project if {
+	not policy.allow with input as {
+		"request": {
+			"method": "POST",
+			"path": "/organizations/:organizationID/projects/:projectID/branches",
+			"scopes": ["branch:write"],
+			"organization": "org1",
+			"project": "projA",
+		},
+		"claims": {
+			"scopes": ["branch:write"],
+			"organizations": {"org1": {"ID": "org1", "Status": "enabled"}},
+			"projects": ["projA"],
+			"branches": ["branchY"],
+		},
+	}
+}
+
+test_allow_restricted_key_listing_projects if {
+	policy.allow with input as {
+		"request": {
+			"method": "GET",
+			"path": "/organizations/:organizationID/projects",
+			"scopes": ["project:read"],
+			"organization": "org1",
+		},
+		"claims": {
+			"scopes": ["project:read"],
+			"organizations": {"org1": {"ID": "org1", "Status": "enabled"}},
+			"projects": ["projA"],
+			"branches": ["*"],
+		},
+	}
+}
+
+test_allow_wildcard_key_listing_projects if {
+	policy.allow with input as {
+		"request": {
+			"method": "GET",
+			"path": "/organizations/:organizationID/projects",
+			"scopes": ["project:read"],
+			"organization": "org1",
+		},
+		"claims": {
+			"scopes": ["project:read"],
+			"organizations": {"org1": {"ID": "org1", "Status": "enabled"}},
+			"projects": ["*"],
+			"branches": ["*"],
+		},
+	}
+}
+
+# Org-level routes work fine with a project/branch-restricted key.
+test_allow_restricted_key_org_route if {
+	policy.allow with input as {
+		"request": {
+			"method": "GET",
+			"path": "/organizations/:organizationID/members",
+			"scopes": ["org:read"],
+			"organization": "org1",
+		},
+		"claims": {
+			"scopes": ["org:read"],
+			"organizations": {"org1": {"ID": "org1", "Status": "enabled"}},
+			"projects": ["projA"],
+			"branches": ["branchY"],
+		},
 	}
 }

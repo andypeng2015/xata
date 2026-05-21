@@ -54,18 +54,46 @@ valid_organization if {
 	input.request.organization in object.keys(input.claims.organizations)
 }
 
-# Project access check
+# Project access check: write on collection routes (no :projectID) requires wildcard.
 valid_project if {
-	not contains(input.request.path, ":projectID")
-} else if {
+	contains(input.request.path, ":projectID")
 	permission_granted(input.request.project, input.claims.projects)
 }
 
-# Branch access check
+valid_project if {
+	not contains(input.request.path, ":projectID")
+	not requires_project_write_scope
+}
+
+valid_project if {
+	not contains(input.request.path, ":projectID")
+	"*" in input.claims.projects
+}
+
+# input.request.scopes are the scopes the route requires, not the caller's claim scopes.
+requires_project_write_scope if {
+	"project:write" in input.request.scopes
+}
+
+# Branch access check: write on collection routes (no :branchID) requires wildcard.
+valid_branch if {
+	contains(input.request.path, ":branchID")
+	permission_granted(input.request.branch, input.claims.branches)
+}
+
 valid_branch if {
 	not contains(input.request.path, ":branchID")
-} else if {
-	permission_granted(input.request.branch, input.claims.branches)
+	not requires_branch_write_scope
+}
+
+valid_branch if {
+	not contains(input.request.path, ":branchID")
+	"*" in input.claims.branches
+}
+
+# input.request.scopes are the scopes the route requires, not the caller's claim scopes.
+requires_branch_write_scope if {
+	"branch:write" in input.request.scopes
 }
 
 # Permission check with support for "*"

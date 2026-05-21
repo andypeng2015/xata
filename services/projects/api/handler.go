@@ -306,9 +306,17 @@ func (s *handler) ListProjects(c echo.Context, organizationID spec.OrganizationI
 			return err
 		}
 
+		claims := api.GetUserClaims(c)
+		filtered := make([]store.Project, 0, len(projects))
+		for _, p := range projects {
+			if claims.HasAccessToProject(p.ID) {
+				filtered = append(filtered, p)
+			}
+		}
+
 		return c.JSON(http.StatusOK, struct {
 			Projects []spec.Project `json:"projects"`
-		}{storeToAPIProjectList(projects)})
+		}{storeToAPIProjectList(filtered)})
 	})
 }
 
@@ -545,9 +553,17 @@ func (s *handler) ListBranches(c echo.Context, organizationID spec.OrganizationI
 			return err
 		}
 
+		claims := api.GetUserClaims(c)
+		filtered := make([]store.Branch, 0, len(branches))
+		for _, b := range branches {
+			if claims.HasAccessToBranch(b.ID) {
+				filtered = append(filtered, b)
+			}
+		}
+
 		return c.JSON(http.StatusOK, struct {
 			Branches []spec.BranchListMetadata `json:"branches"`
-		}{storeToAPIListBranchListMetadata(branches)})
+		}{storeToAPIListBranchListMetadata(filtered)})
 	})
 }
 

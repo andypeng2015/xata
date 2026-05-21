@@ -23,6 +23,7 @@ import (
 	"xata/internal/openfeature"
 	"xata/internal/postgrescfg"
 	"xata/internal/postgresversions"
+	"xata/internal/token"
 	"xata/services/clusters"
 	"xata/services/projects/api/spec"
 	"xata/services/projects/cells"
@@ -273,6 +274,57 @@ func TestListProjects(t *testing.T) {
 	assert.Equal(t, int(projects[1].ScaleToZero.ChildBranches.InactivityPeriod.Duration().Minutes()), res.Projects[1].Configuration.ScaleToZero.ChildBranches.InactivityPeriodMinutes)
 
 	mockStore.AssertExpectations(t)
+}
+
+func TestListProjectsFiltersByClaims(t *testing.T) {
+	now, _ := time.Parse(time.RFC3339, "2021-01-01T00:00:00Z")
+	projects := []store.Project{
+		{ID: "projA", Name: "a", CreatedAt: now, ScaleToZero: defaultProjectScaleToZeroConfig()},
+		{ID: "projB", Name: "b", CreatedAt: now, ScaleToZero: defaultProjectScaleToZeroConfig()},
+		{ID: "projC", Name: "c", CreatedAt: now, ScaleToZero: defaultProjectScaleToZeroConfig()},
+	}
+
+	restricted := apitest.TestClaims
+	restricted.Projects = []string{"projA", "projC"}
+
+	empty := apitest.TestClaims
+	empty.Projects = []string{}
+
+	cases := map[string]struct {
+		claims  token.Claims
+		wantIDs []string
+	}{
+		"wildcard sees all":           {claims: apitest.TestClaims, wantIDs: []string{"projA", "projB", "projC"}},
+		"restricted sees subset":      {claims: restricted, wantIDs: []string{"projA", "projC"}},
+		"empty restriction sees none": {claims: empty, wantIDs: []string{}},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			mockStore := mocks.NewProjectsStore(t)
+			feat := openfeaturetest.NewClient(nil)
+			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
+			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(tc.claims)
+
+			mockStore.EXPECT().ListProjects(mock.Anything, apitest.TestOrganization).Return(projects, nil)
+
+			c, rec := e.GET("/organizations/" + apitest.TestOrganization + "/projects").Context()
+			require.NoError(t, handler.ListProjects(c, apitest.TestOrganization))
+
+			var res struct {
+				Projects []spec.Project `json:"projects"`
+			}
+			rec.MustCode(http.StatusOK)
+			rec.ReadBody(&res)
+
+			got := make([]string, len(res.Projects))
+			for i, p := range res.Projects {
+				got[i] = p.Id
+			}
+			require.Equal(t, tc.wantIDs, got)
+		})
+	}
 }
 
 func TestDeleteProject(t *testing.T) {
@@ -2219,6 +2271,55 @@ func TestListBranches(t *testing.T) {
 		assert.Equal(t, branch.Region, response.Region)
 	}
 	mockStore.AssertExpectations(t)
+}
+
+func TestListBranchesFiltersByClaims(t *testing.T) {
+	now, _ := time.Parse(time.RFC3339, "2021-01-01T00:00:00Z")
+	branches := []store.Branch{
+		{ID: "branchA", Name: "a", CreatedAt: now, UpdatedAt: now, Region: "us-east-1"},
+		{ID: "branchB", Name: "b", CreatedAt: now, UpdatedAt: now, Region: "us-east-1"},
+		{ID: "branchC", Name: "c", CreatedAt: now, UpdatedAt: now, Region: "us-east-1"},
+	}
+
+	restricted := apitest.TestClaims
+	restricted.Branches = []string{"branchA", "branchC"}
+
+	cases := map[string]struct {
+		claims  token.Claims
+		wantIDs []string
+	}{
+		"wildcard sees all":      {claims: apitest.TestClaims, wantIDs: []string{"branchA", "branchB", "branchC"}},
+		"restricted sees subset": {claims: restricted, wantIDs: []string{"branchA", "branchC"}},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			mockStore := mocks.NewProjectsStore(t)
+			mockClusters := protomocks.NewClustersServiceClient(t)
+			mockCells := cellsmock.NewCellsMock(t, mockClusters)
+			feat := openfeaturetest.NewClient(nil)
+			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
+			handler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(tc.claims)
+
+			mockStore.EXPECT().ListBranches(mock.Anything, apitest.TestOrganization, "project_id").Return(branches, nil)
+
+			c, rec := e.GET("/organizations/" + apitest.TestOrganization + "/projects/project_id/branches").Context()
+			require.NoError(t, handler.ListBranches(c, apitest.TestOrganization, "project_id"))
+
+			var resp struct {
+				Branches []spec.BranchListMetadata `json:"branches"`
+			}
+			rec.MustCode(http.StatusOK)
+			rec.ReadBody(&resp)
+
+			got := make([]string, len(resp.Branches))
+			for i, b := range resp.Branches {
+				got[i] = b.Id
+			}
+			require.Equal(t, tc.wantIDs, got)
+		})
+	}
 }
 
 func TestGetBackup(t *testing.T) {

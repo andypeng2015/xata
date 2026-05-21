@@ -1,6 +1,9 @@
 package token
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 const OrgEnabledStatus = "enabled"
 
@@ -80,4 +83,18 @@ func (c *Claims) IsEnabledOrganization(organizationID string) bool {
 	}
 
 	return false
+}
+
+func (c *Claims) HasAccessToProject(projectID string) bool {
+	if c == nil || projectID == "" {
+		return false
+	}
+	return slices.Contains(c.Projects, "*") || slices.Contains(c.Projects, projectID)
+}
+
+func (c *Claims) HasAccessToBranch(branchID string) bool {
+	if c == nil || branchID == "" {
+		return false
+	}
+	return slices.Contains(c.Branches, "*") || slices.Contains(c.Branches, branchID)
 }
