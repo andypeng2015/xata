@@ -1,7 +1,7 @@
 # PostgreSQL versions available in container registry
 # This file is automatically updated by the postgres-images build workflow
 
-last_updated: "2026-02-27T10:23:59Z"
+last_updated: "2026-05-20T03:10:59Z"
 updated_by: workflow
 sources:
   - source: ghcr.io/xataio/postgres-images/cnpg-postgres-plus
@@ -9,52 +9,52 @@ sources:
     major_versions:
       "14":
         # PostgreSQL 14.x versions
-        versions: ["14.20", "14.22"]
-        latest: "14.22"
+        versions: ["14.20", "14.22", "14.23"]
+        latest: "14.23"
         supported: true
       "15":
         # PostgreSQL 15.x versions
-        versions: ["15.15", "15.17"]
-        latest: "15.17"
+        versions: ["15.15", "15.17", "15.18"]
+        latest: "15.18"
         supported: true
       "16":
         # PostgreSQL 16.x versions
-        versions: ["16.11", "16.13"]
-        latest: "16.13"
+        versions: ["16.11", "16.13", "16.14"]
+        latest: "16.14"
         supported: true
       "17":
         # PostgreSQL 17.x versions - current major version
-        versions: ["17.5", "17.6", "17.7", "17.9"]
-        latest: "17.9"
+        versions: ["17.5", "17.6", "17.7", "17.9", "17.10"]
+        latest: "17.10"
         supported: true
       "18":
         # PostgreSQL 18.x versions
-        versions: ["18.0", "18.1", "18.3"]
-        latest: "18.3"
+        versions: ["18.0", "18.1", "18.3", "18.4"]
+        latest: "18.4"
         supported: true
   - source: ghcr.io/xataio/postgres-images/experimental
     package_url: https://github.com/xataio/postgres-images/pkgs/container/postgres-images%2Fexperimental
     major_versions:
       "17":
-        versions: ["17.7", "17.9"]
-        latest: "17.9"
+        versions: ["17.7", "17.9", "17.10"]
+        latest: "17.10"
         supported: true
       "18":
-        versions: ["18.1", "18.3"]
-        latest: "18.3"
+        versions: ["18.1", "18.3", "18.4"]
+        latest: "18.4"
         supported: true
       "16":
-        versions: ["16.11", "16.13"]
-        latest: "16.13"
+        versions: ["16.11", "16.13", "16.14"]
+        latest: "16.14"
         supported: true
   - source: ghcr.io/xataio/postgres-images/xata-analytics
     package_url: https://github.com/xataio/postgres-images/pkgs/container/postgres-images%2Fxata-analytics
     major_versions:
       "17":
-        versions: ["17.6", "17.7", "17.9"]
-        latest: "17.9"
+        versions: ["17.6", "17.7", "17.9", "17.10"]
+        latest: "17.10"
         supported: true
       "18":
-        versions: ["18.0", "18.1", "18.3"]
-        latest: "18.3"
+        versions: ["18.0", "18.1", "18.3", "18.4"]
+        latest: "18.4"
         supported: true
