@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -400,169 +401,162 @@ func TestWebSocketHandler_PipelineConnect_CleartextAuth(t *testing.T) {
 }
 
 func TestWebSocketHandler_PipelineConnect_CleartextAuth_WithQuery(t *testing.T) {
-	pgListener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer pgListener.Close()
+	tests := map[string]struct {
+		query string
+	}{
+		"small query": {
+			query: "SELECT 1 as num",
+		},
+		// Regression: the pipelined first query is coalesced into the opening
+		// message; large ones must not trip coder/websocket's 32 KiB default read
+		// limit before NetConn lifts it for the steady-state proxy.
+		"query just over the 32KiB default read limit": {
+			query: "SELECT 1 as num -- " + strings.Repeat("x", 40*1024),
+		},
+		"query well over the default read limit": {
+			query: "SELECT 1 as num -- " + strings.Repeat("x", 128*1024),
+		},
+	}
 
-	const password = "secret"
-	pgDone := make(chan struct{})
-	go func() {
-		defer close(pgDone)
-		conn, err := pgListener.Accept()
-		if err != nil {
-			return
-		}
-		defer conn.Close()
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			pgListener, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			defer pgListener.Close()
 
-		backend := pgproto3.NewBackend(conn, conn)
-		_, err = backend.ReceiveStartupMessage()
-		if err != nil {
-			t.Logf("mock pg: receive startup: %v", err)
-			return
-		}
+			const password = "secret"
+			pgDone := make(chan struct{})
+			go func() {
+				defer close(pgDone)
+				conn, err := pgListener.Accept()
+				if err != nil {
+					return
+				}
+				defer conn.Close()
 
-		// Request cleartext password
-		backend.Send(&pgproto3.AuthenticationCleartextPassword{})
-		if err := backend.Flush(); err != nil {
-			t.Logf("mock pg: flush auth request: %v", err)
-			return
-		}
+				backend := pgproto3.NewBackend(conn, conn)
+				if _, err := backend.ReceiveStartupMessage(); err != nil {
+					t.Logf("mock pg: receive startup: %v", err)
+					return
+				}
 
-		backend.SetAuthType(pgproto3.AuthTypeCleartextPassword)
-		msg, err := backend.Receive()
-		if err != nil {
-			t.Logf("mock pg: receive password: %v", err)
-			return
-		}
-		pwMsg, ok := msg.(*pgproto3.PasswordMessage)
-		if !ok {
-			t.Logf("mock pg: expected PasswordMessage, got %T", msg)
-			return
-		}
-		if pwMsg.Password != password {
-			t.Logf("mock pg: wrong password: %q", pwMsg.Password)
-			return
-		}
+				backend.Send(&pgproto3.AuthenticationCleartextPassword{})
+				if err := backend.Flush(); err != nil {
+					t.Logf("mock pg: flush auth request: %v", err)
+					return
+				}
 
-		backend.Send(&pgproto3.AuthenticationOk{})
-		backend.Send(&pgproto3.ParameterStatus{Name: "server_version", Value: "16.0"})
-		backend.Send(&pgproto3.BackendKeyData{ProcessID: 1, SecretKey: []byte{0, 0, 0, 2}})
-		backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
-		if err := backend.Flush(); err != nil {
-			t.Logf("mock pg: flush auth response: %v", err)
-			return
-		}
+				backend.SetAuthType(pgproto3.AuthTypeCleartextPassword)
+				msg, err := backend.Receive()
+				if err != nil {
+					t.Logf("mock pg: receive password: %v", err)
+					return
+				}
+				pwMsg, ok := msg.(*pgproto3.PasswordMessage)
+				if !ok || pwMsg.Password != password {
+					t.Logf("mock pg: bad password message: %T %v", msg, msg)
+					return
+				}
 
-		// Receive the pipelined query (Parse/Bind/Describe/Execute/Sync)
-		for {
-			msg, err := backend.Receive()
-			if err != nil {
-				t.Logf("mock pg: receive query: %v", err)
-				return
+				backend.Send(&pgproto3.AuthenticationOk{})
+				backend.Send(&pgproto3.ParameterStatus{Name: "server_version", Value: "16.0"})
+				backend.Send(&pgproto3.BackendKeyData{ProcessID: 1, SecretKey: []byte{0, 0, 0, 2}})
+				backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+				if err := backend.Flush(); err != nil {
+					t.Logf("mock pg: flush auth response: %v", err)
+					return
+				}
+
+				// Receive the pipelined query (Parse/Bind/Describe/Execute/Sync)
+				for {
+					msg, err := backend.Receive()
+					if err != nil {
+						t.Logf("mock pg: receive query: %v", err)
+						return
+					}
+					if _, ok := msg.(*pgproto3.Sync); ok {
+						break
+					}
+				}
+
+				backend.Send(&pgproto3.ParseComplete{})
+				backend.Send(&pgproto3.BindComplete{})
+				backend.Send(&pgproto3.RowDescription{
+					Fields: []pgproto3.FieldDescription{{Name: []byte("num"), DataTypeOID: 23, DataTypeSize: 4, Format: 0}},
+				})
+				backend.Send(&pgproto3.DataRow{Values: [][]byte{[]byte("1")}})
+				backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("SELECT 1")})
+				backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+				if err := backend.Flush(); err != nil {
+					t.Logf("mock pg: flush query response: %v", err)
+					return
+				}
+			}()
+
+			wsURL := setupWSServer(t, pgListener.Addr().String())
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			ws, _, err := websocket.Dial(ctx, wsURL, nil)
+			require.NoError(t, err)
+			defer ws.CloseNow()
+
+			startupData, err := (&pgproto3.StartupMessage{
+				ProtocolVersion: 196608,
+				Parameters:      map[string]string{"user": "testuser", "database": "testdb"},
+			}).Encode(nil)
+			require.NoError(t, err)
+
+			pwData, err := (&pgproto3.PasswordMessage{Password: password}).Encode(nil)
+			require.NoError(t, err)
+
+			var queryData []byte
+			queryData, _ = (&pgproto3.Parse{Query: tc.query}).Encode(queryData)
+			queryData, _ = (&pgproto3.Bind{}).Encode(queryData)
+			queryData, _ = (&pgproto3.Describe{ObjectType: 'P'}).Encode(queryData)
+			queryData, _ = (&pgproto3.Execute{}).Encode(queryData)
+			queryData, _ = (&pgproto3.Sync{}).Encode(queryData)
+
+			coalesced := slices.Concat(startupData, pwData, queryData)
+			require.NoError(t, ws.Write(ctx, websocket.MessageBinary, coalesced))
+
+			// Read until the second ReadyForQuery (auth, then query result). Before
+			// the fix a large coalesced message is dropped during the startup read,
+			// so no DataRow arrives.
+			gotAuthOk := false
+			gotDataRow := false
+			for readyCount := 0; readyCount < 2; {
+				_, data, err := ws.Read(ctx)
+				require.NoError(t, err, "connection dropped before query result — startup read limit too low")
+				require.NotEmpty(t, data)
+
+				for len(data) > 0 {
+					require.GreaterOrEqual(t, len(data), 5, "truncated PG message header")
+					totalLen := 1 + int(binary.BigEndian.Uint32(data[1:5]))
+					require.GreaterOrEqual(t, len(data), totalLen, "truncated PG message body")
+
+					switch data[0] {
+					case 'R': // Authentication
+						require.GreaterOrEqual(t, len(data), 9, "truncated Authentication message")
+						require.Equal(t, uint32(0), binary.BigEndian.Uint32(data[5:9]), "expected AuthenticationOk")
+						gotAuthOk = true
+					case 'S', 'K', '1', '2', 'T', 'C':
+					case 'Z': // ReadyForQuery
+						readyCount++
+					case 'D': // DataRow
+						gotDataRow = true
+					default:
+						t.Fatalf("unexpected message type %c", data[0])
+					}
+					data = data[totalLen:]
+				}
 			}
-			if _, ok := msg.(*pgproto3.Sync); ok {
-				break
-			}
-		}
+			require.True(t, gotAuthOk, "did not receive AuthenticationOk")
+			require.True(t, gotDataRow, "did not receive DataRow — pipelined query was not forwarded")
 
-		// Respond with query result
-		backend.Send(&pgproto3.ParseComplete{})
-		backend.Send(&pgproto3.BindComplete{})
-		backend.Send(&pgproto3.RowDescription{
-			Fields: []pgproto3.FieldDescription{{Name: []byte("num"), DataTypeOID: 23, DataTypeSize: 4, Format: 0}},
+			<-pgDone
 		})
-		backend.Send(&pgproto3.DataRow{Values: [][]byte{[]byte("1")}})
-		backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("SELECT 1")})
-		backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
-		if err := backend.Flush(); err != nil {
-			t.Logf("mock pg: flush query response: %v", err)
-			return
-		}
-	}()
-
-	wsURL := setupWSServer(t, pgListener.Addr().String())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	ws, _, err := websocket.Dial(ctx, wsURL, nil)
-	require.NoError(t, err)
-	defer ws.CloseNow()
-
-	// Build coalesced startup + password + query (Parse/Bind/Describe/Execute/Sync)
-	startupMsg := &pgproto3.StartupMessage{
-		ProtocolVersion: 196608,
-		Parameters:      map[string]string{"user": "testuser", "database": "testdb"},
 	}
-	startupData, err := startupMsg.Encode(nil)
-	require.NoError(t, err)
-
-	pwMsg := &pgproto3.PasswordMessage{Password: password}
-	pwData, err := pwMsg.Encode(nil)
-	require.NoError(t, err)
-
-	// Build extended query protocol messages
-	parseMsg := &pgproto3.Parse{Query: "SELECT 1 as num"}
-	bindMsg := &pgproto3.Bind{}
-	descMsg := &pgproto3.Describe{ObjectType: 'P'}
-	execMsg := &pgproto3.Execute{}
-	syncMsg := &pgproto3.Sync{}
-
-	var queryData []byte
-	queryData, _ = parseMsg.Encode(queryData)
-	queryData, _ = bindMsg.Encode(queryData)
-	queryData, _ = descMsg.Encode(queryData)
-	queryData, _ = execMsg.Encode(queryData)
-	queryData, _ = syncMsg.Encode(queryData)
-
-	// Send everything coalesced in one WebSocket message
-	coalesced := slices.Concat(startupData, pwData, queryData)
-	err = ws.Write(ctx, websocket.MessageBinary, coalesced)
-	require.NoError(t, err)
-
-	// Read auth response + query result
-	gotAuthOk := false
-	gotReady := false
-	gotDataRow := false
-	readyCount := 0
-	for readyCount < 2 {
-		_, data, err := ws.Read(ctx)
-		require.NoError(t, err)
-		require.NotEmpty(t, data)
-
-		for len(data) > 0 {
-			require.GreaterOrEqual(t, len(data), 5, "truncated PG message header")
-			msgType := data[0]
-			msgLen := binary.BigEndian.Uint32(data[1:5])
-			totalLen := 1 + int(msgLen)
-			require.GreaterOrEqual(t, len(data), totalLen, "truncated PG message body")
-
-			switch msgType {
-			case 'R': // Authentication
-				authType := binary.BigEndian.Uint32(data[5:9])
-				require.Equal(t, uint32(0), authType, "expected AuthenticationOk")
-				gotAuthOk = true
-			case 'S': // ParameterStatus
-			case 'K': // BackendKeyData
-			case 'Z': // ReadyForQuery
-				readyCount++
-				gotReady = true
-			case '1': // ParseComplete
-			case '2': // BindComplete
-			case 'T': // RowDescription
-			case 'D': // DataRow
-				gotDataRow = true
-			case 'C': // CommandComplete
-			default:
-				t.Fatalf("unexpected message type %c", msgType)
-			}
-			data = data[totalLen:]
-		}
-	}
-	require.True(t, gotAuthOk, "did not receive AuthenticationOk")
-	require.True(t, gotReady, "did not receive ReadyForQuery")
-	require.True(t, gotDataRow, "did not receive DataRow — pipelined query was not forwarded")
-
-	<-pgDone
 }
 
 func TestWebSocketHandler_PipelineConnect_TrustAuth(t *testing.T) {

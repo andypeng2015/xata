@@ -22,6 +22,11 @@ import (
 const (
 	sslRequestCode    = 80877103
 	gssEncRequestCode = 80877104
+
+	// maxStartupReadBytes bounds the opening client message, which with
+	// pipelineConnect carries the first query. Must exceed coder/websocket's
+	// 32 KiB default; matches the HTTP /sql ceiling (maxResponseSizeBytes).
+	maxStartupReadBytes = 10 * 1024 * 1024
 )
 
 func (h *handler) Websocket(c echo.Context) error {
@@ -40,6 +45,10 @@ func (h *handler) Websocket(c echo.Context) error {
 		return nil
 	}
 	defer ws.CloseNow()
+
+	// Lift coder/websocket's 32 KiB default before reading the (possibly
+	// pipelined and large) opening message. NetConn disables it below anyway.
+	ws.SetReadLimit(maxStartupReadBytes)
 
 	// Read startup message, rejecting SSL/GSS encryption requests
 	var startupData []byte
