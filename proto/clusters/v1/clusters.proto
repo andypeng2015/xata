@@ -344,7 +344,7 @@ message DeleteBranchIPFilteringRequest {
 // DeleteBranchIPFilteringResponse is the response object for DeleteBranchIPFiltering
 message DeleteBranchIPFilteringResponse {}
 
-// GetBranchMetricsRequest is the request object for GetBranchMetrics
+// GetBranchMetricsRequest is the request object for GetBranchMetrics.
 message GetBranchMetricsRequest {
   // The id of the branch
   string branch_id = 1;
@@ -352,22 +352,40 @@ message GetBranchMetricsRequest {
   google.protobuf.Timestamp start = 2;
   // End of the queried time range
   google.protobuf.Timestamp end = 3;
-  // Metric name (e.g. cpu, memory, disk, connections_active, ...)
-  string metric = 4;
-  // Pod instance ids to include; each must start with "{branch_id}-"
+  // DEPRECATED: single-metric `metric`, replaced by `metrics`.
+  reserved 4;
+  reserved "metric";
+  // Pod instance ids to include; empty means every instance on the branch.
   repeated string instances = 5;
   // Aggregations to compute (e.g. avg, max, min)
   repeated string aggregations = 6;
+  // One or more metric names (e.g. cpu, memory, disk, ...)
+  repeated string metrics = 7;
 }
 
-// GetBranchMetricsResponse is the response object for GetBranchMetrics
+// GetBranchMetricsResponse is the response object for GetBranchMetrics.
 message GetBranchMetricsResponse {
   google.protobuf.Timestamp start = 1;
   google.protobuf.Timestamp end = 2;
-  string metric = 3;
+  // DEPRECATED: flat `metric`, replaced by `results`.
+  reserved 3;
+  reserved "metric";
+  // DEPRECATED: flat `unit`, replaced by `results`.
+  reserved 4;
+  reserved "unit";
+  // DEPRECATED: flat `series`, replaced by `results`.
+  reserved 5;
+  reserved "series";
+  // One entry per requested metric in request order.
+  repeated BranchMetricResult results = 6;
+}
+
+// BranchMetricResult is the time-series for a single metric.
+message BranchMetricResult {
+  string metric = 1;
   // Unit of the metric (percentage, bytes, ms, etc.)
-  string unit = 4;
-  repeated MetricSeries series = 5;
+  string unit = 2;
+  repeated MetricSeries series = 3;
 }
 
 // MetricSeries is a single aggregated time-series for one instance

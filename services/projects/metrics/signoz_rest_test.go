@@ -50,7 +50,7 @@ func TestGetMetric(t *testing.T) {
 			mockStatusCode: 200,
 			mockResults: []signoz.Querybuildertypesv5TimeSeriesData{
 				{
-					QueryName: new("A"),
+					QueryName: new("q0"),
 					Aggregations: &[]signoz.Querybuildertypesv5AggregationBucket{
 						{
 							Series: &[]signoz.Querybuildertypesv5TimeSeries{
@@ -104,7 +104,7 @@ func TestGetMetric(t *testing.T) {
 			mockStatusCode: 200,
 			mockResults: []signoz.Querybuildertypesv5TimeSeriesData{
 				{
-					QueryName: new("B"),
+					QueryName: new("q1"),
 					Aggregations: &[]signoz.Querybuildertypesv5AggregationBucket{
 						{
 							Series: &[]signoz.Querybuildertypesv5TimeSeries{
@@ -137,7 +137,7 @@ func TestGetMetric(t *testing.T) {
 					},
 				},
 				{
-					QueryName: new("A"),
+					QueryName: new("q0"),
 					Aggregations: &[]signoz.Querybuildertypesv5AggregationBucket{
 						{
 							Series: &[]signoz.Querybuildertypesv5TimeSeries{
@@ -234,7 +234,7 @@ func TestGetMetric(t *testing.T) {
 			mockStatusCode: 200,
 			mockResults: []signoz.Querybuildertypesv5TimeSeriesData{
 				{
-					QueryName: new("A"),
+					QueryName: new("q0"),
 					Aggregations: &[]signoz.Querybuildertypesv5AggregationBucket{
 						{
 							Series: &[]signoz.Querybuildertypesv5TimeSeries{
@@ -270,8 +270,9 @@ func TestGetMetric(t *testing.T) {
 			},
 		},
 		{
-			name:           "empty instances still includes pod name filter",
+			name:           "empty instances omits the pod name filter",
 			metric:         "cpu",
+			branchID:       "br-123",
 			startTime:      time.UnixMilli(1715000000000),
 			endTime:        time.UnixMilli(1715010000000),
 			instances:      nil,
@@ -283,7 +284,8 @@ func TestGetMetric(t *testing.T) {
 				spec := unwrapBuilderMetricSpec(t, (*req.CompositeQuery.Queries)[0])
 				require.NotNil(t, spec.Filter)
 				require.NotNil(t, spec.Filter.Expression)
-				assert.Contains(t, *spec.Filter.Expression, "k8s.pod.name IN []")
+				assert.NotContains(t, *spec.Filter.Expression, "k8s.pod.name IN")
+				assert.Contains(t, *spec.Filter.Expression, `branch_id = "br-123"`, "branch scope must still be enforced when instances are empty")
 			},
 		},
 		{
@@ -297,7 +299,7 @@ func TestGetMetric(t *testing.T) {
 			mockStatusCode: 200,
 			mockResults: []signoz.Querybuildertypesv5TimeSeriesData{
 				{
-					QueryName: new("A"),
+					QueryName: new("q0"),
 					Aggregations: &[]signoz.Querybuildertypesv5AggregationBucket{
 						{
 							Series: &[]signoz.Querybuildertypesv5TimeSeries{
@@ -373,17 +375,16 @@ func TestGetMetric(t *testing.T) {
 			client, err := NewSigNozClient(server.URL, apiKey, k8sNamespace)
 			require.NoError(t, err)
 
-			result, err := client.GetMetric(context.Background(), "", "", tt.startTime, tt.endTime, tt.branchID, tt.metric, tt.instances, tt.aggregations)
+			batch, err := client.GetMetrics(context.Background(), "", "", tt.startTime, tt.endTime, tt.branchID, []string{tt.metric}, tt.instances, tt.aggregations)
 
 			if tt.expectError {
 				assert.Error(t, err)
 				return
 			}
 			assert.NoError(t, err)
-			assert.NotNil(t, result)
+			require.Len(t, batch, 1)
+			result := &batch[0]
 			assert.Equal(t, tt.metric, result.Metric)
-			assert.Equal(t, tt.startTime, result.Start)
-			assert.Equal(t, tt.endTime, result.End)
 			assert.Equal(t, tt.unit, result.Unit)
 			assert.NotNil(t, result.Series)
 
@@ -413,6 +414,78 @@ func TestGetMetric(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetMetrics_BatchPerMetricInOrder(t *testing.T) {
+	// One HTTP request per metric, fanned out in parallel. Each response echoes
+	// its own SigNoz metric name back as the pod label, so the assertions below
+	// confirm GetMetrics returns one result per requested metric in request
+	// order and fills each from its own response.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req signoz.Querybuildertypesv5QueryRangeRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		result := signoz.Querybuildertypesv5TimeSeriesData{
+			QueryName: new("q0"),
+			Aggregations: &[]signoz.Querybuildertypesv5AggregationBucket{{
+				Series: &[]signoz.Querybuildertypesv5TimeSeries{{
+					Labels: &[]signoz.Querybuildertypesv5Label{{
+						Key:   &signoz.TelemetrytypesTelemetryFieldKey{Name: "k8s.pod.name"},
+						Value: labelValue(signozMetricNameFromRequest(&req)),
+					}},
+					Values: &[]signoz.Querybuildertypesv5TimeSeriesValue{
+						{Timestamp: new(int64(1715000000000)), Value: new(float64(1))},
+					},
+				}},
+			}},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": "success",
+			"data": map[string]any{
+				"type": "time_series",
+				"data": map[string]any{"results": []any{result}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewSigNozClient(server.URL, apiKey, k8sNamespace)
+	require.NoError(t, err)
+
+	start, end := time.UnixMilli(1715000000000), time.UnixMilli(1715010000000)
+	batch, err := client.GetMetrics(context.Background(), "", "", start, end, "br-123", []string{"cpu", "memory"}, nil, []string{"avg"})
+	require.NoError(t, err)
+	require.Len(t, batch, 2)
+
+	require.Equal(t, "cpu", batch[0].Metric)
+	require.Equal(t, "percentage", batch[0].Unit)
+	require.Len(t, batch[0].Series, 1)
+	require.Equal(t, sigNozMetricName["cpu"].name, batch[0].Series[0].InstanceID, "cpu result must be filled from the cpu request")
+
+	require.Equal(t, "memory", batch[1].Metric)
+	require.Equal(t, "bytes", batch[1].Unit)
+	require.Len(t, batch[1].Series, 1)
+	require.Equal(t, sigNozMetricName["memory"].name, batch[1].Series[0].InstanceID, "memory result must be filled from the memory request")
+}
+
+// signozMetricNameFromRequest extracts the SigNoz metric name from a v5 query
+// request, returning "" if the shape is unexpected (kept assertion-free so it
+// is safe to call from the test server goroutine).
+func signozMetricNameFromRequest(req *signoz.Querybuildertypesv5QueryRangeRequest) string {
+	if req.CompositeQuery == nil || req.CompositeQuery.Queries == nil || len(*req.CompositeQuery.Queries) == 0 {
+		return ""
+	}
+	builder, err := (*req.CompositeQuery.Queries)[0].AsQuerybuildertypesv5QueryEnvelopeBuilderMetric()
+	if err != nil || builder.Spec == nil || builder.Spec.Aggregations == nil || len(*builder.Spec.Aggregations) == 0 {
+		return ""
+	}
+	return ptr.Deref((*builder.Spec.Aggregations)[0].MetricName, "")
 }
 
 func TestStepForMetric(t *testing.T) {

@@ -78,15 +78,16 @@ func TestMetricsQuerier_BuildsPromQLPerMetric(t *testing.T) {
 				{Labels: map[string]string{"pod": "br-123-1"}, Values: []PromSample{{Timestamp: start, Value: 1.5}}},
 			}}
 			q := NewMetricsQuerier(backend, "xata-clusters")
-			res, err := q.Query(context.Background(), branchID, tt.metric, tt.instances, tt.aggregations, start, end)
+			res, err := q.Query(context.Background(), branchID, []string{tt.metric}, tt.instances, tt.aggregations, start, end)
 			require.NoError(t, err)
 			require.Len(t, backend.queries, len(tt.aggregations))
 			for _, fragment := range tt.wantContains {
 				require.Contains(t, backend.queries[0], fragment, "missing fragment in %s", backend.queries[0])
 			}
 			require.Equal(t, 1, strings.Count(backend.queries[0], " or "), "exactly one branch_id-vs-legacy OR per query")
-			require.Len(t, res.Series, 1)
-			require.Equal(t, "br-123-1", res.Series[0].InstanceID)
+			require.Len(t, res, 1)
+			require.Len(t, res[0].Series, 1)
+			require.Equal(t, "br-123-1", res[0].Series[0].InstanceID)
 		})
 	}
 }
@@ -108,13 +109,13 @@ func TestBuildPromQL_RateWindowAppliesOnlyToCounters(t *testing.T) {
 
 func TestMetricsQuerier_RejectsUnknownMetric(t *testing.T) {
 	q := NewMetricsQuerier(&fakeMetricsBackend{}, "xata-clusters")
-	_, err := q.Query(context.Background(), "br-1", "unknown-metric", nil, []string{"avg"}, time.Now().Add(-time.Hour), time.Now())
+	_, err := q.Query(context.Background(), "br-1", []string{"unknown-metric"}, nil, []string{"avg"}, time.Now().Add(-time.Hour), time.Now())
 	require.Error(t, err)
 }
 
 func TestMetricsQuerier_RejectsUnsupportedAggregation(t *testing.T) {
 	q := NewMetricsQuerier(&fakeMetricsBackend{}, "xata-clusters")
-	_, err := q.Query(context.Background(), "br-1", "cpu", nil, []string{"p99"}, time.Now().Add(-time.Hour), time.Now())
+	_, err := q.Query(context.Background(), "br-1", []string{"cpu"}, nil, []string{"p99"}, time.Now().Add(-time.Hour), time.Now())
 	require.Error(t, err)
 }
 

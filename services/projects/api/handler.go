@@ -126,6 +126,12 @@ const (
 	observabilityBackendVictoria = "victoria"
 )
 
+// maxMetricsPerRequest bounds the per-request fan-out to the backend (one
+// HTTP/PromQL call per metric). It matches the `metrics` maxItems in the
+// OpenAPI spec, but is enforced here because requests are not validated
+// against the spec at runtime.
+const maxMetricsPerRequest = 15
+
 // selectMetricsClient returns the metrics client for the current request.
 // Without the BranchObservabilityPerCell flag the legacy SigNoz client is
 // always used. With the flag on, the caller may opt-in to the per-cell
@@ -1709,12 +1715,32 @@ func (s *handler) GetDefaultProjectLimits(c echo.Context, organizationID spec.Or
 func (s *handler) BranchMetrics(c echo.Context, organizationID spec.OrganizationID, projectID string, branchID string) error {
 	return s.withOrganizationAccess(c, organizationID, All, func() error {
 		var req spec.BranchMetricsRequest
-		err := c.Bind(&req)
-		if err != nil {
+		if err := c.Bind(&req); err != nil {
 			return err
 		}
 
-		if err = validateTimeRange(branchID, req.Start, req.End); err != nil {
+		// Accept either the deprecated `metric` or the new `metrics`
+		// array; require exactly one.
+		var metricNames []string
+		switch {
+		case req.Metric != nil && req.Metrics != nil:
+			return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "provide either `metric` or `metrics`, not both"}
+		case req.Metric != nil:
+			metricNames = []string{string(*req.Metric)}
+		case req.Metrics != nil:
+			if len(*req.Metrics) == 0 {
+				return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "`metrics` must not be empty"}
+			}
+			metricNames = stringArrayValue(*req.Metrics)
+		default:
+			return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "one of `metric` or `metrics` is required"}
+		}
+
+		if len(metricNames) > maxMetricsPerRequest {
+			return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: fmt.Sprintf("at most %d metrics may be requested", maxMetricsPerRequest)}
+		}
+
+		if err := validateTimeRange(branchID, req.Start, req.End); err != nil {
 			return err
 		}
 
@@ -1723,15 +1749,37 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 			return err
 		}
 
-		if err := s.validateBranchInstances(c.Request().Context(), organizationID, branch, req.Instances); err != nil {
+		instances := ptr.Deref(req.Instances, nil)
+		if err := s.validateBranchInstances(c.Request().Context(), organizationID, branch, instances); err != nil {
 			return err
 		}
 
-		branchMetrics, err := s.selectMetricsClient(c).GetMetric(c.Request().Context(), organizationID, branch.CellID, req.Start, req.End, branchID, string(req.Metric), stringArrayValue(req.Instances), stringArrayValue(req.Aggregations))
+		results, err := s.selectMetricsClient(c).GetMetrics(c.Request().Context(), organizationID, branch.CellID, req.Start, req.End, branchID, metricNames, instances, stringArrayValue(req.Aggregations))
 		if err != nil {
-			return fmt.Errorf("getting metrics for branch [%s]: %w", branchID, err)
+			return fmt.Errorf("get metrics for branch [%s]: %w", branchID, err)
 		}
-		return c.JSON(http.StatusOK, branchMetrics)
+		if len(results) == 0 {
+			return fmt.Errorf("get metrics for branch [%s]: backend returned no results", branchID)
+		}
+
+		specResults := make([]spec.BranchMetricResult, len(results))
+		for i, r := range results {
+			specResults[i] = spec.BranchMetricResult{
+				Metric: r.Metric,
+				Unit:   r.Unit,
+				Series: toSpecSeries(r.Series),
+			}
+		}
+
+		// Flat metric/unit/series fields mirror results[0] for legacy clients.
+		return c.JSON(http.StatusOK, spec.BranchMetrics{
+			Start:   req.Start,
+			End:     req.End,
+			Metric:  specResults[0].Metric,
+			Unit:    specResults[0].Unit,
+			Series:  specResults[0].Series,
+			Results: specResults,
+		})
 	})
 }
 
@@ -1933,6 +1981,27 @@ func stringArrayValue[T ~string](v []T) []string {
 	return strs
 }
 
+// toSpecSeries: spec.MetricSeries.Values is an inline anonymous struct, so this can't be a cast.
+func toSpecSeries(in []metrics.MetricSeries) []spec.MetricSeries {
+	out := make([]spec.MetricSeries, len(in))
+	for i, s := range in {
+		values := make([]struct {
+			Timestamp time.Time `json:"timestamp"`
+			Value     float32   `json:"value"`
+		}, len(s.Values))
+		for j, v := range s.Values {
+			values[j].Timestamp = v.Timestamp
+			values[j].Value = v.Value
+		}
+		out[i] = spec.MetricSeries{
+			Aggregation: spec.MetricSeriesAggregation(s.Aggregation),
+			InstanceID:  s.InstanceID,
+			Values:      values,
+		}
+	}
+	return out
+}
+
 func validateTimeRange(branchID string, start, end time.Time) error {
 	if end.Before(start) {
 		return ErrorInvalidParam{BranchName: branchID, Param: "start", Message: "start time must come before end time"}
@@ -1951,7 +2020,7 @@ func validateTimeRange(branchID string, start, end time.Time) error {
 // rather than a string prefix.
 func (s *handler) validateBranchInstances(ctx context.Context, organizationID spec.OrganizationID, branch *store.Branch, instances []string) error {
 	if len(instances) == 0 {
-		return ErrorInvalidParam{BranchName: branch.ID, Param: "instances", Message: "at least one instance is required"}
+		return nil
 	}
 
 	client, err := s.cells.GetCellConnection(ctx, organizationID, branch.CellID)

@@ -661,8 +661,11 @@ func (c *ClustersService) DeleteBranchIPFiltering(ctx context.Context, request *
 	return &clustersv1.DeleteBranchIPFilteringResponse{}, nil
 }
 
-// GetBranchMetrics queries the cell's VictoriaMetrics instance for the named
-// metric and aggregations.
+// GetBranchMetrics queries the cell's VictoriaMetrics instance for the
+// requested metrics and aggregations in a single call. Instance scoping is
+// enforced at the PromQL layer via buildMatchers, so per-instance prefix
+// checks live in the projects handler (validateBranchInstances) which has
+// the cluster status needed for pool clusters.
 func (c *ClustersService) GetBranchMetrics(ctx context.Context, request *clustersv1.GetBranchMetricsRequest) (*clustersv1.GetBranchMetricsResponse, error) {
 	if c.metricsQuerier == nil {
 		return nil, status.Errorf(codes.Unimplemented, "metrics backend not configured for this cell")
@@ -673,10 +676,13 @@ func (c *ClustersService) GetBranchMetrics(ctx context.Context, request *cluster
 	if request.GetStart() == nil || request.GetEnd() == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "start and end are required")
 	}
+	if len(request.GetMetrics()) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "metrics is required")
+	}
 
-	res, err := c.metricsQuerier.Query(ctx,
+	results, err := c.metricsQuerier.Query(ctx,
 		request.GetBranchId(),
-		request.GetMetric(),
+		request.GetMetrics(),
 		request.GetInstances(),
 		request.GetAggregations(),
 		request.GetStart().AsTime(),
@@ -687,27 +693,35 @@ func (c *ClustersService) GetBranchMetrics(ctx context.Context, request *cluster
 	}
 
 	resp := &clustersv1.GetBranchMetricsResponse{
-		Start:  request.GetStart(),
-		End:    request.GetEnd(),
-		Metric: request.GetMetric(),
-		Unit:   res.Unit,
-		Series: make([]*clustersv1.MetricSeries, 0, len(res.Series)),
+		Start:   request.GetStart(),
+		End:     request.GetEnd(),
+		Results: make([]*clustersv1.BranchMetricResult, 0, len(results)),
 	}
-	for _, s := range res.Series {
-		series := &clustersv1.MetricSeries{
-			Aggregation: s.Aggregation,
-			InstanceId:  s.InstanceID,
-			Values:      make([]*clustersv1.MetricValue, 0, len(s.Values)),
-		}
-		for _, v := range s.Values {
-			series.Values = append(series.Values, &clustersv1.MetricValue{
-				Timestamp: timestamppb.New(v.Timestamp),
-				Value:     v.Value,
-			})
-		}
-		resp.Series = append(resp.Series, series)
+	for _, r := range results {
+		resp.Results = append(resp.Results, &clustersv1.BranchMetricResult{
+			Metric: r.Metric,
+			Unit:   r.Unit,
+			Series: toProtoSeries(r.Series),
+		})
 	}
 	return resp, nil
+}
+
+// toProtoSeries converts observability series into their proto representation.
+func toProtoSeries(in []observability.MetricSeries) []*clustersv1.MetricSeries {
+	out := make([]*clustersv1.MetricSeries, 0, len(in))
+	for _, s := range in {
+		values := make([]*clustersv1.MetricValue, 0, len(s.Values))
+		for _, v := range s.Values {
+			values = append(values, &clustersv1.MetricValue{Timestamp: timestamppb.New(v.Timestamp), Value: v.Value})
+		}
+		out = append(out, &clustersv1.MetricSeries{
+			Aggregation: s.Aggregation,
+			InstanceId:  s.InstanceID,
+			Values:      values,
+		})
+	}
+	return out
 }
 
 // GetBranchLogs queries the cell's VictoriaLogs instance.

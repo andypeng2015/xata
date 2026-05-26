@@ -3045,6 +3045,7 @@
       "post": {
         "operationId": "branchMetrics",
         "summary": "Retrieve branch metrics",
+        "description": "Returns time-series data for one or more metrics of a branch.",
         "parameters": [
           {
             "name": "organizationID",
@@ -5707,6 +5708,27 @@
           "maxBranches"
         ]
       },
+      "BranchMetricName": {
+        "description": "Name of a branch metric exposed by the API.",
+        "type": "string",
+        "enum": [
+          "cpu",
+          "memory",
+          "disk",
+          "connections_active",
+          "connections_idle",
+          "network_ingress",
+          "network_egress",
+          "iops_read",
+          "iops_write",
+          "latency_read",
+          "latency_write",
+          "throughput_read",
+          "throughput_write",
+          "wal_sync_time",
+          "replication_lag_time"
+        ]
+      },
       "OrganizationLimits": {
         "description": "Effective resource limits for an organization, covering org-level defaults for all projects plus organization-specific constraints",
         "allOf": [
@@ -5805,25 +5827,22 @@
             "format": "date-time"
           },
           "metric": {
-            "description": "Metric name to query",
-            "type": "string",
-            "enum": [
-              "cpu",
-              "memory",
-              "disk",
-              "connections_active",
-              "connections_idle",
-              "network_ingress",
-              "network_egress",
-              "iops_read",
-              "iops_write",
-              "latency_read",
-              "latency_write",
-              "throughput_read",
-              "throughput_write",
-              "wal_sync_time",
-              "replication_lag_time"
-            ]
+            "description": "Metric name to query. Deprecated: use `metrics` instead.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BranchMetricName"
+              }
+            ],
+            "deprecated": true
+          },
+          "metrics": {
+            "description": "List of metric names to query. Exactly one of `metric` or `metrics` must be supplied.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BranchMetricName"
+            },
+            "maxItems": 15,
+            "minItems": 1
           },
           "instances": {
             "description": "List of instance IDs to query",
@@ -5833,7 +5852,7 @@
             }
           },
           "aggregations": {
-            "description": "List of aggregations to get, this is how the data-points within the interval are aggregated. Each one will generate a separate time-series in the response.",
+            "description": "List of aggregations to get, this is how the data-points within the interval are aggregated. Each one will generate a separate time-series per metric in the response.",
             "type": "array",
             "items": {
               "type": "string",
@@ -5848,8 +5867,6 @@
         "required": [
           "start",
           "end",
-          "metric",
-          "instances",
           "aggregations"
         ]
       },
@@ -5866,17 +5883,29 @@
             "format": "date-time"
           },
           "metric": {
-            "type": "string"
+            "description": "Name of the queried metric. Deprecated: read `results` instead, which carries one entry per requested metric.",
+            "type": "string",
+            "deprecated": true
           },
           "series": {
+            "description": "Time-series for the first requested metric. Deprecated: read `results` instead.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MetricSeries"
-            }
+            },
+            "deprecated": true
           },
           "unit": {
-            "description": "The unit of the metric (percentage, bytes, ms, etc.)",
-            "type": "string"
+            "description": "Unit of the first requested metric (percentage, bytes, ms, etc.). Deprecated: read `results` instead.",
+            "type": "string",
+            "deprecated": true
+          },
+          "results": {
+            "description": "One entry per requested metric, in the order the metrics were requested.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BranchMetricResult"
+            }
           }
         },
         "required": [
@@ -5884,7 +5913,33 @@
           "end",
           "metric",
           "series",
-          "unit"
+          "unit",
+          "results"
+        ]
+      },
+      "BranchMetricResult": {
+        "description": "Time-series for a single metric.",
+        "type": "object",
+        "properties": {
+          "metric": {
+            "description": "Name of the queried metric.",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Unit of the metric (percentage, bytes, ms, etc.)",
+            "type": "string"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricSeries"
+            }
+          }
+        },
+        "required": [
+          "metric",
+          "unit",
+          "series"
         ]
       },
       "MetricSeries": {

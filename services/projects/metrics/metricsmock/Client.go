@@ -78,22 +78,22 @@ func (_c *Client_GetLogs_Call) Return(_a0 *metrics.BranchLogs, _a1 error) *Clien
 	return _c
 }
 
-// GetMetric provides a mock function with given fields: ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations
-func (_m *Client) GetMetric(ctx context.Context, organizationID string, cellID string, start time.Time, end time.Time, branchID string, metric string, instances []string, aggregations []string) (*metrics.BranchMetrics, error) {
-	ret := _m.Called(ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations)
+// GetMetrics provides a mock function with given fields: ctx, organizationID, cellID, start, end, branchID, metricNames, instances, aggregations
+func (_m *Client) GetMetrics(ctx context.Context, organizationID string, cellID string, start time.Time, end time.Time, branchID string, metricNames []string, instances []string, aggregations []string) ([]metrics.BranchMetrics, error) {
+	ret := _m.Called(ctx, organizationID, cellID, start, end, branchID, metricNames, instances, aggregations)
 
-	var r0 *metrics.BranchMetrics
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Time, time.Time, string, string, []string, []string) *metrics.BranchMetrics); ok {
-		r0 = rf(ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations)
+	var r0 []metrics.BranchMetrics
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Time, time.Time, string, []string, []string, []string) []metrics.BranchMetrics); ok {
+		r0 = rf(ctx, organizationID, cellID, start, end, branchID, metricNames, instances, aggregations)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*metrics.BranchMetrics)
+			r0 = ret.Get(0).([]metrics.BranchMetrics)
 		}
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, string, string, time.Time, time.Time, string, string, []string, []string) error); ok {
-		r1 = rf(ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, time.Time, time.Time, string, []string, []string, []string) error); ok {
+		r1 = rf(ctx, organizationID, cellID, start, end, branchID, metricNames, instances, aggregations)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -101,33 +101,33 @@ func (_m *Client) GetMetric(ctx context.Context, organizationID string, cellID s
 	return r0, r1
 }
 
-// Client_GetMetric_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetMetric'
-type Client_GetMetric_Call struct {
+// Client_GetMetrics_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetMetrics'
+type Client_GetMetrics_Call struct {
 	*mock.Call
 }
 
-// GetMetric is a helper method to define mock.On call
+// GetMetrics is a helper method to define mock.On call
 //   - ctx context.Context
 //   - organizationID string
 //   - cellID string
 //   - start time.Time
 //   - end time.Time
 //   - branchID string
-//   - metric string
+//   - metricNames []string
 //   - instances []string
 //   - aggregations []string
-func (_e *Client_Expecter) GetMetric(ctx interface{}, organizationID interface{}, cellID interface{}, start interface{}, end interface{}, branchID interface{}, metric interface{}, instances interface{}, aggregations interface{}) *Client_GetMetric_Call {
-	return &Client_GetMetric_Call{Call: _e.mock.On("GetMetric", ctx, organizationID, cellID, start, end, branchID, metric, instances, aggregations)}
+func (_e *Client_Expecter) GetMetrics(ctx interface{}, organizationID interface{}, cellID interface{}, start interface{}, end interface{}, branchID interface{}, metricNames interface{}, instances interface{}, aggregations interface{}) *Client_GetMetrics_Call {
+	return &Client_GetMetrics_Call{Call: _e.mock.On("GetMetrics", ctx, organizationID, cellID, start, end, branchID, metricNames, instances, aggregations)}
 }
 
-func (_c *Client_GetMetric_Call) Run(run func(ctx context.Context, organizationID string, cellID string, start time.Time, end time.Time, branchID string, metric string, instances []string, aggregations []string)) *Client_GetMetric_Call {
+func (_c *Client_GetMetrics_Call) Run(run func(ctx context.Context, organizationID string, cellID string, start time.Time, end time.Time, branchID string, metricNames []string, instances []string, aggregations []string)) *Client_GetMetrics_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(time.Time), args[4].(time.Time), args[5].(string), args[6].(string), args[7].([]string), args[8].([]string))
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(time.Time), args[4].(time.Time), args[5].(string), args[6].([]string), args[7].([]string), args[8].([]string))
 	})
 	return _c
 }
 
-func (_c *Client_GetMetric_Call) Return(_a0 *metrics.BranchMetrics, _a1 error) *Client_GetMetric_Call {
+func (_c *Client_GetMetrics_Call) Return(_a0 []metrics.BranchMetrics, _a1 error) *Client_GetMetrics_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }

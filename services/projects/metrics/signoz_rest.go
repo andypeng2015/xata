@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"k8s.io/utils/ptr"
 
 	"xata/internal/signoz"
@@ -62,41 +63,54 @@ func NewSigNozClient(endpoint, apiKey, clustersNamespace string) (*SigNozClient,
 	}, nil
 }
 
-func (sc *SigNozClient) GetMetric(ctx context.Context, _organizationID, _cellID string, start, end time.Time, branchID string, metric string, instances, aggregations []string) (*BranchMetrics, error) {
-	if _, exists := sigNozMetricName[metric]; !exists {
-		return nil, fmt.Errorf("metric %s not found", metric)
+func (sc *SigNozClient) GetMetrics(ctx context.Context, _organizationID, _cellID string, start, end time.Time, branchID string, metrics []string, instances, aggregations []string) ([]BranchMetrics, error) {
+	out := make([]BranchMetrics, len(metrics))
+	for i, m := range metrics {
+		info, exists := sigNozMetricName[m]
+		if !exists {
+			return nil, fmt.Errorf("metric %s not found", m)
+		}
+		out[i] = BranchMetrics{
+			Metric: m,
+			Unit:   info.unit,
+			Series: []MetricSeries{},
+		}
 	}
 
-	// Build request
-	reqBody, queryToAgg, err := buildMetricsReq(sc.clustersNamespace, branchID, start, end, metric, instances, aggregations)
-	if err != nil {
+	// One HTTP request per metric in parallel. Within a request, all
+	// aggregations for that metric are packed into a single composite
+	// query — SigNoz parallelizes 2 sub-queries internally but degrades
+	// linearly beyond that, so the win comes from fanning out at the
+	// HTTP layer.
+	g, gctx := errgroup.WithContext(ctx)
+	for i, m := range metrics {
+		g.Go(func() error {
+			reqBody, queryToAgg, err := buildMetricsReq(sc.clustersNamespace, branchID, start, end, m, instances, aggregations)
+			if err != nil {
+				return fmt.Errorf("build metrics request (metric=%s): %w", m, err)
+			}
+
+			results, err := sc.queryRange(gctx, reqBody)
+			if err != nil {
+				return fmt.Errorf("query range (metric=%s): %w", m, err)
+			}
+			if results == nil {
+				return nil
+			}
+
+			series, err := parseMetricResults(results, queryToAgg)
+			if err != nil {
+				return fmt.Errorf("parse results (metric=%s): %w", m, err)
+			}
+			out[i].Series = series
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
-	// Parse response
-	branchMetrics := BranchMetrics{
-		Start:  start,
-		End:    end,
-		Metric: metric,
-		Unit:   sigNozMetricName[metric].unit,
-		Series: []MetricSeries{},
-	}
-
-	results, err := sc.queryRange(ctx, reqBody)
-	if err != nil {
-		return nil, err
-	}
-	if results == nil {
-		return &branchMetrics, nil
-	}
-
-	series, err := parseMetricResults(results, queryToAgg)
-	if err != nil {
-		return nil, err
-	}
-	branchMetrics.Series = series
-
-	return &branchMetrics, nil
+	return out, nil
 }
 
 // queryRange sends a v5 query and returns the raw results, or nil if the response carries none.
@@ -126,7 +140,8 @@ func (sc *SigNozClient) queryRange(ctx context.Context, reqBody signoz.QueryRang
 	return *queryData.Results, nil
 }
 
-// parseMetricResults extracts metric series from SigNoz query results
+// parseMetricResults flattens SigNoz query results into series, mapping each
+// envelope name back to the aggregation it was emitted for via queryToAgg.
 func parseMetricResults(results []any, queryToAgg map[string]string) ([]MetricSeries, error) {
 	parsed, err := decodeResults[signoz.Querybuildertypesv5TimeSeriesData](results)
 	if err != nil {
@@ -138,7 +153,8 @@ func parseMetricResults(results []any, queryToAgg map[string]string) ([]MetricSe
 		queryName := ptr.Deref(result.QueryName, "")
 		agg, ok := queryToAgg[queryName]
 		if !ok {
-			return nil, fmt.Errorf("unexpected query name: %s", queryName)
+			// Tolerate diagnostic envelopes SigNoz may attach to responses.
+			continue
 		}
 		if result.Aggregations == nil {
 			continue
@@ -213,18 +229,6 @@ func buildMetricsReq(clustersNamespace, branchID string, start, end time.Time, m
 	return buildRequestBody(start, end, queries, signoz.TimeSeries), queryToAgg, nil
 }
 
-// SigNoz v5 ties the counter rate window to the step, so clamp counter steps
-// up to 4×scrape (matches the Victoria path).
-const counterRateWindowSeconds = 120
-
-func stepForMetric(metricName string, step int) int {
-	info, ok := sigNozMetricName[metricName]
-	if !ok || info.metricType != "counter" {
-		return step
-	}
-	return max(step, counterRateWindowSeconds)
-}
-
 func buildMetricsFilterExpression(namespace, branchID string, instances []string, metricName string) string {
 	parts := buildPodFilters(namespace, instances)
 	parts = append(parts, branchScopeFilter(branchID))
@@ -235,18 +239,6 @@ func buildMetricsFilterExpression(namespace, branchID string, instances []string
 	}
 
 	return filter.And(parts...).Render()
-}
-
-// branchScopeFilter returns the per-branch predicate, OR'd with the
-// pre-branch_id pod-name regex so queries still hit data emitted before the
-// branch_id attribute was added.
-// TODO(cleanup after one month): drop the Regexp fallback once SigNoz
-// retention has aged past the branch_id rollout.
-func branchScopeFilter(branchID string) filter.Expr {
-	return filter.Or(
-		filter.Eq("branch_id", branchID),
-		filter.Regexp("k8s.pod.name", "^"+regexp.QuoteMeta(branchID)+"-"),
-	)
 }
 
 func buildMetricQueries(metricName string, step int, aggregations []string, filterExpr string) ([]signoz.Querybuildertypesv5QueryEnvelope, map[string]string, error) {
@@ -268,8 +260,8 @@ func buildMetricQueries(metricName string, step int, aggregations []string, filt
 			spaceAgg = info.spaceAgg
 		}
 
-		// Queries are named A, B, C, etc. in order to be able to interpret the response properly
-		queryName := string(rune(65 + i))
+		// Queries are named q0, q1, q2, etc. in order to be able to interpret the response properly
+		queryName := fmt.Sprintf("q%d", i)
 		queryToAgg[queryName] = agg
 
 		spec := signoz.Querybuildertypesv5QueryBuilderQueryGithubComSigNozSignozPkgTypesQuerybuildertypesQuerybuildertypesv5MetricAggregation{
@@ -302,6 +294,30 @@ func buildMetricQueries(metricName string, step int, aggregations []string, filt
 	}
 
 	return queries, queryToAgg, nil
+}
+
+// SigNoz v5 ties the counter rate window to the step, so clamp counter steps
+// up to 4×scrape (matches the Victoria path).
+const counterRateWindowSeconds = 120
+
+func stepForMetric(metricName string, step int) int {
+	info, ok := sigNozMetricName[metricName]
+	if !ok || info.metricType != "counter" {
+		return step
+	}
+	return max(step, counterRateWindowSeconds)
+}
+
+// branchScopeFilter returns the per-branch predicate, OR'd with the
+// pre-branch_id pod-name regex so queries still hit data emitted before the
+// branch_id attribute was added.
+// TODO(cleanup after one month): drop the Regexp fallback once SigNoz
+// retention has aged past the branch_id rollout.
+func branchScopeFilter(branchID string) filter.Expr {
+	return filter.Or(
+		filter.Eq("branch_id", branchID),
+		filter.Regexp("k8s.pod.name", "^"+regexp.QuoteMeta(branchID)+"-"),
+	)
 }
 
 func (sc *SigNozClient) GetLogs(ctx context.Context, _organizationID, _cellID string, start, end time.Time, branchID string, userFilters []LogFilter, limit int, cursor string) (*BranchLogs, error) {
@@ -525,13 +541,15 @@ func buildRequestBody(start, end time.Time, queries []signoz.Querybuildertypesv5
 }
 
 // buildPodFilters returns the standard k8s pod and namespace filter expressions.
-// The pod filter is always emitted (even with an empty list) so callers default
-// to "match no pods" rather than "match every pod in the namespace".
+// The pod filter is only appended when instances is non-empty; callers are
+// expected to further scope the query (e.g. via branchScopeFilter) so an empty
+// instances list does not widen the result set beyond the intended branch.
 func buildPodFilters(namespace string, instances []string) []filter.Expr {
-	return []filter.Expr{
-		filter.MustIn("k8s.pod.name", instances),
-		filter.Eq("k8s.namespace.name", namespace),
+	parts := []filter.Expr{filter.Eq("k8s.namespace.name", namespace)}
+	if len(instances) > 0 {
+		parts = append(parts, filter.MustIn("k8s.pod.name", instances))
 	}
+	return parts
 }
 
 // decodeResults reinterprets the untyped v5 result slice as a typed slice via JSON round-tripping.

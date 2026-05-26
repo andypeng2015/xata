@@ -21,7 +21,7 @@ func NewCellsClient(c cells.Cells) *CellsClient {
 	return &CellsClient{cells: c}
 }
 
-func (c *CellsClient) GetMetric(ctx context.Context, organizationID, cellID string, start, end time.Time, branchID string, metric string, instances, aggregations []string) (*BranchMetrics, error) {
+func (c *CellsClient) GetMetrics(ctx context.Context, organizationID, cellID string, start, end time.Time, branchID string, metrics []string, instances, aggregations []string) ([]BranchMetrics, error) {
 	conn, err := c.cells.GetCellConnection(ctx, organizationID, cellID)
 	if err != nil {
 		return nil, fmt.Errorf("get cell connection: %w", err)
@@ -32,7 +32,7 @@ func (c *CellsClient) GetMetric(ctx context.Context, organizationID, cellID stri
 		BranchId:     branchID,
 		Start:        timestamppb.New(start),
 		End:          timestamppb.New(end),
-		Metric:       metric,
+		Metrics:      metrics,
 		Instances:    instances,
 		Aggregations: aggregations,
 	})
@@ -75,26 +75,25 @@ func (c *CellsClient) GetLogs(ctx context.Context, organizationID, cellID string
 	return convertBranchLogs(resp), nil
 }
 
-func convertBranchMetrics(resp *clustersv1.GetBranchMetricsResponse) *BranchMetrics {
-	out := &BranchMetrics{
-		Start:  resp.GetStart().AsTime(),
-		End:    resp.GetEnd().AsTime(),
-		Metric: resp.GetMetric(),
-		Unit:   resp.GetUnit(),
-		Series: make([]MetricSeries, 0, len(resp.GetSeries())),
-	}
-	for _, s := range resp.GetSeries() {
-		values := make([]Values, 0, len(s.GetValues()))
-		for _, v := range s.GetValues() {
-			values = append(values, Values{
-				Timestamp: v.GetTimestamp().AsTime(),
-				Value:     v.GetValue(),
+func convertBranchMetrics(resp *clustersv1.GetBranchMetricsResponse) []BranchMetrics {
+	out := make([]BranchMetrics, 0, len(resp.GetResults()))
+	for _, r := range resp.GetResults() {
+		series := make([]MetricSeries, 0, len(r.GetSeries()))
+		for _, s := range r.GetSeries() {
+			values := make([]Values, 0, len(s.GetValues()))
+			for _, v := range s.GetValues() {
+				values = append(values, Values{Timestamp: v.GetTimestamp().AsTime(), Value: v.GetValue()})
+			}
+			series = append(series, MetricSeries{
+				Aggregation: s.GetAggregation(),
+				InstanceID:  s.GetInstanceId(),
+				Values:      values,
 			})
 		}
-		out.Series = append(out.Series, MetricSeries{
-			Aggregation: s.GetAggregation(),
-			InstanceID:  s.GetInstanceId(),
-			Values:      values,
+		out = append(out, BranchMetrics{
+			Metric: r.GetMetric(),
+			Unit:   r.GetUnit(),
+			Series: series,
 		})
 	}
 	return out

@@ -150,19 +150,21 @@ type MetricValue struct {
 	Value     float32
 }
 
-// Result captures everything the RPC needs to assemble its response.
+// Result captures the time-series for a single metric.
 type Result struct {
+	Metric string
 	Unit   string
 	Series []MetricSeries
 }
 
-// Query runs the configured query against the backend. branchID is enforced
-// as an exact match on the `branch_id` series label so results can never
-// include another branch's samples even if validation is bypassed upstream.
-func (q *MetricsQuerier) Query(ctx context.Context, branchID, metric string, instances, aggregations []string, start, end time.Time) (*Result, error) {
-	info, ok := LookupMetric(metric)
-	if !ok {
-		return nil, fmt.Errorf("unknown metric: %s", metric)
+// Query fans out one VictoriaMetrics request per (metric, aggregation) pair
+// in parallel and returns one Result per requested metric in request order.
+// branchID is enforced as an anchored regex on the pod label so results can
+// never include other branches' samples even if validation is bypassed
+// upstream.
+func (q *MetricsQuerier) Query(ctx context.Context, branchID string, metrics, instances, aggregations []string, start, end time.Time) ([]Result, error) {
+	if len(metrics) == 0 {
+		return nil, errors.New("at least one metric is required")
 	}
 	if len(aggregations) == 0 {
 		return nil, errors.New("at least one aggregation is required")
@@ -173,46 +175,65 @@ func (q *MetricsQuerier) Query(ctx context.Context, branchID, metric string, ins
 		}
 	}
 
-	step := CalculateStep(start, end)
-	scopedMatchers := buildMatchers(q.namespace, branchID, instances, info.AdditionalLabels, info.ExcludeLabels)
-	// TODO(cleanup after one month): once retentionPeriod (30d) has elapsed
-	// from the deploy that introduced branch_id, drop legacyMatchers and the
-	// surrounding OR; series stamped before then carry no branch_id label.
-	legacyMatchers := buildLegacyPodMatchers(q.namespace, branchID, instances, info.AdditionalLabels, info.ExcludeLabels)
+	infos := make([]MetricInfo, len(metrics))
+	for i, m := range metrics {
+		info, ok := LookupMetric(m)
+		if !ok {
+			return nil, fmt.Errorf("unknown metric: %s", m)
+		}
+		infos[i] = info
+	}
 
-	// One backend round-trip per aggregation; fan out so e.g. min,avg,max
-	// finishes in one round-trip's worth of latency instead of three.
-	results := make([][]MetricSeries, len(aggregations))
+	step := CalculateStep(start, end)
+
+	// Per-metric, per-aggregation slots so backend fan-out can fill them
+	// independently without locking.
+	perMetric := make([][][]MetricSeries, len(metrics))
+	for i := range perMetric {
+		perMetric[i] = make([][]MetricSeries, len(aggregations))
+	}
+
 	g, gctx := errgroup.WithContext(ctx)
-	for i, agg := range aggregations {
-		g.Go(func() error {
-			query, err := buildPromQL(info, agg, scopedMatchers, legacyMatchers, step)
-			if err != nil {
-				return fmt.Errorf("build promql (agg=%s): %w", agg, err)
-			}
-			series, err := q.backend.QueryRange(gctx, query, start, end, step)
-			if err != nil {
-				return fmt.Errorf("query backend (agg=%s): %w", agg, err)
-			}
-			ms := make([]MetricSeries, len(series))
-			for j, s := range series {
-				ms[j] = MetricSeries{
-					Aggregation: agg,
-					InstanceID:  s.Labels["pod"],
-					Values:      toMetricValues(s.Values),
+	for mi, m := range metrics {
+		info := infos[mi]
+		scopedMatchers := buildMatchers(q.namespace, branchID, instances, info.AdditionalLabels, info.ExcludeLabels)
+		// TODO(cleanup after one month): once retentionPeriod (30d) has elapsed
+		// from the deploy that introduced branch_id, drop legacyMatchers and the
+		// surrounding OR; series stamped before then carry no branch_id label.
+		legacyMatchers := buildLegacyPodMatchers(q.namespace, branchID, instances, info.AdditionalLabels, info.ExcludeLabels)
+		for ai, agg := range aggregations {
+			g.Go(func() error {
+				query, err := buildPromQL(info, agg, scopedMatchers, legacyMatchers, step)
+				if err != nil {
+					return fmt.Errorf("build promql (metric=%s agg=%s): %w", m, agg, err)
 				}
-			}
-			results[i] = ms
-			return nil
-		})
+				series, err := q.backend.QueryRange(gctx, query, start, end, step)
+				if err != nil {
+					return fmt.Errorf("query backend (metric=%s agg=%s): %w", m, agg, err)
+				}
+				ms := make([]MetricSeries, len(series))
+				for j, s := range series {
+					ms[j] = MetricSeries{
+						Aggregation: agg,
+						InstanceID:  s.Labels["pod"],
+						Values:      toMetricValues(s.Values),
+					}
+				}
+				perMetric[mi][ai] = ms
+				return nil
+			})
+		}
 	}
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
-	out := &Result{Unit: info.Unit}
-	for _, series := range results {
-		out.Series = append(out.Series, series...)
+	out := make([]Result, len(metrics))
+	for i, m := range metrics {
+		out[i] = Result{Metric: m, Unit: infos[i].Unit}
+		for _, series := range perMetric[i] {
+			out[i].Series = append(out[i].Series, series...)
+		}
 	}
 	return out, nil
 }

@@ -8,10 +8,12 @@ import (
 //go:generate go run github.com/vektra/mockery/v3 --output metricsmock --outpkg metricsmock --with-expecter --name Client
 
 type Client interface {
-	// GetMetric returns the time serie(s) for the given metric and timeframe.
-	// branchID is required by the per-cell backend to enforce branch scope on
-	// the pod label; the legacy SigNoz client ignores it.
-	GetMetric(ctx context.Context, organizationID, cellID string, start, end time.Time, branchID string, metric string, instances, aggregations []string) (*BranchMetrics, error)
+	// GetMetrics returns the time serie(s) for the given metrics and
+	// timeframe in a single backend round-trip. branchID is required by the
+	// per-cell backend to enforce branch scope on the pod label; the legacy
+	// SigNoz client ignores it. Results are returned in the same order as
+	// the requested metrics.
+	GetMetrics(ctx context.Context, organizationID, cellID string, start, end time.Time, branchID string, metricNames []string, instances, aggregations []string) ([]BranchMetrics, error)
 	// GetLogs returns the log entries for the given timeframe and filters.
 	GetLogs(ctx context.Context, organizationID, cellID string, start, end time.Time, branchID string, filters []LogFilter, limit int, cursor string) (*BranchLogs, error)
 }
@@ -29,14 +31,11 @@ type LogFilter struct {
 	Value string
 }
 
+// BranchMetrics is the time-series response for one requested metric.
 type BranchMetrics struct {
-	End    time.Time      `json:"end"`
 	Metric string         `json:"metric"`
+	Unit   string         `json:"unit"`
 	Series []MetricSeries `json:"series"`
-	Start  time.Time      `json:"start"`
-
-	// Unit The unit of the metric (percentage, bytes, ms, etc.)
-	Unit string `json:"unit"`
 }
 
 // Values The metric series values
