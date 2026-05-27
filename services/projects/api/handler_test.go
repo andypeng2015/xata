@@ -3405,22 +3405,16 @@ func TestBranchMetrics(t *testing.T) {
 // TestBranchObservabilityPerCellFlag asserts the per-cell observability
 // rollout selection logic. Without the BranchObservabilityPerCell flag, the
 // legacy SigNoz client is always used and the override header is ignored.
-// With the flag on, the default stays on SigNoz so production traffic shape
-// is unchanged; only an explicit X-Xata-Observability-Backend: victoria
-// header swaps in the per-cell client. The flag-on/header-on case is what
-// the console will use to render the side-by-side rollout comparison.
+// With the flag on, the default is time-aware: requests whose start falls
+// inside the VM retention window go to the per-cell client, older requests
+// fall back to SigNoz so charts aren't half-empty. The
+// X-Xata-Observability-Backend header overrides that decision in either
+// direction for debugging and side-by-side comparison.
 func TestBranchObservabilityPerCellFlag(t *testing.T) {
 	branchID := "branchID"
 	cellID := "cell-A"
-	start := time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC)
-	end := start.Add(time.Hour)
-	req := spec.BranchMetricsRequest{
-		Start:        start,
-		End:          end,
-		Metric:       new(spec.Cpu),
-		Instances:    &[]string{branchID + "-1"},
-		Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
-	}
+	preCutoff := vmDataAvailableSince.Add(-24 * time.Hour)
+	postCutoff := vmDataAvailableSince.Add(24 * time.Hour)
 	respShape := func(label string) []metrics.BranchMetrics {
 		return []metrics.BranchMetrics{{
 			Metric: string(spec.Cpu),
@@ -3432,19 +3426,32 @@ func TestBranchObservabilityPerCellFlag(t *testing.T) {
 	tests := map[string]struct {
 		flagOn       bool
 		header       string // empty == header not set
+		start        time.Time
 		expectClient string // "signoz" or "cells"
 	}{
-		"flag off, no header                            → signoz": {flagOn: false, expectClient: "signoz"},
-		"flag off, header=victoria (override ignored)   → signoz": {flagOn: false, header: "victoria", expectClient: "signoz"},
-		"flag on,  no header (default unchanged)        → signoz": {flagOn: true, expectClient: "signoz"},
-		"flag on,  header=signoz (explicit default)     → signoz": {flagOn: true, header: "signoz", expectClient: "signoz"},
-		"flag on,  header=victoria (opt-in override)    → cells":  {flagOn: true, header: "victoria", expectClient: "cells"},
-		"flag on,  header=Victoria (case-insensitive)   → cells":  {flagOn: true, header: "Victoria", expectClient: "cells"},
-		"flag on,  header=garbage (unknown → default)   → signoz": {flagOn: true, header: "garbage", expectClient: "signoz"},
+		"flag off                                          → signoz": {flagOn: false, start: postCutoff, expectClient: "signoz"},
+		"flag off, header=victoria (ignored)               → signoz": {flagOn: false, header: "victoria", start: postCutoff, expectClient: "signoz"},
+		"flag on, no header, start ≥ cutoff (auto)         → cells":  {flagOn: true, start: postCutoff, expectClient: "cells"},
+		"flag on, no header, start < cutoff (auto fallback)→ signoz": {flagOn: true, start: preCutoff, expectClient: "signoz"},
+		"flag on, header=signoz, start ≥ cutoff (override) → signoz": {flagOn: true, header: "signoz", start: postCutoff, expectClient: "signoz"},
+		"flag on, header=victoria, start < cutoff (override)→ cells": {flagOn: true, header: "victoria", start: preCutoff, expectClient: "cells"},
+		"flag on, header=Victoria (case-insensitive)       → cells":  {flagOn: true, header: "Victoria", start: postCutoff, expectClient: "cells"},
+		"flag on, header=garbage, start ≥ cutoff (→ auto)  → cells":  {flagOn: true, header: "garbage", start: postCutoff, expectClient: "cells"},
+		"flag on, header=garbage, start < cutoff (→ auto)  → signoz": {flagOn: true, header: "garbage", start: preCutoff, expectClient: "signoz"},
 	}
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			start := tt.start
+			end := start.Add(time.Hour)
+			req := spec.BranchMetricsRequest{
+				Start:        start,
+				End:          end,
+				Metric:       new(spec.Cpu),
+				Instances:    &[]string{branchID + "-1"},
+				Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
+			}
+
 			mockStore := mocks.NewProjectsStore(t)
 			mockClusters := protomocks.NewClustersServiceClient(t)
 			mockCells := cellsmock.NewCellsMock(t, mockClusters)

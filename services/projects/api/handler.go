@@ -113,19 +113,23 @@ func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cel
 }
 
 // observabilityBackendHeader is an internal, undocumented HTTP header the
-// console uses to compare backends side-by-side during the per-cell
-// observability rollout. It is intentionally absent from the OpenAPI spec.
-// Recognised values: "signoz" (default) and "victoria". Honoured only when
-// the BranchObservabilityPerCell feature flag is enabled for the org; for
-// every other caller the legacy SigNoz path is used and the header is
-// ignored. The default stays SigNoz so flipping the flag on does not
-// silently change a production response.
+// console can set to override per-request backend routing. It is
+// intentionally absent from the OpenAPI spec. Recognised values: "signoz",
+// "victoria". Honoured only when the BranchObservabilityPerCell feature flag
+// is enabled for the org; for every other caller the legacy SigNoz path is
+// used and the header is ignored.
 const observabilityBackendHeader = "X-Xata-Observability-Backend"
 
 const (
 	observabilityBackendSigNoz   = "signoz"
 	observabilityBackendVictoria = "victoria"
 )
+
+// vmDataAvailableSince is the earliest timestamp for which the per-cell
+// VictoriaMetrics/VictoriaLogs backend has data. Queries whose start time
+// pre-dates this cutoff fall back to SigNoz, which retains the full history.
+// Temporary — remove once the VM retention window covers the SigNoz one.
+var vmDataAvailableSince = time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
 
 // maxMetricsPerRequest bounds the per-request fan-out to the backend (one
 // HTTP/PromQL call per metric). It matches the `metrics` maxItems in the
@@ -135,17 +139,23 @@ const maxMetricsPerRequest = 15
 
 // selectMetricsClient returns the metrics client for the current request.
 // Without the BranchObservabilityPerCell flag the legacy SigNoz client is
-// always used. With the flag on, the caller may opt-in to the per-cell
-// VictoriaMetrics/VictoriaLogs backend via the observabilityBackendHeader;
-// the default remains SigNoz so default traffic shape is unchanged.
-func (s *handler) selectMetricsClient(c echo.Context) metrics.Client {
+// always used. With the flag on, the default is the VM backend for time
+// ranges fully within its retention window and SigNoz otherwise; the
+// observabilityBackendHeader can override that decision.
+func (s *handler) selectMetricsClient(c echo.Context, start time.Time) metrics.Client {
 	if !s.feat.BoolValue(c.Request().Context(), flags.BranchObservabilityPerCell) {
 		return s.metricsClient
 	}
-	if strings.EqualFold(c.Request().Header.Get(observabilityBackendHeader), observabilityBackendVictoria) {
+	switch strings.ToLower(c.Request().Header.Get(observabilityBackendHeader)) {
+	case observabilityBackendSigNoz:
+		return s.metricsClient
+	case observabilityBackendVictoria:
 		return s.cellsMetricsClient
 	}
-	return s.metricsClient
+	if start.Before(vmDataAvailableSince) {
+		return s.metricsClient
+	}
+	return s.cellsMetricsClient
 }
 
 // Get list of regions available for the organization
@@ -1823,7 +1833,7 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 			return err
 		}
 
-		results, err := s.selectMetricsClient(c).GetMetrics(c.Request().Context(), organizationID, branch.CellID, req.Start, req.End, branchID, metricNames, instances, stringArrayValue(req.Aggregations))
+		results, err := s.selectMetricsClient(c, req.Start).GetMetrics(c.Request().Context(), organizationID, branch.CellID, req.Start, req.End, branchID, metricNames, instances, stringArrayValue(req.Aggregations))
 		if err != nil {
 			return fmt.Errorf("get metrics for branch [%s]: %w", branchID, err)
 		}
@@ -1882,7 +1892,7 @@ func (s *handler) BranchLogs(c echo.Context, organizationID spec.OrganizationID,
 			return err
 		}
 
-		logs, err := s.selectMetricsClient(c).GetLogs(
+		logs, err := s.selectMetricsClient(c, req.Start).GetLogs(
 			c.Request().Context(),
 			organizationID,
 			branch.CellID,
