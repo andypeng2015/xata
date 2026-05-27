@@ -5554,7 +5554,7 @@ func TestHandler_GetDefaultProjectLimits(t *testing.T) {
 	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
-	limits := spec.ProjectLimits{
+	want := spec.ProjectLimits{
 		MaxDescriptionLength: MaxBranchDescriptionLength,
 		MaxInstances:         DefaultMaxInstances,
 		MinInstances:         DefaultMinInstances,
@@ -5563,12 +5563,133 @@ func TestHandler_GetDefaultProjectLimits(t *testing.T) {
 
 	c, rec := e.GET("/organizations/" + apitest.TestOrganization + "/projects/limits").Context()
 	err := handler.GetDefaultProjectLimits(c, apitest.TestOrganization)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
-	var res spec.ProjectLimits
+	var got spec.ProjectLimits
 	rec.MustCode(http.StatusOK)
-	rec.ReadBody(&res)
-	assert.Equal(t, limits, res)
+	rec.ReadBody(&got)
+	require.Equal(t, want, got)
+}
+
+func TestHandler_GetOrganizationLimits(t *testing.T) {
+	t1Claims := token.Claims{
+		ID:            apitest.TestUserID,
+		Email:         apitest.TestUserEmail,
+		Organizations: map[string]token.Organization{apitest.TestOrganization: {ID: apitest.TestOrganization, Status: "enabled", UsageTier: "t1"}},
+		Scopes:        []string{"*"},
+		Projects:      []string{"*"},
+		Branches:      []string{"*"},
+	}
+
+	tests := map[string]struct {
+		claims    token.Claims
+		overrides map[store.LimitKey]any
+		want      spec.OrganizationLimits
+	}{
+		"t1 returns tier defaults, no db lookup": {
+			claims: t1Claims,
+			want: spec.OrganizationLimits{
+				MaxProjects:            store.TierDefaultInt(store.TierT1, store.LimitMaxProjects, 0),
+				MaxProjectsPerHour:     store.TierDefaultInt(store.TierT1, store.LimitMaxProjectsPerHour, 0),
+				MaxBranchesPerProject:  store.TierDefaultInt(store.TierT1, store.LimitMaxBranchesPerProject, 0),
+				MaxBranchesPerOrg:      store.TierDefaultInt(store.TierT1, store.LimitMaxBranchesPerOrg, 0),
+				MaxInstancesPerBranch:  store.TierDefaultInt(store.TierT1, store.LimitMaxInstancesPerBranch, 0),
+				MinInstancesPerBranch:  store.TierDefaultInt(store.TierT1, store.LimitMinInstancesPerBranch, 0),
+				MaxBranchesPerHour:     store.TierDefaultInt(store.TierT1, store.LimitMaxBranchesPerHour, 0),
+				MaxDescriptionLength:   store.TierDefaultInt(store.TierT1, store.LimitMaxDescriptionLength, 0),
+				MaxAllowedInstanceType: store.TierDefaultInt(store.TierT1, store.LimitMaxAllowedInstanceType, 0),
+			},
+		},
+		"t2 with no overrides returns t2 tier defaults": {
+			claims:    apitest.TestClaims,
+			overrides: map[store.LimitKey]any{},
+			want: spec.OrganizationLimits{
+				MaxProjects:            store.TierDefaultInt(store.TierT2, store.LimitMaxProjects, 0),
+				MaxProjectsPerHour:     store.TierDefaultInt(store.TierT2, store.LimitMaxProjectsPerHour, 0),
+				MaxBranchesPerProject:  store.TierDefaultInt(store.TierT2, store.LimitMaxBranchesPerProject, 0),
+				MaxBranchesPerOrg:      store.TierDefaultInt(store.TierT2, store.LimitMaxBranchesPerOrg, 0),
+				MaxInstancesPerBranch:  store.TierDefaultInt(store.TierT2, store.LimitMaxInstancesPerBranch, 0),
+				MinInstancesPerBranch:  store.TierDefaultInt(store.TierT2, store.LimitMinInstancesPerBranch, 0),
+				MaxBranchesPerHour:     store.TierDefaultInt(store.TierT2, store.LimitMaxBranchesPerHour, 0),
+				MaxDescriptionLength:   store.TierDefaultInt(store.TierT2, store.LimitMaxDescriptionLength, 0),
+				MaxAllowedInstanceType: store.TierDefaultInt(store.TierT2, store.LimitMaxAllowedInstanceType, 0),
+			},
+		},
+		"t2 with overrides applies overrides on top of t2 defaults": {
+			claims: apitest.TestClaims,
+			overrides: map[store.LimitKey]any{
+				store.LimitMaxBranchesPerProject: json.Number("500"),
+				store.LimitMaxProjects:           json.Number("50"),
+			},
+			want: spec.OrganizationLimits{
+				MaxProjects:            50,
+				MaxProjectsPerHour:     store.TierDefaultInt(store.TierT2, store.LimitMaxProjectsPerHour, 0),
+				MaxBranchesPerProject:  500,
+				MaxBranchesPerOrg:      store.TierDefaultInt(store.TierT2, store.LimitMaxBranchesPerOrg, 0),
+				MaxInstancesPerBranch:  store.TierDefaultInt(store.TierT2, store.LimitMaxInstancesPerBranch, 0),
+				MinInstancesPerBranch:  store.TierDefaultInt(store.TierT2, store.LimitMinInstancesPerBranch, 0),
+				MaxBranchesPerHour:     store.TierDefaultInt(store.TierT2, store.LimitMaxBranchesPerHour, 0),
+				MaxDescriptionLength:   store.TierDefaultInt(store.TierT2, store.LimitMaxDescriptionLength, 0),
+				MaxAllowedInstanceType: store.TierDefaultInt(store.TierT2, store.LimitMaxAllowedInstanceType, 0),
+			},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockStore := mocks.NewProjectsStore(t)
+			mockImageProvider := postgresversionsmocks.NewImageProvider(t)
+			feat := openfeaturetest.NewClient(nil)
+			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
+			h := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
+			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(tc.claims)
+
+			if tc.overrides != nil {
+				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "").Return(tc.overrides, nil)
+			}
+
+			c, rec := e.GET("/organizations/" + apitest.TestOrganization + "/limits").Context()
+			err := h.GetOrganizationLimits(c, apitest.TestOrganization)
+			require.NoError(t, err)
+
+			var got spec.OrganizationLimits
+			rec.MustCode(http.StatusOK)
+			rec.ReadBody(&got)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// TestLimitsEndpointsConsistency ensures that the overlapping fields between
+// /organizations/{id}/limits and /organizations/{id}/projects/limits stay in sync
+// for a T2 org with no overrides. If they diverge, it's a bug.
+// T1 is intentionally excluded: /projects/limits is a legacy tier-unaware endpoint
+// scheduled for removal, and its MaxBranches (always 100) diverges from the T1 default (10).
+func TestLimitsEndpointsConsistency(t *testing.T) {
+	mockStore := mocks.NewProjectsStore(t)
+	mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "").Return(map[store.LimitKey]any{}, nil)
+
+	mockImageProvider := postgresversionsmocks.NewImageProvider(t)
+	feat := openfeaturetest.NewClient(nil)
+	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
+	h := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
+	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
+
+	cProj, recProj := e.GET("/organizations/" + apitest.TestOrganization + "/projects/limits").Context()
+	require.NoError(t, h.GetDefaultProjectLimits(cProj, apitest.TestOrganization))
+	var projLimits spec.ProjectLimits
+	recProj.MustCode(http.StatusOK)
+	recProj.ReadBody(&projLimits)
+
+	cOrg, recOrg := e.GET("/organizations/" + apitest.TestOrganization + "/limits").Context()
+	require.NoError(t, h.GetOrganizationLimits(cOrg, apitest.TestOrganization))
+	var orgLimits spec.OrganizationLimits
+	recOrg.MustCode(http.StatusOK)
+	recOrg.ReadBody(&orgLimits)
+
+	require.Equal(t, projLimits.MaxBranches, orgLimits.MaxBranchesPerProject, "maxBranches mismatch")
+	require.Equal(t, projLimits.MaxInstances, orgLimits.MaxInstancesPerBranch, "maxInstances mismatch")
+	require.Equal(t, projLimits.MinInstances, orgLimits.MinInstancesPerBranch, "minInstances mismatch")
+	require.Equal(t, projLimits.MaxDescriptionLength, orgLimits.MaxDescriptionLength, "maxDescriptionLength mismatch")
 }
 
 func mustParseTime(s string) time.Time {

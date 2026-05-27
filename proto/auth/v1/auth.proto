@@ -38,6 +38,7 @@ message Organization {
   string billing_status = 5;
   optional string billing_reason = 6;
   google.protobuf.Timestamp created_at = 7;
+  string usage_tier = 8;
 }
 
 message UpdateOrganizationRequest {

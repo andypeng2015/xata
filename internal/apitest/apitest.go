@@ -27,7 +27,7 @@ const (
 var TestClaims = token.Claims{
 	ID:            TestUserID,
 	Email:         TestUserEmail,
-	Organizations: map[string]token.Organization{TestOrganization: {ID: TestOrganization, Status: "enabled"}},
+	Organizations: map[string]token.Organization{TestOrganization: {ID: TestOrganization, Status: "enabled", UsageTier: "t2"}},
 	Scopes:        []string{"*"},
 	Projects:      []string{"*"},
 	Branches:      []string{"*"},

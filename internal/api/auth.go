@@ -90,6 +90,7 @@ func mapOrganizations(src map[string]*authv1.Organization) map[string]token.Orga
 			ID:        o.Id,
 			Status:    o.Status,
 			CreatedAt: o.CreatedAt.AsTime(),
+			UsageTier: o.GetUsageTier(),
 		}
 	}
 	return dst

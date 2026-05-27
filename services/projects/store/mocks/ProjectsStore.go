@@ -199,6 +199,51 @@ func (_c *ProjectsStore_Close_Call) Return(_a0 error) *ProjectsStore_Close_Call 
 	return _c
 }
 
+// CountActiveOrgBranches provides a mock function with given fields: ctx, organizationID
+func (_m *ProjectsStore) CountActiveOrgBranches(ctx context.Context, organizationID string) (int64, error) {
+	ret := _m.Called(ctx, organizationID)
+
+	var r0 int64
+	if rf, ok := ret.Get(0).(func(context.Context, string) int64); ok {
+		r0 = rf(ctx, organizationID)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, organizationID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ProjectsStore_CountActiveOrgBranches_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountActiveOrgBranches'
+type ProjectsStore_CountActiveOrgBranches_Call struct {
+	*mock.Call
+}
+
+// CountActiveOrgBranches is a helper method to define mock.On call
+//   - ctx context.Context
+//   - organizationID string
+func (_e *ProjectsStore_Expecter) CountActiveOrgBranches(ctx interface{}, organizationID interface{}) *ProjectsStore_CountActiveOrgBranches_Call {
+	return &ProjectsStore_CountActiveOrgBranches_Call{Call: _e.mock.On("CountActiveOrgBranches", ctx, organizationID)}
+}
+
+func (_c *ProjectsStore_CountActiveOrgBranches_Call) Run(run func(ctx context.Context, organizationID string)) *ProjectsStore_CountActiveOrgBranches_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ProjectsStore_CountActiveOrgBranches_Call) Return(_a0 int64, _a1 error) *ProjectsStore_CountActiveOrgBranches_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
 // CountActiveProjectBranches provides a mock function with given fields: ctx, projectID
 func (_m *ProjectsStore) CountActiveProjectBranches(ctx context.Context, projectID string) (int64, error) {
 	ret := _m.Called(ctx, projectID)

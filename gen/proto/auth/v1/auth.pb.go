@@ -223,6 +223,7 @@ type Organization struct {
 	BillingStatus         string                 `protobuf:"bytes,5,opt,name=billing_status,json=billingStatus,proto3" json:"billing_status,omitempty"`
 	BillingReason         *string                `protobuf:"bytes,6,opt,name=billing_reason,json=billingReason,proto3,oneof" json:"billing_reason,omitempty"`
 	CreatedAt             *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UsageTier             string                 `protobuf:"bytes,8,opt,name=usage_tier,json=usageTier,proto3" json:"usage_tier,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -304,6 +305,13 @@ func (x *Organization) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *Organization) GetUsageTier() string {
+	if x != nil {
+		return x.UsageTier
+	}
+	return ""
 }
 
 type UpdateOrganizationRequest struct {
@@ -437,7 +445,7 @@ const file_auth_v1_auth_proto_rawDesc = "" +
 	"api_key_id\x18\t \x01(\tR\bapiKeyId\x1aW\n" +
 	"\x12OrganizationsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
-	"\x05value\x18\x02 \x01(\v2\x15.auth.v1.OrganizationR\x05value:\x028\x01J\x04\b\x05\x10\x06\"\xde\x02\n" +
+	"\x05value\x18\x02 \x01(\v2\x15.auth.v1.OrganizationR\x05value:\x028\x01J\x04\b\x05\x10\x06\"\xfd\x02\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12*\n" +
@@ -446,7 +454,9 @@ const file_auth_v1_auth_proto_rawDesc = "" +
 	"\x0ebilling_status\x18\x05 \x01(\tR\rbillingStatus\x12*\n" +
 	"\x0ebilling_reason\x18\x06 \x01(\tH\x01R\rbillingReason\x88\x01\x01\x129\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\x1b\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"usage_tier\x18\b \x01(\tR\tusageTierB\x1b\n" +
 	"\x19_disabled_by_admin_reasonB\x11\n" +
 	"\x0f_billing_reason\"\xcb\x01\n" +
 	"\x19UpdateOrganizationRequest\x12'\n" +

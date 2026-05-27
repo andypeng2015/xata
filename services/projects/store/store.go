@@ -15,6 +15,64 @@ const (
 	BackupTypeContinuous              = "continuous"
 )
 
+// UsageTier identifies the usage tier of an organization.
+type UsageTier string
+
+const (
+	TierT1 UsageTier = "t1"
+	TierT2 UsageTier = "t2"
+)
+
+// tierDefaults holds the hardcoded default limits per (tier, key).
+// T1 orgs always use these values; T2 orgs use them as a fallback when no DB override exists.
+var tierDefaults = map[UsageTier]map[LimitKey]int{
+	TierT1: {
+		LimitMaxDescriptionLength:   50,
+		LimitMaxBranchesPerProject:  10,
+		LimitMaxBranchesPerOrg:      10,
+		LimitMaxInstancesPerBranch:  5,
+		LimitMinInstancesPerBranch:  1,
+		LimitMaxBranchesPerHour:     10,
+		LimitMaxProjects:            10,
+		LimitMaxProjectsPerHour:     5,
+		LimitMaxAllowedInstanceType: 2000,
+	},
+	TierT2: {
+		LimitMaxDescriptionLength:   50,
+		LimitMaxBranchesPerProject:  100,
+		LimitMaxBranchesPerOrg:      1000,
+		LimitMaxInstancesPerBranch:  5,
+		LimitMinInstancesPerBranch:  1,
+		LimitMaxBranchesPerHour:     50,
+		LimitMaxProjects:            100,
+		LimitMaxProjectsPerHour:     20,
+		LimitMaxAllowedInstanceType: 8000,
+	},
+}
+
+// ParseUsageTier parses a tier string, returning (tier, true) for known values
+// and (TierT1, false) for anything unrecognized.
+func ParseUsageTier(s string) (UsageTier, bool) {
+	t := UsageTier(s)
+	switch t {
+	case TierT1, TierT2:
+		return t, true
+	default:
+		return TierT1, false
+	}
+}
+
+// TierDefaultInt returns the hardcoded default for (tier, key), falling back to fallback
+// if the tier or key is not found in tierDefaults.
+func TierDefaultInt(tier UsageTier, key LimitKey, fallback int) int {
+	if defaults, ok := tierDefaults[tier]; ok {
+		if v, ok := defaults[key]; ok {
+			return v
+		}
+	}
+	return fallback
+}
+
 // LimitKey identifies a project-level limit stored in the projects service.
 type LimitKey string
 
@@ -26,15 +84,16 @@ const (
 	LimitMaxStorageGBPerBranch  LimitKey = "max_storage_gb_per_branch"
 	LimitMaxAllowedInstanceType LimitKey = "max_allowed_instance_type"
 	LimitMaxBranchesPerHour     LimitKey = "max_branches_per_hour"
+	LimitMaxBranchesPerOrg      LimitKey = "max_branches_per_org"
 	LimitMaxProjects            LimitKey = "max_projects"
 	LimitMaxProjectsPerHour     LimitKey = "max_projects_per_hour"
 )
 
 func (k LimitKey) IsValid() bool {
 	switch k {
-	case LimitMaxDescriptionLength, LimitMaxBranchesPerProject, LimitMaxInstancesPerBranch,
-		LimitMinInstancesPerBranch, LimitMaxStorageGBPerBranch, LimitMaxAllowedInstanceType,
-		LimitMaxBranchesPerHour, LimitMaxProjects, LimitMaxProjectsPerHour:
+	case LimitMaxDescriptionLength, LimitMaxBranchesPerProject, LimitMaxBranchesPerOrg,
+		LimitMaxInstancesPerBranch, LimitMinInstancesPerBranch, LimitMaxStorageGBPerBranch,
+		LimitMaxAllowedInstanceType, LimitMaxBranchesPerHour, LimitMaxProjects, LimitMaxProjectsPerHour:
 		return true
 	}
 	return false
@@ -328,6 +387,9 @@ type ProjectsStore interface {
 
 	// CountOrganizationBranches counts all branches ever created for an organization (including soft-deleted ones)
 	CountOrganizationBranches(ctx context.Context, organizationID string) (int64, error)
+
+	// CountActiveOrgBranches counts active (non-deleted) branches across all projects in an organization.
+	CountActiveOrgBranches(ctx context.Context, organizationID string) (int64, error)
 
 	// CountActiveProjectBranches counts active (non-deleted) branches in a project.
 	CountActiveProjectBranches(ctx context.Context, projectID string) (int64, error)

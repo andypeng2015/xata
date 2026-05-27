@@ -1207,6 +1207,19 @@ func (s *sqlProjectStore) CountOrganizationBranches(ctx context.Context, organiz
 	return count, nil
 }
 
+func (s *sqlProjectStore) CountActiveOrgBranches(ctx context.Context, organizationID string) (int64, error) {
+	var count int64
+	err := s.sql.QueryRowContext(ctx,
+		`SELECT COUNT(b.id) FROM branches b
+		 INNER JOIN projects p ON b.project_id = p.id
+		 WHERE p.organization_id = $1 AND b.status = $2`,
+		organizationID, StatusActive).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count active org branches: %w", err)
+	}
+	return count, nil
+}
+
 // AcquireProjectLock acquires a PostgreSQL advisory lock for the given projectID.
 // Uses hashtextextended() to convert projectID string to a bigint for the advisory lock key,
 // avoiding the collision risk of the 32-bit hashtext().

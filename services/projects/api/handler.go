@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -1679,14 +1680,6 @@ func (s *handler) DeleteBranch(c echo.Context, organizationID spec.OrganizationI
 	})
 }
 
-// GetOrganizationLimits returns the effective resource limits for an organization
-// (GET /organizations/{organizationID}/limits)
-func (s *handler) GetOrganizationLimits(c echo.Context, organizationID spec.OrganizationID) error {
-	return s.withOrganizationAccess(c, organizationID, All, func() error {
-		return echo.ErrNotImplemented
-	})
-}
-
 // GetProjectLimits returns the effective resource limits for a project
 // (GET /organizations/{organizationID}/projects/{projectID}/limits)
 func (s *handler) GetProjectLimits(c echo.Context, organizationID spec.OrganizationID, projectID string) error {
@@ -1708,6 +1701,82 @@ func (s *handler) GetDefaultProjectLimits(c echo.Context, organizationID spec.Or
 			MaxBranches:          store.MaxBranchesPerProject,
 		})
 	})
+}
+
+// GetOrganizationLimits returns the effective limits for an organization, applying
+// tier defaults and any per-organization overrides stored in the DB.
+// T1 organizations always receive tier defaults with no DB lookup.
+// (GET /organizations/{organizationID}/limits)
+func (s *handler) GetOrganizationLimits(c echo.Context, organizationID spec.OrganizationID) error {
+	return s.withOrganizationAccess(c, organizationID, All, func() error {
+		claims := api.GetUserClaims(c)
+		tier := orgTier(c.Request().Context(), claims.Organizations[organizationID].UsageTier)
+
+		def := func(key store.LimitKey) int {
+			return store.TierDefaultInt(tier, key, 0)
+		}
+
+		if tier == store.TierT1 {
+			return c.JSON(http.StatusOK, spec.OrganizationLimits{
+				MaxProjects:            def(store.LimitMaxProjects),
+				MaxProjectsPerHour:     def(store.LimitMaxProjectsPerHour),
+				MaxBranchesPerProject:  def(store.LimitMaxBranchesPerProject),
+				MaxBranchesPerOrg:      def(store.LimitMaxBranchesPerOrg),
+				MaxInstancesPerBranch:  def(store.LimitMaxInstancesPerBranch),
+				MinInstancesPerBranch:  def(store.LimitMinInstancesPerBranch),
+				MaxBranchesPerHour:     def(store.LimitMaxBranchesPerHour),
+				MaxDescriptionLength:   def(store.LimitMaxDescriptionLength),
+				MaxAllowedInstanceType: def(store.LimitMaxAllowedInstanceType),
+			})
+		}
+
+		overrides, err := s.store.GetOrgLimits(c.Request().Context(), organizationID, "")
+		if err != nil {
+			return fmt.Errorf("get org limits: %w", err)
+		}
+
+		ctx := c.Request().Context()
+		return c.JSON(http.StatusOK, spec.OrganizationLimits{
+			MaxProjects:            resolveIntLimit(ctx, overrides, store.LimitMaxProjects, def(store.LimitMaxProjects)),
+			MaxProjectsPerHour:     resolveIntLimit(ctx, overrides, store.LimitMaxProjectsPerHour, def(store.LimitMaxProjectsPerHour)),
+			MaxBranchesPerProject:  resolveIntLimit(ctx, overrides, store.LimitMaxBranchesPerProject, def(store.LimitMaxBranchesPerProject)),
+			MaxBranchesPerOrg:      resolveIntLimit(ctx, overrides, store.LimitMaxBranchesPerOrg, def(store.LimitMaxBranchesPerOrg)),
+			MaxInstancesPerBranch:  resolveIntLimit(ctx, overrides, store.LimitMaxInstancesPerBranch, def(store.LimitMaxInstancesPerBranch)),
+			MinInstancesPerBranch:  resolveIntLimit(ctx, overrides, store.LimitMinInstancesPerBranch, def(store.LimitMinInstancesPerBranch)),
+			MaxBranchesPerHour:     resolveIntLimit(ctx, overrides, store.LimitMaxBranchesPerHour, def(store.LimitMaxBranchesPerHour)),
+			MaxDescriptionLength:   resolveIntLimit(ctx, overrides, store.LimitMaxDescriptionLength, def(store.LimitMaxDescriptionLength)),
+			MaxAllowedInstanceType: resolveIntLimit(ctx, overrides, store.LimitMaxAllowedInstanceType, def(store.LimitMaxAllowedInstanceType)),
+		})
+	})
+}
+
+// orgTier resolves the usage tier from a raw usage tier string, defaulting to
+// TierT1 (more restrictive) for any unrecognized value.
+func orgTier(ctx context.Context, usageTier string) store.UsageTier {
+	tier, ok := store.ParseUsageTier(usageTier)
+	if !ok {
+		log.Ctx(ctx).Warn().Str("usage_tier", usageTier).Msg("unknown usage tier, defaulting to t1")
+	}
+	return tier
+}
+
+// resolveIntLimit returns the override value for key if present, otherwise def.
+func resolveIntLimit(ctx context.Context, overrides map[store.LimitKey]any, key store.LimitKey, def int) int {
+	v, ok := overrides[key]
+	if !ok {
+		return def
+	}
+	n, ok := v.(json.Number)
+	if !ok {
+		log.Ctx(ctx).Warn().Str("key", string(key)).Msgf("unexpected type %T for limit override, using default", v)
+		return def
+	}
+	i, err := n.Int64()
+	if err != nil {
+		log.Ctx(ctx).Warn().Str("key", string(key)).Str("value", n.String()).Msg("limit override is not a valid int64, using default")
+		return def
+	}
+	return int(i)
 }
 
 // BranchMetrics retrieves the branch metrics

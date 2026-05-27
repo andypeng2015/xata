@@ -5749,11 +5749,18 @@
                 "type": "integer",
                 "minimum": 1,
                 "title": "Maximum project creation rate per hour"
+              },
+              "maxBranchesPerOrg": {
+                "description": "Maximum number of active branches allowed across all projects in the organization",
+                "type": "integer",
+                "minimum": 1,
+                "title": "Maximum number of branches per organization"
               }
             },
             "required": [
               "maxProjects",
-              "maxProjectsPerHour"
+              "maxProjectsPerHour",
+              "maxBranchesPerOrg"
             ]
           }
         ]
@@ -5785,16 +5792,11 @@
             "minimum": 1,
             "title": "Minimum number of instances per branch"
           },
-          "maxStorageGbPerBranch": {
-            "description": "Maximum storage in GB allowed per branch",
+          "maxAllowedInstanceType": {
+            "description": "Maximum VCPUs (in millicores) allowed per instance; instance types with a higher VCPUsRequest are unavailable",
             "type": "integer",
             "minimum": 1,
-            "title": "Maximum storage per branch (GB)"
-          },
-          "maxAllowedInstanceType": {
-            "description": "Highest instance type allowed (e.g. xata.large); instances with a higher hourly cost are unavailable",
-            "type": "string",
-            "title": "Maximum allowed instance type"
+            "title": "Maximum allowed instance type (VCPUs in millicores)"
           },
           "maxBranchesPerHour": {
             "description": "Maximum number of branches that can be created in a rolling one-hour window",
@@ -5808,7 +5810,6 @@
           "maxBranchesPerProject",
           "maxInstancesPerBranch",
           "minInstancesPerBranch",
-          "maxStorageGbPerBranch",
           "maxAllowedInstanceType",
           "maxBranchesPerHour"
         ]
