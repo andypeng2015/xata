@@ -1798,22 +1798,10 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 			return err
 		}
 
-		// Accept either the deprecated `metric` or the new `metrics`
-		// array; require exactly one.
-		var metricNames []string
-		switch {
-		case req.Metric != nil && req.Metrics != nil:
-			return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "provide either `metric` or `metrics`, not both"}
-		case req.Metric != nil:
-			metricNames = []string{string(*req.Metric)}
-		case req.Metrics != nil:
-			if len(*req.Metrics) == 0 {
-				return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "`metrics` must not be empty"}
-			}
-			metricNames = stringArrayValue(*req.Metrics)
-		default:
-			return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "one of `metric` or `metrics` is required"}
+		if len(req.Metrics) == 0 {
+			return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "`metrics` must not be empty"}
 		}
+		metricNames := stringArrayValue(req.Metrics)
 
 		if len(metricNames) > maxMetricsPerRequest {
 			return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: fmt.Sprintf("at most %d metrics may be requested", maxMetricsPerRequest)}
@@ -1850,13 +1838,9 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 			}
 		}
 
-		// Flat metric/unit/series fields mirror results[0] for legacy clients.
 		return c.JSON(http.StatusOK, spec.BranchMetrics{
 			Start:   req.Start,
 			End:     req.End,
-			Metric:  specResults[0].Metric,
-			Unit:    specResults[0].Unit,
-			Series:  specResults[0].Series,
 			Results: specResults,
 		})
 	})

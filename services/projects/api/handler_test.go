@@ -3087,7 +3087,7 @@ func TestBranchMetrics(t *testing.T) {
 	cpuMetricRequest := spec.BranchMetricsRequest{
 		Start:        time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC),
 		End:          time.Date(2025, 5, 20, 1, 0, 0, 0, time.UTC),
-		Metric:       new(spec.BranchMetricName("cpu")),
+		Metrics:      []spec.BranchMetricName{"cpu"},
 		Instances:    &[]string{branchID + "-1"},
 		Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
 	}
@@ -3095,7 +3095,7 @@ func TestBranchMetrics(t *testing.T) {
 	unknownBranchRequest := spec.BranchMetricsRequest{
 		Start:        time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC),
 		End:          time.Date(2025, 5, 20, 1, 0, 0, 0, time.UTC),
-		Metric:       new(spec.BranchMetricName("cpu")),
+		Metrics:      []spec.BranchMetricName{"cpu"},
 		Instances:    &[]string{unknownBranch + "-1"},
 		Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
 	}
@@ -3103,7 +3103,7 @@ func TestBranchMetrics(t *testing.T) {
 	wrongDatesRequest := spec.BranchMetricsRequest{
 		Start:        time.Date(2025, 5, 20, 1, 0, 0, 0, time.UTC),
 		End:          time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC),
-		Metric:       new(spec.BranchMetricName("cpu")),
+		Metrics:      []spec.BranchMetricName{"cpu"},
 		Instances:    &[]string{branchID + "-1"},
 		Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
 	}
@@ -3111,7 +3111,7 @@ func TestBranchMetrics(t *testing.T) {
 	dateRangeTooBigRequest := spec.BranchMetricsRequest{
 		Start:        time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC),
 		End:          time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC),
-		Metric:       new(spec.BranchMetricName("cpu")),
+		Metrics:      []spec.BranchMetricName{"cpu"},
 		Instances:    &[]string{branchID + "-1"},
 		Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
 	}
@@ -3120,18 +3120,13 @@ func TestBranchMetrics(t *testing.T) {
 	unknownInstanceRequest.Instances = &[]string{branchID + "-99"}
 
 	multiMetricRequest := cpuMetricRequest
-	multiMetricRequest.Metric = nil
-	multiMetricRequest.Metrics = &[]spec.BranchMetricName{"cpu", "memory"}
-
-	bothMetricFieldsRequest := cpuMetricRequest
-	bothMetricFieldsRequest.Metrics = &[]spec.BranchMetricName{"memory"}
+	multiMetricRequest.Metrics = []spec.BranchMetricName{"cpu", "memory"}
 
 	emptyMetricsRequest := cpuMetricRequest
-	emptyMetricsRequest.Metric = nil
-	emptyMetricsRequest.Metrics = &[]spec.BranchMetricName{}
+	emptyMetricsRequest.Metrics = []spec.BranchMetricName{}
 
-	noMetricRequest := cpuMetricRequest
-	noMetricRequest.Metric = nil
+	noMetricsRequest := cpuMetricRequest
+	noMetricsRequest.Metrics = nil
 
 	noInstancesRequest := cpuMetricRequest
 	noInstancesRequest.Instances = nil
@@ -3141,13 +3136,12 @@ func TestBranchMetrics(t *testing.T) {
 		overLimitMetrics[i] = "cpu"
 	}
 	overLimitMetricsRequest := cpuMetricRequest
-	overLimitMetricsRequest.Metric = nil
-	overLimitMetricsRequest.Metrics = &overLimitMetrics
+	overLimitMetricsRequest.Metrics = overLimitMetrics
 
 	metricRequest2i2a := spec.BranchMetricsRequest{
 		Start:        time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC),
 		End:          time.Date(2025, 5, 20, 1, 0, 0, 0, time.UTC),
-		Metric:       new(spec.BranchMetricName("cpu")),
+		Metrics:      []spec.BranchMetricName{"cpu"},
 		Instances:    &[]string{branchID + "-1", branchID + "-2"},
 		Aggregations: []spec.BranchMetricsRequestAggregations{"min", "max"},
 	}
@@ -3177,8 +3171,8 @@ func TestBranchMetrics(t *testing.T) {
 			branchID: branchID,
 			req:      cpuMetricRequest,
 			setupMocks: func() {
-				mockMetrics.EXPECT().GetMetrics(mock.Anything, mock.Anything, mock.Anything, cpuMetricRequest.Start, cpuMetricRequest.End, mock.Anything, []string{string(*cpuMetricRequest.Metric)}, *cpuMetricRequest.Instances, convertAggs(cpuMetricRequest.Aggregations)).Return([]metrics.BranchMetrics{{
-					Metric: string(*cpuMetricRequest.Metric),
+				mockMetrics.EXPECT().GetMetrics(mock.Anything, mock.Anything, mock.Anything, cpuMetricRequest.Start, cpuMetricRequest.End, mock.Anything, []string{"cpu"}, *cpuMetricRequest.Instances, convertAggs(cpuMetricRequest.Aggregations)).Return([]metrics.BranchMetrics{{
+					Metric: "cpu",
 					Unit:   "percentage",
 					Series: []metrics.MetricSeries{
 						{
@@ -3194,17 +3188,12 @@ func TestBranchMetrics(t *testing.T) {
 			assertResponse: func(t *testing.T, got spec.BranchMetrics) {
 				assert.Equal(t, cpuMetricRequest.Start, got.Start)
 				assert.Equal(t, cpuMetricRequest.End, got.End)
-				// Deprecated flat fields mirror the first result for
-				// backward compatibility with legacy clients.
-				assert.Equal(t, string(*cpuMetricRequest.Metric), got.Metric)
-				assert.Equal(t, "percentage", got.Unit)
-				assert.Len(t, got.Series, 1)
 				require.Len(t, got.Results, 1)
-				assert.Equal(t, string(*cpuMetricRequest.Metric), got.Results[0].Metric)
+				assert.Equal(t, "cpu", got.Results[0].Metric)
 				assert.Equal(t, "percentage", got.Results[0].Unit)
-				assert.Len(t, got.Results[0].Series, 1)
+				require.Len(t, got.Results[0].Series, 1)
 
-				series := got.Series[0]
+				series := got.Results[0].Series[0]
 				assert.Equal(t, (*cpuMetricRequest.Instances)[0], series.InstanceID)
 				assert.Equal(t, "avg", string(series.Aggregation))
 				assert.Len(t, series.Values, len(dataPoints))
@@ -3221,8 +3210,8 @@ func TestBranchMetrics(t *testing.T) {
 			branchID: branchID,
 			req:      metricRequest2i2a,
 			setupMocks: func() {
-				mockMetrics.EXPECT().GetMetrics(mock.Anything, mock.Anything, mock.Anything, metricRequest2i2a.Start, metricRequest2i2a.End, mock.Anything, []string{string(*metricRequest2i2a.Metric)}, *metricRequest2i2a.Instances, convertAggs(metricRequest2i2a.Aggregations)).Return([]metrics.BranchMetrics{{
-					Metric: string(*metricRequest2i2a.Metric),
+				mockMetrics.EXPECT().GetMetrics(mock.Anything, mock.Anything, mock.Anything, metricRequest2i2a.Start, metricRequest2i2a.End, mock.Anything, []string{"cpu"}, *metricRequest2i2a.Instances, convertAggs(metricRequest2i2a.Aggregations)).Return([]metrics.BranchMetrics{{
+					Metric: "cpu",
 					Unit:   "percentage",
 					Series: []metrics.MetricSeries{
 						{InstanceID: (*metricRequest2i2a.Instances)[0], Aggregation: "min", Values: dataPoints},
@@ -3237,11 +3226,12 @@ func TestBranchMetrics(t *testing.T) {
 			assertResponse: func(t *testing.T, got spec.BranchMetrics) {
 				assert.Equal(t, metricRequest2i2a.Start, got.Start)
 				assert.Equal(t, metricRequest2i2a.End, got.End)
-				assert.Equal(t, string(*metricRequest2i2a.Metric), got.Metric)
-				assert.Equal(t, "percentage", got.Unit)
-				assert.Len(t, got.Series, 4)
+				require.Len(t, got.Results, 1)
+				assert.Equal(t, "cpu", got.Results[0].Metric)
+				assert.Equal(t, "percentage", got.Results[0].Unit)
+				assert.Len(t, got.Results[0].Series, 4)
 
-				for _, series := range got.Series {
+				for _, series := range got.Results[0].Series {
 					assert.Contains(t, *metricRequest2i2a.Instances, series.InstanceID)
 					assert.Contains(t, convertAggs(metricRequest2i2a.Aggregations), string(series.Aggregation))
 					assert.Len(t, series.Values, len(dataPoints))
@@ -3317,19 +3307,8 @@ func TestBranchMetrics(t *testing.T) {
 				assert.Equal(t, "percentage", got.Results[0].Unit)
 				assert.Equal(t, "memory", got.Results[1].Metric)
 				assert.Equal(t, "bytes", got.Results[1].Unit)
-				// Deprecated flat fields mirror results[0].
-				assert.Equal(t, "cpu", got.Metric)
-				assert.Equal(t, "percentage", got.Unit)
 			},
 			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "both `metric` and `metrics` provided fails",
-			branchID:       branchID,
-			req:            bothMetricFieldsRequest,
-			setupMocks:     func() {},
-			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "provide either `metric` or `metrics`, not both"},
-			expectedStatus: http.StatusBadRequest,
 		},
 		{
 			name:           "empty `metrics` array fails",
@@ -3340,11 +3319,11 @@ func TestBranchMetrics(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:           "neither `metric` nor `metrics` fails",
+			name:           "missing `metrics` fails",
 			branchID:       branchID,
-			req:            noMetricRequest,
+			req:            noMetricsRequest,
 			setupMocks:     func() {},
-			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "one of `metric` or `metrics` is required"},
+			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "`metrics` must not be empty"},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
@@ -3447,7 +3426,7 @@ func TestBranchObservabilityPerCellFlag(t *testing.T) {
 			req := spec.BranchMetricsRequest{
 				Start:        start,
 				End:          end,
-				Metric:       new(spec.Cpu),
+				Metrics:      []spec.BranchMetricName{spec.Cpu},
 				Instances:    &[]string{branchID + "-1"},
 				Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
 			}

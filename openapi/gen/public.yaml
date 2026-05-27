@@ -3921,13 +3921,8 @@ components:
           description: End time
           type: string
           format: date-time
-        metric:
-          description: 'Metric name to query. Deprecated: use `metrics` instead.'
-          allOf:
-            - $ref: '#/components/schemas/BranchMetricName'
-          deprecated: true
         metrics:
-          description: List of metric names to query. Exactly one of `metric` or `metrics` must be supplied.
+          description: List of metric names to query.
           type: array
           items:
             $ref: '#/components/schemas/BranchMetricName'
@@ -3950,6 +3945,7 @@ components:
       required:
         - start
         - end
+        - metrics
         - aggregations
     BranchMetrics:
       description: A collection of metrics (cpu, memory, disk,...) for each of the instances of a branch
@@ -3961,20 +3957,6 @@ components:
         end:
           type: string
           format: date-time
-        metric:
-          description: 'Name of the queried metric. Deprecated: read `results` instead, which carries one entry per requested metric.'
-          type: string
-          deprecated: true
-        series:
-          description: 'Time-series for the first requested metric. Deprecated: read `results` instead.'
-          type: array
-          items:
-            $ref: '#/components/schemas/MetricSeries'
-          deprecated: true
-        unit:
-          description: 'Unit of the first requested metric (percentage, bytes, ms, etc.). Deprecated: read `results` instead.'
-          type: string
-          deprecated: true
         results:
           description: One entry per requested metric, in the order the metrics were requested.
           type: array
@@ -3983,9 +3965,6 @@ components:
       required:
         - start
         - end
-        - metric
-        - series
-        - unit
         - results
     BranchMetricResult:
       description: Time-series for a single metric.
