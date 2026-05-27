@@ -3382,13 +3382,12 @@ func TestBranchMetrics(t *testing.T) {
 }
 
 // TestBranchObservabilityPerCellFlag asserts the per-cell observability
-// rollout selection logic. Without the BranchObservabilityPerCell flag, the
-// legacy SigNoz client is always used and the override header is ignored.
-// With the flag on, the default is time-aware: requests whose start falls
-// inside the VM retention window go to the per-cell client, older requests
-// fall back to SigNoz so charts aren't half-empty. The
+// selection logic. Backend selection is time-aware by default, flag or not:
+// requests whose start falls inside the VM retention window go to the per-cell
+// client, older requests fall back to SigNoz so charts aren't half-empty. The
 // X-Xata-Observability-Backend header overrides that decision in either
-// direction for debugging and side-by-side comparison.
+// direction for debugging and side-by-side comparison, but only when the
+// BranchObservabilityPerCell flag is on; otherwise it is ignored.
 func TestBranchObservabilityPerCellFlag(t *testing.T) {
 	branchID := "branchID"
 	cellID := "cell-A"
@@ -3408,8 +3407,10 @@ func TestBranchObservabilityPerCellFlag(t *testing.T) {
 		start        time.Time
 		expectClient string // "signoz" or "cells"
 	}{
-		"flag off                                          → signoz": {flagOn: false, start: postCutoff, expectClient: "signoz"},
-		"flag off, header=victoria (ignored)               → signoz": {flagOn: false, header: "victoria", start: postCutoff, expectClient: "signoz"},
+		"flag off, no header, start ≥ cutoff (auto)        → cells":  {flagOn: false, start: postCutoff, expectClient: "cells"},
+		"flag off, no header, start < cutoff (auto)        → signoz": {flagOn: false, start: preCutoff, expectClient: "signoz"},
+		"flag off, header=signoz (ignored), start ≥ cutoff → cells":  {flagOn: false, header: "signoz", start: postCutoff, expectClient: "cells"},
+		"flag off, header=victoria (ignored), start < cutoff→signoz": {flagOn: false, header: "victoria", start: preCutoff, expectClient: "signoz"},
 		"flag on, no header, start ≥ cutoff (auto)         → cells":  {flagOn: true, start: postCutoff, expectClient: "cells"},
 		"flag on, no header, start < cutoff (auto fallback)→ signoz": {flagOn: true, start: preCutoff, expectClient: "signoz"},
 		"flag on, header=signoz, start ≥ cutoff (override) → signoz": {flagOn: true, header: "signoz", start: postCutoff, expectClient: "signoz"},

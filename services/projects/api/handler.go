@@ -87,7 +87,7 @@ type handler struct {
 
 	// cellsMetricsClient routes branch metric/log queries to the per-cell
 	// observability backend via the clusters gRPC service. Selected per
-	// request by the BranchObservabilityPerCell feature flag.
+	// request by start time, or by the observabilityBackendHeader override.
 	cellsMetricsClient metrics.Client
 
 	// postgresConfigProvider is the provider for PostgreSQL configuration operations
@@ -116,8 +116,8 @@ func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cel
 // console can set to override per-request backend routing. It is
 // intentionally absent from the OpenAPI spec. Recognised values: "signoz",
 // "victoria". Honoured only when the BranchObservabilityPerCell feature flag
-// is enabled for the org; for every other caller the legacy SigNoz path is
-// used and the header is ignored.
+// is enabled for the org; otherwise the header is ignored and the backend is
+// chosen automatically by request time range.
 const observabilityBackendHeader = "X-Xata-Observability-Backend"
 
 const (
@@ -138,19 +138,19 @@ var vmDataAvailableSince = time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
 const maxMetricsPerRequest = 15
 
 // selectMetricsClient returns the metrics client for the current request.
-// Without the BranchObservabilityPerCell flag the legacy SigNoz client is
-// always used. With the flag on, the default is the VM backend for time
-// ranges fully within its retention window and SigNoz otherwise; the
-// observabilityBackendHeader can override that decision.
+// By default it picks automatically by time range: the per-cell VM backend
+// for ranges within its retention window, SigNoz otherwise (it keeps the full
+// history). The BranchObservabilityPerCell flag enables the
+// observabilityBackendHeader override, letting the console force a specific
+// backend for debugging and side-by-side comparison.
 func (s *handler) selectMetricsClient(c echo.Context, start time.Time) metrics.Client {
-	if !s.feat.BoolValue(c.Request().Context(), flags.BranchObservabilityPerCell) {
-		return s.metricsClient
-	}
-	switch strings.ToLower(c.Request().Header.Get(observabilityBackendHeader)) {
-	case observabilityBackendSigNoz:
-		return s.metricsClient
-	case observabilityBackendVictoria:
-		return s.cellsMetricsClient
+	if s.feat.BoolValue(c.Request().Context(), flags.BranchObservabilityPerCell) {
+		switch strings.ToLower(c.Request().Header.Get(observabilityBackendHeader)) {
+		case observabilityBackendSigNoz:
+			return s.metricsClient
+		case observabilityBackendVictoria:
+			return s.cellsMetricsClient
+		}
 	}
 	if start.Before(vmDataAvailableSince) {
 		return s.metricsClient
