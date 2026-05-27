@@ -1800,9 +1800,10 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 				},
 				InheritedMetadata: &v1alpha1.InheritedMetadata{
 					Labels: map[string]string{
-						LabelOrgID:     "jf1tpn",
-						LabelProjectID: "prj_9tmrorf02l0gv9ioptqat1uc6k",
-						LabelBranchID:  "lsmevenv7t3l56euo1v9bh3b74",
+						LabelOrgID:                     "jf1tpn",
+						LabelProjectID:                 "prj_9tmrorf02l0gv9ioptqat1uc6k",
+						LabelBranchID:                  "lsmevenv7t3l56euo1v9bh3b74",
+						LabelXatastorAntiAffinityGroup: "lsmevenv7t3l56euo1v9bh3b74",
 					},
 				},
 			},
@@ -1954,9 +1955,10 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 				},
 				InheritedMetadata: &v1alpha1.InheritedMetadata{
 					Labels: map[string]string{
-						LabelOrgID:     "jf1tpn",
-						LabelProjectID: "prj_9tmrorf02l0gv9ioptqat1uc6k",
-						LabelBranchID:  "lsmevenv7t3l56euo1v9bh3b74",
+						LabelOrgID:                     "jf1tpn",
+						LabelProjectID:                 "prj_9tmrorf02l0gv9ioptqat1uc6k",
+						LabelBranchID:                  "lsmevenv7t3l56euo1v9bh3b74",
+						LabelXatastorAntiAffinityGroup: "lsmevenv7t3l56euo1v9bh3b74",
 					},
 				},
 			},

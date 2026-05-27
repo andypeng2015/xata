@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	LabelOrgID           = "xata.io/organizationID"
-	LabelProjectID       = "xata.io/projectID"
-	LabelBranchID        = "xata.io/branchID"
-	XataUtilsPreloadName = "xatautils"
+	LabelOrgID                     = "xata.io/organizationID"
+	LabelProjectID                 = "xata.io/projectID"
+	LabelBranchID                  = "xata.io/branchID"
+	LabelXatastorAntiAffinityGroup = "xatastor.xata.io/anti-affinity-group"
+	XataUtilsPreloadName           = "xatautils"
 )
 
 // BranchBuilder builds Branch resources.
@@ -53,9 +54,10 @@ func (b *BranchBuilder) FromCreateClusterRequest(r *clustersv1.CreatePostgresClu
 		Spec: v1alpha1.BranchSpec{
 			InheritedMetadata: &v1alpha1.InheritedMetadata{
 				Labels: map[string]string{
-					LabelOrgID:     r.GetOrganizationId(),
-					LabelProjectID: r.GetProjectId(),
-					LabelBranchID:  r.GetId(),
+					LabelOrgID:                     r.GetOrganizationId(),
+					LabelProjectID:                 r.GetProjectId(),
+					LabelBranchID:                  r.GetId(),
+					LabelXatastorAntiAffinityGroup: r.GetId(),
 				},
 			},
 			Restore: restoreSpec(r),
