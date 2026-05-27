@@ -325,6 +325,96 @@ func (_c *Client_FetchInvoice_Call) Return(_a0 *billing.Invoice, _a1 error) *Cli
 	return _c
 }
 
+// FetchPaymentIntentPaymentMethodID provides a mock function with given fields: ctx, paymentIntentID
+func (_m *Client) FetchPaymentIntentPaymentMethodID(ctx context.Context, paymentIntentID string) (string, error) {
+	ret := _m.Called(ctx, paymentIntentID)
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = rf(ctx, paymentIntentID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, paymentIntentID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Client_FetchPaymentIntentPaymentMethodID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FetchPaymentIntentPaymentMethodID'
+type Client_FetchPaymentIntentPaymentMethodID_Call struct {
+	*mock.Call
+}
+
+// FetchPaymentIntentPaymentMethodID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - paymentIntentID string
+func (_e *Client_Expecter) FetchPaymentIntentPaymentMethodID(ctx interface{}, paymentIntentID interface{}) *Client_FetchPaymentIntentPaymentMethodID_Call {
+	return &Client_FetchPaymentIntentPaymentMethodID_Call{Call: _e.mock.On("FetchPaymentIntentPaymentMethodID", ctx, paymentIntentID)}
+}
+
+func (_c *Client_FetchPaymentIntentPaymentMethodID_Call) Run(run func(ctx context.Context, paymentIntentID string)) *Client_FetchPaymentIntentPaymentMethodID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *Client_FetchPaymentIntentPaymentMethodID_Call) Return(_a0 string, _a1 error) *Client_FetchPaymentIntentPaymentMethodID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+// FetchSetupIntentPaymentMethodID provides a mock function with given fields: ctx, setupIntentID
+func (_m *Client) FetchSetupIntentPaymentMethodID(ctx context.Context, setupIntentID string) (string, error) {
+	ret := _m.Called(ctx, setupIntentID)
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = rf(ctx, setupIntentID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, setupIntentID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Client_FetchSetupIntentPaymentMethodID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FetchSetupIntentPaymentMethodID'
+type Client_FetchSetupIntentPaymentMethodID_Call struct {
+	*mock.Call
+}
+
+// FetchSetupIntentPaymentMethodID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - setupIntentID string
+func (_e *Client_Expecter) FetchSetupIntentPaymentMethodID(ctx interface{}, setupIntentID interface{}) *Client_FetchSetupIntentPaymentMethodID_Call {
+	return &Client_FetchSetupIntentPaymentMethodID_Call{Call: _e.mock.On("FetchSetupIntentPaymentMethodID", ctx, setupIntentID)}
+}
+
+func (_c *Client_FetchSetupIntentPaymentMethodID_Call) Run(run func(ctx context.Context, setupIntentID string)) *Client_FetchSetupIntentPaymentMethodID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *Client_FetchSetupIntentPaymentMethodID_Call) Return(_a0 string, _a1 error) *Client_FetchSetupIntentPaymentMethodID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
 // FetchStripeCustomer provides a mock function with given fields: ctx, stripeCustomerID
 func (_m *Client) FetchStripeCustomer(ctx context.Context, stripeCustomerID string) (*billing.StripeCustomer, error) {
 	ret := _m.Called(ctx, stripeCustomerID)
@@ -497,6 +587,85 @@ func (_c *Client_HasValidDefaultPaymentMethod_Call) Run(run func(ctx context.Con
 
 func (_c *Client_HasValidDefaultPaymentMethod_Call) Return(_a0 bool, _a1 error) *Client_HasValidDefaultPaymentMethod_Call {
 	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+// RefundPaymentIntent provides a mock function with given fields: ctx, paymentIntentID, metadata, idempotencyKey
+func (_m *Client) RefundPaymentIntent(ctx context.Context, paymentIntentID string, metadata map[string]string, idempotencyKey string) error {
+	ret := _m.Called(ctx, paymentIntentID, metadata, idempotencyKey)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, map[string]string, string) error); ok {
+		r0 = rf(ctx, paymentIntentID, metadata, idempotencyKey)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Client_RefundPaymentIntent_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RefundPaymentIntent'
+type Client_RefundPaymentIntent_Call struct {
+	*mock.Call
+}
+
+// RefundPaymentIntent is a helper method to define mock.On call
+//   - ctx context.Context
+//   - paymentIntentID string
+//   - metadata map[string]string
+//   - idempotencyKey string
+func (_e *Client_Expecter) RefundPaymentIntent(ctx interface{}, paymentIntentID interface{}, metadata interface{}, idempotencyKey interface{}) *Client_RefundPaymentIntent_Call {
+	return &Client_RefundPaymentIntent_Call{Call: _e.mock.On("RefundPaymentIntent", ctx, paymentIntentID, metadata, idempotencyKey)}
+}
+
+func (_c *Client_RefundPaymentIntent_Call) Run(run func(ctx context.Context, paymentIntentID string, metadata map[string]string, idempotencyKey string)) *Client_RefundPaymentIntent_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(map[string]string), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *Client_RefundPaymentIntent_Call) Return(_a0 error) *Client_RefundPaymentIntent_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+// SetOrbCustomerStripeChargeProvider provides a mock function with given fields: ctx, externalCustomerID, stripeCustomerID
+func (_m *Client) SetOrbCustomerStripeChargeProvider(ctx context.Context, externalCustomerID string, stripeCustomerID string) error {
+	ret := _m.Called(ctx, externalCustomerID, stripeCustomerID)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, externalCustomerID, stripeCustomerID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Client_SetOrbCustomerStripeChargeProvider_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetOrbCustomerStripeChargeProvider'
+type Client_SetOrbCustomerStripeChargeProvider_Call struct {
+	*mock.Call
+}
+
+// SetOrbCustomerStripeChargeProvider is a helper method to define mock.On call
+//   - ctx context.Context
+//   - externalCustomerID string
+//   - stripeCustomerID string
+func (_e *Client_Expecter) SetOrbCustomerStripeChargeProvider(ctx interface{}, externalCustomerID interface{}, stripeCustomerID interface{}) *Client_SetOrbCustomerStripeChargeProvider_Call {
+	return &Client_SetOrbCustomerStripeChargeProvider_Call{Call: _e.mock.On("SetOrbCustomerStripeChargeProvider", ctx, externalCustomerID, stripeCustomerID)}
+}
+
+func (_c *Client_SetOrbCustomerStripeChargeProvider_Call) Run(run func(ctx context.Context, externalCustomerID string, stripeCustomerID string)) *Client_SetOrbCustomerStripeChargeProvider_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *Client_SetOrbCustomerStripeChargeProvider_Call) Return(_a0 error) *Client_SetOrbCustomerStripeChargeProvider_Call {
+	_c.Call.Return(_a0)
 	return _c
 }
 

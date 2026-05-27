@@ -85,6 +85,7 @@ type StripeCustomer struct {
 	ID             string
 	OrganizationID string
 }
+
 type Client interface {
 	// CreateCustomer creates a new customer in the billing system
 	CreateCustomer(ctx context.Context, name, email, externalCustomerID string, organizationsCount int, metadata OrbCustomerMetadata) error
@@ -94,11 +95,19 @@ type Client interface {
 	FetchCustomer(ctx context.Context, customerID string) (*Customer, error)
 	// FetchStripeCustomer retrieves a Stripe customer by their Stripe customer ID.
 	FetchStripeCustomer(ctx context.Context, stripeCustomerID string) (*StripeCustomer, error)
+	// FetchPaymentIntentPaymentMethodID retrieves the payment method attached to a Stripe payment intent.
+	FetchPaymentIntentPaymentMethodID(ctx context.Context, paymentIntentID string) (string, error)
+	// FetchSetupIntentPaymentMethodID retrieves the payment method attached to a Stripe setup intent.
+	FetchSetupIntentPaymentMethodID(ctx context.Context, setupIntentID string) (string, error)
 	// FetchInvoice retrieves an orb invoice. invoiceID is an Orb internal invoice id
 	FetchInvoice(ctx context.Context, invoiceID string) (*Invoice, error)
 	// EnsureDefaultPaymentMethod sets paymentMethodID as the Stripe customer's default payment method
 	// if it is not already set.
 	EnsureDefaultPaymentMethod(ctx context.Context, stripeCustomerID, paymentMethodID string) error
+	// SetOrbCustomerStripeChargeProvider configures the Orb customer to charge the Stripe customer.
+	SetOrbCustomerStripeChargeProvider(ctx context.Context, externalCustomerID, stripeCustomerID string) error
+	// RefundPaymentIntent creates a Stripe refund for a payment intent.
+	RefundPaymentIntent(ctx context.Context, paymentIntentID string, metadata map[string]string, idempotencyKey string) error
 	// HasValidDefaultPaymentMethod returns true if the Stripe customer has a valid default payment method.
 	HasValidDefaultPaymentMethod(ctx context.Context, stripeCustomerID string) (bool, error)
 	// VoidInvoice voids an invoice in the billing system.
@@ -135,7 +144,23 @@ func (n *NoopBilling) FetchStripeCustomer(_ context.Context, _ string) (*StripeC
 	return nil, nil
 }
 
+func (n *NoopBilling) FetchPaymentIntentPaymentMethodID(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
+func (n *NoopBilling) FetchSetupIntentPaymentMethodID(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
 func (n *NoopBilling) EnsureDefaultPaymentMethod(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (n *NoopBilling) SetOrbCustomerStripeChargeProvider(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (n *NoopBilling) RefundPaymentIntent(_ context.Context, _ string, _ map[string]string, _ string) error {
 	return nil
 }
 
