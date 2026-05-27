@@ -18,10 +18,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	clustersv1 "xata/gen/proto/clusters/v1"
 	cpv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
@@ -1600,6 +1602,7 @@ type testServiceConfig struct {
 	cnpgConnector    *cnpgmocks.Connector
 	openebsConnector *openebsmocks.Connector
 	xatastorEnabled  bool
+	interceptorFuncs interceptor.Funcs
 }
 
 type testServiceOption func(*testServiceConfig)
@@ -1634,6 +1637,12 @@ func withXatastorEnabled(enabled bool) testServiceOption {
 	}
 }
 
+func withInterceptorFuncs(funcs interceptor.Funcs) testServiceOption {
+	return func(c *testServiceConfig) {
+		c.interceptorFuncs = funcs
+	}
+}
+
 func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*ClustersService, client.Client) {
 	cfg := &testServiceConfig{}
 	for _, opt := range opts {
@@ -1660,6 +1669,7 @@ func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*Cluster
 			}
 			return []string{owner.Name}
 		}).
+		WithInterceptorFuncs(cfg.interceptorFuncs).
 		Build()
 
 	cacheReady := make(chan struct{})
@@ -2163,6 +2173,7 @@ func TestCreateWakeupRequestFromUpdate(t *testing.T) {
 		inputBranchFn func(b *v1alpha1.Branch)
 		requestFn     func(r *clustersv1.UpdatePostgresClusterRequest)
 		extraObjects  []client.Object
+		interceptors  interceptor.Funcs
 		wantWUR       bool
 		wantNew       bool
 		wantErr       bool
@@ -2216,6 +2227,31 @@ func TestCreateWakeupRequestFromUpdate(t *testing.T) {
 			wantWUR: true,
 			wantNew: true,
 		},
+		{
+			// Concurrent wakers all see no WakeupRequest at the Get and race to
+			// create one; the losers get AlreadyExists, which must be swallowed.
+			name: "no error when create races and returns AlreadyExists",
+			interceptors: interceptor.Funcs{
+				Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
+					return errors.NewAlreadyExists(schema.GroupResource{Resource: "wakeuprequests"}, obj.GetName())
+				},
+			},
+			wantWUR: false,
+		},
+		{
+			// Concurrent wakers both delete a finished WakeupRequest; the loser
+			// gets NotFound on delete, which must be swallowed.
+			name: "no error when delete races and returns NotFound",
+			extraObjects: []client.Object{
+				existingWUR(metav1.ConditionTrue, v1alpha1.WakeupSucceededReason),
+			},
+			interceptors: interceptor.Funcs{
+				Delete: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.DeleteOption) error {
+					return errors.NewNotFound(schema.GroupResource{Resource: "wakeuprequests"}, obj.GetName())
+				},
+			},
+			wantWUR: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2233,7 +2269,10 @@ func TestCreateWakeupRequestFromUpdate(t *testing.T) {
 			}
 
 			existingObjs := append([]client.Object{branch}, tt.extraObjects...)
-			svc, k8sClient := setupTestClustersService(t, withExistingObjects(existingObjs...))
+			svc, k8sClient := setupTestClustersService(t,
+				withExistingObjects(existingObjs...),
+				withInterceptorFuncs(tt.interceptors),
+			)
 
 			err := svc.createWakeupRequestFromUpdateClusterRequest(ctx, branch, req)
 			if tt.wantErr {

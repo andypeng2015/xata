@@ -181,7 +181,13 @@ func (d *ClusterDialer) Dial(ctx context.Context, network string, branch *Branch
 	case d.isClusterHibernated(cluster.Status):
 		return nil, ErrBranchHibernated
 
-	case d.isClusterReactivating(cluster.Status):
+	case d.isScaleToZeroEnabled(cluster.Configuration) && d.isClusterStartingOrHealthy(cluster.Status):
+		// The cluster is not hibernated but the dial still failed. With
+		// scale-to-zero enabled this means it is mid-wake: a concurrent request
+		// already cleared the hibernation flag, or the Postgres instances are
+		// back but the dial target (the pooler Service) isn't routable yet. Hold
+		// the connection and wait for it to become reachable instead of
+		// returning the dial error.
 		dialLogger.Info().Msg("cluster is reactivating, waiting for it to become available...")
 		conn, err := d.waitUntilReachable(ctx, svc, branch.ID, network, branch.Address)
 		if err != nil {
@@ -205,8 +211,14 @@ func (d *ClusterDialer) isClusterHibernated(status *clustersv1.ClusterStatus) bo
 	return status.StatusType == clustersv1.ClusterStatus_STATUS_TYPE_HIBERNATED
 }
 
-func (d *ClusterDialer) isClusterReactivating(status *clustersv1.ClusterStatus) bool {
-	return status.StatusType == clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT && status.Status == apiv1.PhaseWaitingForInstancesToBeActive
+// isClusterStartingOrHealthy reports whether the cluster is healthy or still
+// transitioning toward healthy (any transient phase), as opposed to faulted or
+// in an unknown state. A failed dial against such a cluster means the target
+// endpoint hasn't caught up yet, so the connection should be held rather than
+// dropped.
+func (d *ClusterDialer) isClusterStartingOrHealthy(status *clustersv1.ClusterStatus) bool {
+	return status.StatusType == clustersv1.ClusterStatus_STATUS_TYPE_HEALTHY ||
+		status.StatusType == clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT
 }
 
 func (d *ClusterDialer) reactivateCluster(ctx context.Context, svc clustersService, clusterID, network, address string) (net.Conn, error) {

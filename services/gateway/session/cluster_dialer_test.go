@@ -376,14 +376,18 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantDialCalls: 1,
 			wantErr:       ErrBranchHibernated,
 		},
-		"error - connection refused with scale to zero enabled and cluster not hibernated, returns error": {
+		// A concurrent request already reactivated the cluster (so it reports
+		// HEALTHY, not HIBERNATED) but the dial target — typically the pooler
+		// Service — isn't routable yet. The connection must be held and the
+		// target re-probed until it succeeds, rather than failing fast.
+		"ok - scale to zero enabled, cluster healthy but target briefly unreachable, waits then connects": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
 					switch i {
 					case 1:
 						return nil, syscall.ECONNREFUSED
 					default:
-						return nil, errors.New("unexpected dial call")
+						return &net.TCPConn{}, nil
 					}
 				},
 			},
@@ -399,11 +403,37 @@ func TestClusterDialer_Dial(t *testing.T) {
 					Configuration: &clustersv1.ClusterConfiguration{
 						ScaleToZero: &clustersv1.ScaleToZero{Enabled: true},
 					},
-				}, nil).Once()
+				}, nil)
 			},
 
-			wantDialCalls: 1,
-			wantErr:       syscall.ECONNREFUSED,
+			wantDialCalls: 2,
+			wantErr:       nil,
+		},
+		// Same race as above, but the target never recovers: the dialer keeps
+		// re-probing until reactivateTimeout, then surfaces the dial error.
+		"error - scale to zero enabled, cluster healthy but target stays unreachable, returns dial error": {
+			dialer: &mockDialer{
+				dialFn: func(ctx context.Context, _ uint, network, address string) (net.Conn, error) {
+					return nil, syscall.ECONNREFUSED
+				},
+			},
+			setupMocks: func(mockClusters *protomocks.ClustersServiceClient) {
+				mockClusters.EXPECT().DescribePostgresCluster(ctx, &clustersv1.DescribePostgresClusterRequest{
+					Id: "test-branch",
+				}).Return(&clustersv1.DescribePostgresClusterResponse{
+					Status: &clustersv1.ClusterStatus{
+						StatusType:         clustersv1.ClusterStatus_STATUS_TYPE_HEALTHY,
+						InstanceCount:      1,
+						InstanceReadyCount: 1,
+					},
+					Configuration: &clustersv1.ClusterConfiguration{
+						ScaleToZero: &clustersv1.ScaleToZero{Enabled: true},
+					},
+				}, nil)
+			},
+
+			wantMinDialCalls: 2,
+			wantErr:          syscall.ECONNREFUSED,
 		},
 		// Simulates a hibernated cluster that reactivates successfully (Postgres
 		// instances come back) but the dial target (e.g. the pooler Service)

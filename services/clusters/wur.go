@@ -87,8 +87,10 @@ func (c *ClustersService) ensureWakeupRequest(ctx context.Context, branchName, x
 			return nil
 		}
 
-		// Otherwise, delete the existing WakeupRequest so we can create a new one
-		if err := c.kubeClient.Delete(ctx, wur); err != nil {
+		// Otherwise, delete the existing WakeupRequest so we can create a new one.
+		// A NotFound here means a concurrent caller already deleted it, which is
+		// the state we want.
+		if err := c.kubeClient.Delete(ctx, wur); err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("delete wakeup request: %w", err)
 		}
 	}
@@ -105,8 +107,11 @@ func (c *ClustersService) ensureWakeupRequest(ctx context.Context, branchName, x
 		},
 	}
 
-	// Create the WakeupRequest
-	if err := c.kubeClient.Create(ctx, wur); err != nil {
+	// Create the WakeupRequest. Multiple connections to a hibernated branch race
+	// to wake it; they all see no WakeupRequest at the Get above and then try to
+	// create one. An AlreadyExists here means a concurrent caller won the race
+	// and the wake-up is already in progress, which satisfies our intent.
+	if err := c.kubeClient.Create(ctx, wur); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("create wakeup request: %w", err)
 	}
 	return nil
