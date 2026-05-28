@@ -11,22 +11,37 @@ import (
 //
 // BackupSpec defines backup settings for a Branch
 type BackupSpecApplyConfiguration struct {
-	// Retention specifies how long to retain backups
-	// Examples: "60d", "4w", "2m"
+	// Method specifies the backup method.
+	// "barman" uses the barman-cloud plugin; "pgbackrest" uses in-core pgbackrest.
+	Method *apiv1alpha1.BackupMethod `json:"method,omitempty"`
+	// Retention specifies how long to retain backups (barman only).
+	// Examples: "60d", "4w", "2m".
+	// Ignored when Method is "pgbackrest"; use PgBackRest.RetentionFullDays instead.
 	Retention *string `json:"retention,omitempty"`
 	// WALArchiving specifies whether WAL archiving is enabled
 	WALArchiving *apiv1alpha1.WALArchivingMode `json:"walArchiving,omitempty"`
 	// ScheduledBackup configures periodic base backups.
 	ScheduledBackup *ScheduledBackupSpecApplyConfiguration `json:"scheduledBackup,omitempty"`
-	// ServerName overrides the barman serverName plugin parameter.
-	// When empty, serverName defaults to the branch name.
+	// ServerName overrides the barman serverName plugin parameter (barman only).
+	// When empty, defaults to the branch name.
 	ServerName *string `json:"serverName,omitempty"`
+	// PgBackRest configures pgbackrest storage and options.
+	// Required when Method is "pgbackrest".
+	PgBackRest *PgBackRestSpecApplyConfiguration `json:"pgbackrest,omitempty"`
 }
 
 // BackupSpecApplyConfiguration constructs a declarative configuration of the BackupSpec type for use with
 // apply.
 func BackupSpec() *BackupSpecApplyConfiguration {
 	return &BackupSpecApplyConfiguration{}
+}
+
+// WithMethod sets the Method field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Method field is set to the value of the last call.
+func (b *BackupSpecApplyConfiguration) WithMethod(value apiv1alpha1.BackupMethod) *BackupSpecApplyConfiguration {
+	b.Method = &value
+	return b
 }
 
 // WithRetention sets the Retention field in the declarative configuration to the given value
@@ -58,5 +73,13 @@ func (b *BackupSpecApplyConfiguration) WithScheduledBackup(value *ScheduledBacku
 // If called multiple times, the ServerName field is set to the value of the last call.
 func (b *BackupSpecApplyConfiguration) WithServerName(value string) *BackupSpecApplyConfiguration {
 	b.ServerName = &value
+	return b
+}
+
+// WithPgBackRest sets the PgBackRest field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PgBackRest field is set to the value of the last call.
+func (b *BackupSpecApplyConfiguration) WithPgBackRest(value *PgBackRestSpecApplyConfiguration) *BackupSpecApplyConfiguration {
+	b.PgBackRest = value
 	return b
 }

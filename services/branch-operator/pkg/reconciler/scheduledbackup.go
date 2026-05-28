@@ -63,6 +63,7 @@ func (r *BranchReconciler) reconcileScheduledBackup(
 			branch.ClusterName(),
 			branch.Spec.BackupSpec.ScheduledBackup.Schedule,
 			!branch.HasClusterName() || branch.Spec.ClusterSpec.Hibernation.IsEnabled(),
+			branch.Spec.BackupSpec.Method,
 		)
 
 		return nil

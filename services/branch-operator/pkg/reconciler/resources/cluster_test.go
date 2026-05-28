@@ -389,6 +389,167 @@ func TestClusterSpec(t *testing.T) {
 					WithNoop(apiv1.BootstrapNoop{})),
 		},
 		{
+			name: "pgbackrest backup configuration",
+			cfgModifier: func(cfg *resources.ClusterConfig) {
+				cfg.BackupSpec = &v1alpha1.BackupSpec{
+					Method: v1alpha1.BackupMethodPgBackRest,
+					PgBackRest: &v1alpha1.PgBackRestSpec{
+						Bucket:              "test-bucket",
+						Region:              "us-east-1",
+						InheritFromIAMRole:  true,
+						RetentionFullDays:   7,
+						CompressType:        "lz4",
+						ArchiveAsync:        true,
+						ArchivePushQueueMax: "2GiB",
+						ArchiveGetQueueMax:  "2GiB",
+					},
+				}
+			},
+			expected: baseExpectedSpec().
+				WithBackup(apiv1ac.BackupConfiguration().
+					WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
+						WithClassName("snapshot-class").
+						WithOnline(true).
+						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
+							WithImmediateCheckpoint(true))).
+					WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+						WithRepository(apiv1ac.PgBackRestRepository().
+							WithS3(apiv1ac.PgBackRestS3().
+								WithBucket("test-bucket").
+								WithRegion("us-east-1").
+								WithInheritFromIAMRole(true))).
+						WithOptions(apiv1ac.PgBackRestOptions().
+							WithCompressType("lz4").
+							WithArchiveAsync(true).
+							WithArchivePushQueueMax("2GiB").
+							WithArchiveGetQueueMax("2GiB").
+							WithBundle(true).
+							WithBlockIncremental(true).
+							WithStartFast(true).
+							WithDelta(true).
+							WithPriority(19).
+							WithRetention(apiv1ac.PgBackRestRetention().
+								WithFull(7).
+								WithFullType("time")))).
+					WithTarget(apiv1.BackupTargetStandby)),
+		},
+		{
+			name: "pgbackrest backup with minio endpoint",
+			cfgModifier: func(cfg *resources.ClusterConfig) {
+				cfg.BackupSpec = &v1alpha1.BackupSpec{
+					Method: v1alpha1.BackupMethodPgBackRest,
+					PgBackRest: &v1alpha1.PgBackRestSpec{
+						Bucket:              "test-bucket",
+						Region:              "us-east-1",
+						Endpoint:            "http://minio.local:9000",
+						InheritFromIAMRole:  true,
+						RetentionFullDays:   7,
+						CompressType:        "lz4",
+						ArchiveAsync:        true,
+						ArchivePushQueueMax: "2GiB",
+						ArchiveGetQueueMax:  "2GiB",
+					},
+				}
+			},
+			expected: baseExpectedSpec().
+				WithBackup(apiv1ac.BackupConfiguration().
+					WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
+						WithClassName("snapshot-class").
+						WithOnline(true).
+						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
+							WithImmediateCheckpoint(true))).
+					WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+						WithRepository(apiv1ac.PgBackRestRepository().
+							WithS3(apiv1ac.PgBackRestS3().
+								WithBucket("test-bucket").
+								WithRegion("us-east-1").
+								WithEndpoint("http://minio.local:9000").
+								WithInheritFromIAMRole(false).
+								WithAccessKeyID(machineryapi.SecretKeySelector{
+									LocalObjectReference: machineryapi.LocalObjectReference{Name: "minio-eu"},
+									Key:                  "rootUser",
+								}).
+								WithSecretAccessKey(machineryapi.SecretKeySelector{
+									LocalObjectReference: machineryapi.LocalObjectReference{Name: "minio-eu"},
+									Key:                  "rootPassword",
+								}))).
+						WithOptions(apiv1ac.PgBackRestOptions().
+							WithCompressType("lz4").
+							WithArchiveAsync(true).
+							WithArchivePushQueueMax("2GiB").
+							WithArchiveGetQueueMax("2GiB").
+							WithBundle(true).
+							WithBlockIncremental(true).
+							WithStartFast(true).
+							WithDelta(true).
+							WithPriority(19).
+							WithRetention(apiv1ac.PgBackRestRetention().
+								WithFull(7).
+								WithFullType("time")))).
+					WithTarget(apiv1.BackupTargetStandby)),
+		},
+		{
+			name: "pgbackrest restore from object store",
+			cfgModifier: func(cfg *resources.ClusterConfig) {
+				cfg.BackupSpec = &v1alpha1.BackupSpec{
+					Method: v1alpha1.BackupMethodPgBackRest,
+					PgBackRest: &v1alpha1.PgBackRestSpec{
+						Bucket:             "test-bucket",
+						Region:             "us-east-1",
+						InheritFromIAMRole: true,
+					},
+				}
+				cfg.RestoreSpec = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeObjectStore,
+					Name: "source-cluster",
+				}
+			},
+			expected: baseExpectedSpec().
+				WithBackup(apiv1ac.BackupConfiguration().
+					WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
+						WithClassName("snapshot-class").
+						WithOnline(true).
+						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
+							WithImmediateCheckpoint(true))).
+					WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+						WithRepository(apiv1ac.PgBackRestRepository().
+							WithS3(apiv1ac.PgBackRestS3().
+								WithBucket("test-bucket").
+								WithRegion("us-east-1").
+								WithInheritFromIAMRole(true))).
+						WithOptions(apiv1ac.PgBackRestOptions().
+							WithCompressType("").
+							WithArchiveAsync(false).
+							WithArchivePushQueueMax("").
+							WithArchiveGetQueueMax("").
+							WithBundle(true).
+							WithBlockIncremental(true).
+							WithStartFast(true).
+							WithDelta(true).
+							WithPriority(19).
+							WithRetention(apiv1ac.PgBackRestRetention().
+								WithFull(0).
+								WithFullType("time")))).
+					WithTarget(apiv1.BackupTargetStandby)).
+				WithBootstrap(apiv1ac.BootstrapConfiguration().
+					WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, &v1alpha1.RestoreSpec{
+						Type: v1alpha1.RestoreTypeObjectStore,
+						Name: "source-cluster",
+					}))).
+				WithExternalClusters(
+					apiv1ac.ExternalCluster().
+						WithName("source-cluster").
+						WithPgBackRest(apiv1ac.PgBackRestExternalCluster().
+							WithRepository(apiv1ac.PgBackRestRepository().
+								WithS3(apiv1ac.PgBackRestS3().
+									WithBucket("test-bucket").
+									WithRegion("us-east-1").
+									WithInheritFromIAMRole(true))).
+							WithOptions(apiv1ac.PgBackRestOptions().
+								WithRepoPath("/source-cluster"))),
+				),
+		},
+		{
 			name: "smart shutdown timeout - custom value set",
 			cfgModifier: func(cfg *resources.ClusterConfig) {
 				cfg.SmartShutdownTimeout = ptr.To[int32](300)

@@ -27,8 +27,9 @@ func (r *BranchReconciler) reconcileObjectStore(
 		},
 	}
 
-	// If no backup configuration, ensure ObjectStore doesn't exist
-	if branch.Spec.BackupSpec == nil {
+	// ObjectStore is only needed for barman. If no backup config or using pgbackrest,
+	// ensure no ObjectStore exists.
+	if branch.Spec.BackupSpec == nil || branch.Spec.BackupSpec.IsPgBackRest() {
 		// Try to get the ObjectStore
 		err := r.Get(ctx, types.NamespacedName{
 			Name:      branch.Name,

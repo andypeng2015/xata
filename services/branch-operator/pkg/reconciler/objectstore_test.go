@@ -139,6 +139,59 @@ func TestObjectStoreReconciliation(t *testing.T) {
 		})
 	})
 
+	t.Run("objectstore is not created for pgbackrest branches", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branch := NewBranchBuilder().
+			WithPgBackRest("test-bucket", "us-east-1").
+			WithBackupSchedule("0 0 0 * * *").
+			Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			requireEventuallyTrue(t, func() bool {
+				os := barmanPluginApi.ObjectStore{}
+				err := getK8SObject(ctx, br.Name, &os)
+				return apierrors.IsNotFound(err)
+			})
+		})
+	})
+
+	t.Run("objectstore is deleted when switching from barman to pgbackrest", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branch := NewBranchBuilder().
+			WithBackupRetention("1d").
+			Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			// Expect the ObjectStore to be created for barman
+			requireEventuallyNoErr(t, func() error {
+				os := barmanPluginApi.ObjectStore{}
+				return getK8SObject(ctx, br.Name, &os)
+			})
+
+			// Switch to pgbackrest
+			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
+				b.Spec.BackupSpec.Method = v1alpha1.BackupMethodPgBackRest
+				b.Spec.BackupSpec.PgBackRest = &v1alpha1.PgBackRestSpec{
+					Bucket:             "test-bucket",
+					Region:             "us-east-1",
+					InheritFromIAMRole: true,
+				}
+			})
+			require.NoError(t, err)
+
+			// Expect the ObjectStore to be deleted
+			requireEventuallyTrue(t, func() bool {
+				os := barmanPluginApi.ObjectStore{}
+				err := getK8SObject(ctx, br.Name, &os)
+				return apierrors.IsNotFound(err)
+			})
+		})
+	})
+
 	t.Run("objectstore direct changes are reverted", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()

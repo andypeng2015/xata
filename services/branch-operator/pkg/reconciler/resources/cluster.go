@@ -14,6 +14,11 @@ import (
 	"xata/services/branch-operator/api/v1alpha1"
 )
 
+const (
+	// Fixed pgbackrest defaults not exposed to users
+	pgbackrestPriority = 19
+)
+
 // InheritedAnnotations are defined on the Cluster; CNPG will propagate them to
 // all resources it creates
 var InheritedAnnotations = map[string]string{
@@ -208,12 +213,7 @@ func ClusterSpec(
 				WithParameters(BarmanPluginParameters(branchName, cfg.GetServerName())),
 		).
 		WithResources(cfg.Resources).
-		WithBackup(apiv1ac.BackupConfiguration().
-			WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
-				WithClassName(cfg.Storage.GetVolumeSnapshotClass()).
-				WithOnline(true).
-				WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
-					WithImmediateCheckpoint(true)))).
+		WithBackup(backupConfiguration(cfg)).
 		WithProbes(apiv1ac.ProbesConfiguration().
 			WithStartup(apiv1ac.ProbeWithStrategy().
 				WithTimeoutSeconds(5).
@@ -301,6 +301,24 @@ func ExternalClusters(cfg ClusterConfig) []*apiv1ac.ExternalClusterApplyConfigur
 		return nil
 	}
 
+	// pgbackrest: external cluster points to the source branch's repo in S3
+	if cfg.IsPgBackRest() {
+		pgb := cfg.PgBackRest
+
+		// The source branch's repo path — pgbackrest defaults to /<clusterName>
+		options := apiv1ac.PgBackRestOptions().
+			WithRepoPath("/" + cfg.RestoreSpec.Name)
+
+		return []*apiv1ac.ExternalClusterApplyConfiguration{
+			apiv1ac.ExternalCluster().
+				WithName(cfg.RestoreSpec.Name).
+				WithPgBackRest(apiv1ac.PgBackRestExternalCluster().
+					WithRepository(apiv1ac.PgBackRestRepository().WithS3(pgbackrestS3(pgb))).
+					WithOptions(options)),
+		}
+	}
+
+	// barman: external cluster uses barman-cloud plugin
 	pluginParams := map[string]string{
 		"barmanObjectName": cfg.RestoreSpec.Name,
 		"serverName":       cfg.RestoreSpec.GetServerName(),
@@ -372,6 +390,78 @@ func smartShutdownTimeout(t *int32) int32 {
 		return *t
 	}
 	return DefaultSmartShutdownTimeout
+}
+
+// backupConfiguration builds the CNPG BackupConfiguration for the cluster.
+// Volume snapshot config is always included regardless of backup method.
+// For barman, backup storage is configured via the separate ObjectStore CR.
+// For pgbackrest, backup storage is configured inline on the Cluster.
+func backupConfiguration(cfg ClusterConfig) *apiv1ac.BackupConfigurationApplyConfiguration {
+	backup := apiv1ac.BackupConfiguration().
+		WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
+			WithClassName(cfg.Storage.GetVolumeSnapshotClass()).
+			WithOnline(true).
+			WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
+				WithImmediateCheckpoint(true)))
+
+	// this is barman
+	if !cfg.IsPgBackRest() {
+		return backup
+	}
+
+	pgb := cfg.PgBackRest
+
+	options := apiv1ac.PgBackRestOptions().
+		WithCompressType(pgb.CompressType).
+		WithArchiveAsync(pgb.ArchiveAsync).
+		WithArchivePushQueueMax(pgb.ArchivePushQueueMax).
+		WithArchiveGetQueueMax(pgb.ArchiveGetQueueMax).
+		WithBundle(true).
+		WithBlockIncremental(true).
+		WithStartFast(true).
+		WithDelta(true).
+		WithPriority(pgbackrestPriority).
+		WithRetention(apiv1ac.PgBackRestRetention().
+			WithFull(pgb.RetentionFullDays).
+			WithFullType("time"))
+
+	if pgb.CompressLevel != nil {
+		options = options.WithCompressLevel(*pgb.CompressLevel)
+	}
+	if pgb.RepoPath != "" {
+		options = options.WithRepoPath(pgb.RepoPath)
+	}
+
+	return backup.
+		WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+			WithRepository(apiv1ac.PgBackRestRepository().WithS3(pgbackrestS3(pgb))).
+			WithOptions(options)).
+		WithTarget(apiv1.BackupTargetStandby)
+}
+
+// pgbackrestS3 builds the S3 apply configuration from a PgBackRestSpec.
+// When Endpoint is set (local dev with MinIO), it hardcodes MinIO credentials
+// matching the barman pattern.
+func pgbackrestS3(pgb *v1alpha1.PgBackRestSpec) *apiv1ac.PgBackRestS3ApplyConfiguration {
+	s3 := apiv1ac.PgBackRestS3().
+		WithBucket(pgb.Bucket).
+		WithRegion(pgb.Region).
+		WithInheritFromIAMRole(pgb.InheritFromIAMRole)
+
+	if pgb.Endpoint != "" {
+		s3 = s3.WithEndpoint(pgb.Endpoint).
+			WithInheritFromIAMRole(false).
+			WithAccessKeyID(machineryapi.SecretKeySelector{
+				LocalObjectReference: machineryapi.LocalObjectReference{Name: "minio-eu"},
+				Key:                  "rootUser",
+			}).
+			WithSecretAccessKey(machineryapi.SecretKeySelector{
+				LocalObjectReference: machineryapi.LocalObjectReference{Name: "minio-eu"},
+				Key:                  "rootPassword",
+			})
+	}
+
+	return s3
 }
 
 // LabelsFromInheritedMetadata extracts labels from InheritedMetadata, handling nil

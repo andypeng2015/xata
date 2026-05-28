@@ -349,10 +349,29 @@ const (
 	WALArchivingModeDisabled WALArchivingMode = "Disabled"
 )
 
+// BackupMethod defines the backup method to use
+type BackupMethod string
+
+const (
+	// BackupMethodBarman uses barman-cloud plugin for WAL archiving and backups
+	BackupMethodBarman BackupMethod = "barman"
+	// BackupMethodPgBackRest uses in-core pgbackrest for WAL archiving and backups
+	BackupMethodPgBackRest BackupMethod = "pgbackrest"
+)
+
 // BackupSpec defines backup settings for a Branch
+// +kubebuilder:validation:XValidation:rule="self.method != 'pgbackrest' || has(self.pgbackrest)",message="pgbackrest spec is required when method is pgbackrest"
 type BackupSpec struct {
-	// Retention specifies how long to retain backups
-	// Examples: "60d", "4w", "2m"
+	// Method specifies the backup method.
+	// "barman" uses the barman-cloud plugin; "pgbackrest" uses in-core pgbackrest.
+	// +kubebuilder:validation:Enum=barman;pgbackrest
+	// +kubebuilder:default:="barman"
+	// +optional
+	Method BackupMethod `json:"method,omitempty"`
+
+	// Retention specifies how long to retain backups (barman only).
+	// Examples: "60d", "4w", "2m".
+	// Ignored when Method is "pgbackrest"; use PgBackRest.RetentionFullDays instead.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=`^\d+[dwm]$`
 	// +kubebuilder:default:="2d"
@@ -368,10 +387,88 @@ type BackupSpec struct {
 	// +kubebuilder:validation:Optional
 	ScheduledBackup *ScheduledBackupSpec `json:"scheduledBackup,omitempty"`
 
-	// ServerName overrides the barman serverName plugin parameter.
-	// When empty, serverName defaults to the branch name.
+	// ServerName overrides the barman serverName plugin parameter (barman only).
+	// When empty, defaults to the branch name.
 	// +kubebuilder:validation:Optional
 	ServerName string `json:"serverName,omitempty"`
+
+	// PgBackRest configures pgbackrest storage and options.
+	// Required when Method is "pgbackrest".
+	// +optional
+	PgBackRest *PgBackRestSpec `json:"pgbackrest,omitempty"`
+}
+
+// PgBackRestSpec defines pgbackrest-specific backup configuration.
+//
+// The following pgbackrest options are set internally with fixed defaults
+// and not exposed to users:
+//   - retention fullType: always "time" (days)
+//   - retention archive: follows full retention (pgbackrest default)
+//   - bundle: always on (fewer S3 API calls)
+//   - blockIncremental: always on (requires bundle; reduces storage for large DBs)
+//   - startFast: always on (immediate checkpoint, no waiting)
+//   - delta: always on (faster restores)
+//   - backupStandby: controlled via backup.target on the Cluster
+//   - priority: 19 (lowest CPU priority, avoids impacting postgres)
+//   - processMax: computed from instance CPU resources
+type PgBackRestSpec struct {
+	// Bucket is the S3 bucket for backups and WAL archives.
+	// +kubebuilder:validation:Required
+	Bucket string `json:"bucket"`
+
+	// Region is the S3 region.
+	// +kubebuilder:validation:Required
+	Region string `json:"region"`
+
+	// Endpoint overrides S3 endpoint discovery. Required for non-AWS
+	// S3-compatible storage (e.g. MinIO for local dev).
+	// When set, MinIO credentials are used automatically.
+	// +optional
+	Endpoint string `json:"endpoint,omitempty"`
+
+	// InheritFromIAMRole uses the pod's IAM role for S3 authentication.
+	// +optional
+	// +kubebuilder:default:=true
+	InheritFromIAMRole bool `json:"inheritFromIAMRole,omitempty"`
+
+	// RetentionFullDays is the number of days to retain full backups.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default:=7
+	RetentionFullDays int `json:"retentionFullDays,omitempty"`
+
+	// CompressType sets the compression algorithm.
+	// +optional
+	// +kubebuilder:validation:Enum=none;gz;bz2;lz4;zst
+	// +kubebuilder:default:="lz4"
+	CompressType string `json:"compressType,omitempty"`
+
+	// CompressLevel sets the compression level (0-9).
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=9
+	CompressLevel *int `json:"compressLevel,omitempty"`
+
+	// ArchiveAsync enables asynchronous WAL archiving.
+	// +optional
+	// +kubebuilder:default:=true
+	ArchiveAsync bool `json:"archiveAsync,omitempty"`
+
+	// ArchivePushQueueMax is the max WAL push queue size when async is enabled.
+	// Uses pgbackrest size format (e.g. "2GiB", "256MiB").
+	// +optional
+	// +kubebuilder:default:="2GiB"
+	ArchivePushQueueMax string `json:"archivePushQueueMax,omitempty"`
+
+	// ArchiveGetQueueMax is the max WAL restore queue size when async is enabled.
+	// Uses pgbackrest size format (e.g. "2GiB", "256MiB").
+	// +optional
+	// +kubebuilder:default:="2GiB"
+	ArchiveGetQueueMax string `json:"archiveGetQueueMax,omitempty"`
+
+	// RepoPath overrides the storage path prefix. Defaults to /<clusterName>.
+	// +optional
+	RepoPath string `json:"repoPath,omitempty"`
 }
 
 // ScheduledBackupSpec configures periodic base backups
@@ -393,7 +490,12 @@ func (b *BackupSpec) IsScheduledBackupEnabled() bool {
 }
 
 func (b *BackupSpec) RequiresBarmanPlugin() bool {
-	return b != nil && (b.WALArchiving == WALArchivingModeEnabled || b.ScheduledBackup != nil)
+	return b != nil && b.Method != BackupMethodPgBackRest &&
+		(b.WALArchiving == WALArchivingModeEnabled || b.ScheduledBackup != nil)
+}
+
+func (b *BackupSpec) IsPgBackRest() bool {
+	return b != nil && b.Method == BackupMethodPgBackRest && b.PgBackRest != nil
 }
 
 // GetServerName returns the serverName for the Barman cloud plugin.

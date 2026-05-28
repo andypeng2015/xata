@@ -60,11 +60,88 @@ spec:
                   ObjectStore resource is created to manage backup storage and retention.
                   When nil, no ObjectStore is created.
                 properties:
+                  method:
+                    default: barman
+                    description: |-
+                      Method specifies the backup method.
+                      "barman" uses the barman-cloud plugin; "pgbackrest" uses in-core pgbackrest.
+                    enum:
+                    - barman
+                    - pgbackrest
+                    type: string
+                  pgbackrest:
+                    description: |-
+                      PgBackRest configures pgbackrest storage and options.
+                      Required when Method is "pgbackrest".
+                    properties:
+                      archiveAsync:
+                        default: true
+                        description: ArchiveAsync enables asynchronous WAL archiving.
+                        type: boolean
+                      archiveGetQueueMax:
+                        default: 2GiB
+                        description: |-
+                          ArchiveGetQueueMax is the max WAL restore queue size when async is enabled.
+                          Uses pgbackrest size format (e.g. "2GiB", "256MiB").
+                        type: string
+                      archivePushQueueMax:
+                        default: 2GiB
+                        description: |-
+                          ArchivePushQueueMax is the max WAL push queue size when async is enabled.
+                          Uses pgbackrest size format (e.g. "2GiB", "256MiB").
+                        type: string
+                      bucket:
+                        description: Bucket is the S3 bucket for backups and WAL archives.
+                        type: string
+                      compressLevel:
+                        description: CompressLevel sets the compression level (0-9).
+                        maximum: 9
+                        minimum: 0
+                        type: integer
+                      compressType:
+                        default: lz4
+                        description: CompressType sets the compression algorithm.
+                        enum:
+                        - none
+                        - gz
+                        - bz2
+                        - lz4
+                        - zst
+                        type: string
+                      endpoint:
+                        description: |-
+                          Endpoint overrides S3 endpoint discovery. Required for non-AWS
+                          S3-compatible storage (e.g. MinIO for local dev).
+                          When set, MinIO credentials are used automatically.
+                        type: string
+                      inheritFromIAMRole:
+                        default: true
+                        description: InheritFromIAMRole uses the pod's IAM role for
+                          S3 authentication.
+                        type: boolean
+                      region:
+                        description: Region is the S3 region.
+                        type: string
+                      repoPath:
+                        description: RepoPath overrides the storage path prefix. Defaults
+                          to /<clusterName>.
+                        type: string
+                      retentionFullDays:
+                        default: 7
+                        description: RetentionFullDays is the number of days to retain
+                          full backups.
+                        minimum: 1
+                        type: integer
+                    required:
+                    - bucket
+                    - region
+                    type: object
                   retention:
                     default: 2d
                     description: |-
-                      Retention specifies how long to retain backups
-                      Examples: "60d", "4w", "2m"
+                      Retention specifies how long to retain backups (barman only).
+                      Examples: "60d", "4w", "2m".
+                      Ignored when Method is "pgbackrest"; use PgBackRest.RetentionFullDays instead.
                     pattern: ^\d+[dwm]$
                     type: string
                   scheduledBackup:
@@ -80,8 +157,8 @@ spec:
                     type: object
                   serverName:
                     description: |-
-                      ServerName overrides the barman serverName plugin parameter.
-                      When empty, serverName defaults to the branch name.
+                      ServerName overrides the barman serverName plugin parameter (barman only).
+                      When empty, defaults to the branch name.
                     type: string
                   walArchiving:
                     default: Enabled
@@ -91,6 +168,9 @@ spec:
                     - Disabled
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: pgbackrest spec is required when method is pgbackrest
+                  rule: self.method != 'pgbackrest' || has(self.pgbackrest)
               cluster:
                 description: ClusterSpec defines the CNPG cluster configuration for
                   the branch

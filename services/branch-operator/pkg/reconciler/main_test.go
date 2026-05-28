@@ -182,6 +182,20 @@ func (b *BranchBuilder) WithWALArchiving(enabled bool) *BranchBuilder {
 	return b
 }
 
+// WithPgBackRest sets the backup method to pgbackrest with the given S3 config
+func (b *BranchBuilder) WithPgBackRest(bucket, region string) *BranchBuilder {
+	if b.branch.Spec.BackupSpec == nil {
+		b.branch.Spec.BackupSpec = &v1alpha1.BackupSpec{}
+	}
+	b.branch.Spec.BackupSpec.Method = v1alpha1.BackupMethodPgBackRest
+	b.branch.Spec.BackupSpec.PgBackRest = &v1alpha1.PgBackRestSpec{
+		Bucket:             bucket,
+		Region:             region,
+		InheritFromIAMRole: true,
+	}
+	return b
+}
+
 // WithBackupSchedule sets the BackupConfiguration.ScheduledBackup field
 func (b *BranchBuilder) WithBackupSchedule(schedule string) *BranchBuilder {
 	if b.branch.Spec.BackupSpec == nil {

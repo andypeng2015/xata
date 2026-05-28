@@ -257,4 +257,59 @@ func TestScheduledBackupReconciliation(t *testing.T) {
 			})
 		})
 	})
+
+	t.Run("pgbackrest scheduledbackup uses correct method and type", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branch := NewBranchBuilder().
+			WithPgBackRest("test-bucket", "us-east-1").
+			WithBackupSchedule("0 0 0 * * *").
+			Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			sb := apiv1.ScheduledBackup{}
+
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, br.Name, &sb)
+			})
+
+			require.Equal(t, apiv1.BackupMethodPgBackRest, sb.Spec.Method)
+			require.Equal(t, apiv1.PgBackRestBackupTypeFull, sb.Spec.PgBackRestBackupType)
+			require.Nil(t, sb.Spec.PluginConfiguration)
+		})
+	})
+
+	t.Run("pgbackrest scheduledbackup is updated when schedule changes", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branch := NewBranchBuilder().
+			WithPgBackRest("test-bucket", "us-east-1").
+			WithBackupSchedule("0 0 0 * * *").
+			Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			sb := apiv1.ScheduledBackup{}
+
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, br.Name, &sb)
+			})
+			require.Equal(t, "0 0 0 * * *", sb.Spec.Schedule)
+
+			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
+				b.Spec.BackupSpec.ScheduledBackup.Schedule = "0 0 2 * * *"
+			})
+			require.NoError(t, err)
+
+			requireEventuallyTrue(t, func() bool {
+				err := getK8SObject(ctx, br.Name, &sb)
+				if err != nil {
+					return false
+				}
+				return sb.Spec.Schedule == "0 0 2 * * *" &&
+					sb.Spec.Method == apiv1.BackupMethodPgBackRest
+			})
+		})
+	})
 }

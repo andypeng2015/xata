@@ -3,6 +3,7 @@ package resources_test
 import (
 	"testing"
 
+	"xata/services/branch-operator/api/v1alpha1"
 	"xata/services/branch-operator/pkg/reconciler/resources"
 
 	barmanApi "github.com/cloudnative-pg/barman-cloud/pkg/api"
@@ -447,13 +448,15 @@ func TestScheduledBackupSpec(t *testing.T) {
 
 	testcases := []struct {
 		name       string
+		method     v1alpha1.BackupMethod
 		branchName string
 		schedule   string
 		suspend    bool
 		want       apiv1.ScheduledBackupSpec
 	}{
 		{
-			name:       "scheduled backup with hourly schedule",
+			name:       "barman scheduled backup with hourly schedule",
+			method:     v1alpha1.BackupMethodBarman,
 			branchName: "test-branch-1",
 			schedule:   "0 0 * * * *",
 			want: apiv1.ScheduledBackupSpec{
@@ -470,7 +473,8 @@ func TestScheduledBackupSpec(t *testing.T) {
 			},
 		},
 		{
-			name:       "scheduled backup with very frequent schedule",
+			name:       "barman scheduled backup with very frequent schedule",
+			method:     v1alpha1.BackupMethodBarman,
 			branchName: "test-branch-2",
 			schedule:   "0 * * * * *",
 			want: apiv1.ScheduledBackupSpec{
@@ -487,7 +491,8 @@ func TestScheduledBackupSpec(t *testing.T) {
 			},
 		},
 		{
-			name:       "suspended scheduled backup",
+			name:       "barman suspended scheduled backup",
+			method:     v1alpha1.BackupMethodBarman,
 			branchName: "test-branch-2",
 			schedule:   "0 * * * * *",
 			suspend:    true,
@@ -504,11 +509,44 @@ func TestScheduledBackupSpec(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:       "pgbackrest scheduled backup",
+			method:     v1alpha1.BackupMethodPgBackRest,
+			branchName: "test-branch-1",
+			schedule:   "0 0 0 * * *",
+			want: apiv1.ScheduledBackupSpec{
+				Cluster: apiv1.LocalObjectReference{
+					Name: "test-branch-1",
+				},
+				Method:               apiv1.BackupMethodPgBackRest,
+				Schedule:             "0 0 0 * * *",
+				Immediate:            new(true),
+				Suspend:              new(false),
+				PgBackRestBackupType: apiv1.PgBackRestBackupTypeFull,
+			},
+		},
+		{
+			name:       "pgbackrest suspended scheduled backup",
+			method:     v1alpha1.BackupMethodPgBackRest,
+			branchName: "test-branch-2",
+			schedule:   "0 0 2 * * 0",
+			suspend:    true,
+			want: apiv1.ScheduledBackupSpec{
+				Cluster: apiv1.LocalObjectReference{
+					Name: "test-branch-2",
+				},
+				Method:               apiv1.BackupMethodPgBackRest,
+				Schedule:             "0 0 2 * * 0",
+				Immediate:            new(true),
+				Suspend:              new(true),
+				PgBackRestBackupType: apiv1.PgBackRestBackupTypeFull,
+			},
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := resources.ScheduledBackupSpec(tc.branchName, tc.schedule, tc.suspend)
+			got := resources.ScheduledBackupSpec(tc.branchName, tc.schedule, tc.suspend, tc.method)
 
 			require.Equal(t, tc.want, got)
 		})

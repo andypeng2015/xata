@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.1-0.20260221191338-50567dcb131b
   name: scheduledbackups.postgresql.cnpg.io
 spec:
   group: postgresql.cnpg.io
@@ -77,14 +77,15 @@ spec:
                   creation or not
                 type: boolean
               method:
-                default: barmanObjectStore
+                default: pgBackRest
                 description: |-
-                  The backup method to be used, possible options are `barmanObjectStore`,
-                  `volumeSnapshot` or `plugin`. Defaults to: `barmanObjectStore`.
+                  The backup method to be used, possible options are `barmanObjectStore`, `pgBackRest`
+                  `volumeSnapshot` or `plugin`. Defaults to: `pgBackRest`.
                 enum:
                 - barmanObjectStore
                 - volumeSnapshot
                 - plugin
+                - pgBackRest
                 type: string
               online:
                 description: |-
@@ -119,6 +120,16 @@ spec:
                       an immediate segment switch.
                     type: boolean
                 type: object
+              pgBackRestBackupType:
+                default: full
+                description: |-
+                  The pgBackRest backup type. Possible values are `full`, `diff` (differential),
+                  or `incr` (incremental). Defaults to `full`. Only used when method is `pgBackRest`.
+                enum:
+                - full
+                - diff
+                - incr
+                type: string
               pluginConfiguration:
                 description: Configuration parameters passed to the plugin managing
                   this backup

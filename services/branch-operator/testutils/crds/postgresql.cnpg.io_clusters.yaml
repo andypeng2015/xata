@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.20.1-0.20260221191338-50567dcb131b
   name: clusters.postgresql.cnpg.io
 spec:
   group: postgresql.cnpg.io
@@ -1389,6 +1389,196 @@ spec:
                     required:
                     - destinationPath
                     type: object
+                  pgBackRest:
+                    description: The configuration for pgbackrest
+                    properties:
+                      options:
+                        description: PgBackRestOptions defines process-level settings
+                          for pgbackrest.
+                        properties:
+                          archiveAsync:
+                            description: Enable async WAL archiving for better throughput.
+                            type: boolean
+                          archiveGetQueueMax:
+                            description: |-
+                              Max size of the WAL restore queue when archiveAsync is enabled.
+                              Uses pgbackrest size format (e.g. "1GiB", "256MiB").
+                            type: string
+                          archivePushQueueMax:
+                            description: |-
+                              Max size of the WAL archive push queue when archiveAsync is enabled.
+                              Uses pgbackrest size format (e.g. "1GiB", "256MiB").
+                            type: string
+                          backupStandby:
+                            description: |-
+                              Take backups from a standby instance instead of the primary,
+                              reducing load on the primary.
+                            type: boolean
+                          blockIncremental:
+                            description: |-
+                              Enable block-level incremental backup. Only changed blocks within files
+                              are backed up instead of entire files. Requires Bundle to be true.
+                              Requires pgbackrest 2.46+.
+                            type: boolean
+                          bundle:
+                            description: |-
+                              Bundle small files together for more efficient object storage operations.
+                              pgbackrest defaults: bundle-limit=2MiB (max file size eligible for bundling),
+                              bundle-size=20MiB (target size per bundle). Files larger than bundle-limit
+                              are stored individually.
+                            type: boolean
+                          compressLevel:
+                            description: Compression level (0-9). The meaning depends
+                              on the algorithm.
+                            maximum: 9
+                            minimum: 0
+                            type: integer
+                          compressType:
+                            default: lz4
+                            description: Compression algorithm. Defaults to "lz4".
+                            enum:
+                            - none
+                            - gz
+                            - bz2
+                            - lz4
+                            - zst
+                            type: string
+                          delta:
+                            description: Only restore files that have changed. Speeds
+                              up restores.
+                            type: boolean
+                          priority:
+                            description: |-
+                              Allow for deprioritization when taking CPU (nice value), making sure we are
+                              not impacting postgres TPS. If not set defaults to 0 - which means no
+                              deprioritization. Do not go below 0 because that would make it more important than postgres
+                            maximum: 19
+                            minimum: 0
+                            type: integer
+                          processMax:
+                            description: Maximum number of parallel processes for
+                              backup/restore.
+                            minimum: 1
+                            type: integer
+                          repoPath:
+                            description: |-
+                              RepoPath is the pgbackrest repo1-path — the prefix in the storage
+                              backend where backups and WAL archives are stored. When unset, it
+                              defaults to /<clusterName>. Configure this to isolate a new cluster
+                              incarnation from existing data under the default path, or to restore
+                              from a custom path.
+                            type: string
+                          retention:
+                            description: Backup retention policy.
+                            properties:
+                              archive:
+                                description: |-
+                                  Number of WAL archive sets to retain. If not set, pgbackrest will
+                                  use the full backup retention to determine WAL expiration.
+                                minimum: 1
+                                type: integer
+                              full:
+                                description: Number of full backups to retain. Required.
+                                minimum: 1
+                                type: integer
+                              fullType:
+                                default: count
+                                description: |-
+                                  Type of full backup retention: "count" (number of backups) or "time" (days).
+                                  Defaults to "count".
+                                enum:
+                                - count
+                                - time
+                                type: string
+                            required:
+                            - full
+                            type: object
+                          startFast:
+                            description: |-
+                              Force an immediate checkpoint at backup start instead of
+                              waiting for the next scheduled checkpoint.
+                            type: boolean
+                        type: object
+                        x-kubernetes-validations:
+                        - message: blockIncremental requires bundle to be true
+                          rule: '!has(self.blockIncremental) || !self.blockIncremental
+                            || (has(self.bundle) && self.bundle)'
+                      repository:
+                        description: |-
+                          PgBackRestRepository defines the storage repository for pgbackrest.
+                          Exactly one of s3, gcs, or azure must be specified.
+                        properties:
+                          azure:
+                            description: PgBackRestAzure defines the Azure Blob Storage
+                              configuration for pgbackrest.
+                            type: object
+                          gcs:
+                            description: PgBackRestGCS defines the Google Cloud Storage
+                              configuration for pgbackrest.
+                            type: object
+                          s3:
+                            description: PgBackRestS3 defines the S3-compatible storage
+                              configuration for pgbackrest.
+                            properties:
+                              accessKeyId:
+                                description: The reference to the access key id
+                                properties:
+                                  key:
+                                    description: The key to select
+                                    type: string
+                                  name:
+                                    description: Name of the referent.
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                              bucket:
+                                description: The S3 bucket name
+                                type: string
+                              endpoint:
+                                description: |-
+                                  The S3 endpoint, overriding the automatic endpoint discovery.
+                                  Required for non-AWS S3-compatible storage (e.g. MinIO).
+                                type: string
+                              inheritFromIAMRole:
+                                description: |-
+                                  Use IAM role-based authentication (e.g. IRSA, instance profile).
+                                  Sets pgbackrest repo1-s3-key-type=auto.
+                                type: boolean
+                              region:
+                                description: The S3 region
+                                type: string
+                              secretAccessKey:
+                                description: The reference to the secret access key
+                                properties:
+                                  key:
+                                    description: The key to select
+                                    type: string
+                                  name:
+                                    description: Name of the referent.
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            required:
+                            - bucket
+                            - region
+                            type: object
+                            x-kubernetes-validations:
+                            - message: either inheritFromIAMRole or both accessKeyId
+                                and secretAccessKey must be specified, but not both
+                              rule: (self.inheritFromIAMRole == true) != (has(self.accessKeyId)
+                                && has(self.secretAccessKey))
+                        type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of s3, gcs, or azure must be specified
+                          rule: '(has(self.s3) ? 1 : 0) + (has(self.gcs) ? 1 : 0)
+                            + (has(self.azure) ? 1 : 0) == 1'
+                    required:
+                    - repository
+                    type: object
                   retentionPolicy:
                     description: |-
                       RetentionPolicy is the retention policy to be used for backups
@@ -1865,6 +2055,11 @@ spec:
                     - message: icuRules is only available when localeProvider is set
                         to `icu`
                       rule: '!has(self.icuRules) || self.localeProvider == ''icu'''
+                  noop:
+                    description: |-
+                      Skip bootstrap entirely. The instance manager will wait for PGDATA
+                      to appear from an external source (e.g. NVMe-oF mount).
+                    type: object
                   pg_basebackup:
                     description: |-
                       Bootstrap the cluster taking a physical backup of another compatible
@@ -2088,6 +2283,7 @@ spec:
                         type: object
                     type: object
                 type: object
+                x-kubernetes-map-type: atomic
               certificates:
                 description: The configuration for the CA and related certificates
                 properties:
@@ -3015,6 +3211,198 @@ spec:
                       - key
                       type: object
                       x-kubernetes-map-type: atomic
+                    pgBackRest:
+                      description: The pgbackrest configuration for this external
+                        cluster (repository and options)
+                      properties:
+                        options:
+                          description: PgBackRestOptions defines process-level settings
+                            for pgbackrest.
+                          properties:
+                            archiveAsync:
+                              description: Enable async WAL archiving for better throughput.
+                              type: boolean
+                            archiveGetQueueMax:
+                              description: |-
+                                Max size of the WAL restore queue when archiveAsync is enabled.
+                                Uses pgbackrest size format (e.g. "1GiB", "256MiB").
+                              type: string
+                            archivePushQueueMax:
+                              description: |-
+                                Max size of the WAL archive push queue when archiveAsync is enabled.
+                                Uses pgbackrest size format (e.g. "1GiB", "256MiB").
+                              type: string
+                            backupStandby:
+                              description: |-
+                                Take backups from a standby instance instead of the primary,
+                                reducing load on the primary.
+                              type: boolean
+                            blockIncremental:
+                              description: |-
+                                Enable block-level incremental backup. Only changed blocks within files
+                                are backed up instead of entire files. Requires Bundle to be true.
+                                Requires pgbackrest 2.46+.
+                              type: boolean
+                            bundle:
+                              description: |-
+                                Bundle small files together for more efficient object storage operations.
+                                pgbackrest defaults: bundle-limit=2MiB (max file size eligible for bundling),
+                                bundle-size=20MiB (target size per bundle). Files larger than bundle-limit
+                                are stored individually.
+                              type: boolean
+                            compressLevel:
+                              description: Compression level (0-9). The meaning depends
+                                on the algorithm.
+                              maximum: 9
+                              minimum: 0
+                              type: integer
+                            compressType:
+                              default: lz4
+                              description: Compression algorithm. Defaults to "lz4".
+                              enum:
+                              - none
+                              - gz
+                              - bz2
+                              - lz4
+                              - zst
+                              type: string
+                            delta:
+                              description: Only restore files that have changed. Speeds
+                                up restores.
+                              type: boolean
+                            priority:
+                              description: |-
+                                Allow for deprioritization when taking CPU (nice value), making sure we are
+                                not impacting postgres TPS. If not set defaults to 0 - which means no
+                                deprioritization. Do not go below 0 because that would make it more important than postgres
+                              maximum: 19
+                              minimum: 0
+                              type: integer
+                            processMax:
+                              description: Maximum number of parallel processes for
+                                backup/restore.
+                              minimum: 1
+                              type: integer
+                            repoPath:
+                              description: |-
+                                RepoPath is the pgbackrest repo1-path — the prefix in the storage
+                                backend where backups and WAL archives are stored. When unset, it
+                                defaults to /<clusterName>. Configure this to isolate a new cluster
+                                incarnation from existing data under the default path, or to restore
+                                from a custom path.
+                              type: string
+                            retention:
+                              description: Backup retention policy.
+                              properties:
+                                archive:
+                                  description: |-
+                                    Number of WAL archive sets to retain. If not set, pgbackrest will
+                                    use the full backup retention to determine WAL expiration.
+                                  minimum: 1
+                                  type: integer
+                                full:
+                                  description: Number of full backups to retain. Required.
+                                  minimum: 1
+                                  type: integer
+                                fullType:
+                                  default: count
+                                  description: |-
+                                    Type of full backup retention: "count" (number of backups) or "time" (days).
+                                    Defaults to "count".
+                                  enum:
+                                  - count
+                                  - time
+                                  type: string
+                              required:
+                              - full
+                              type: object
+                            startFast:
+                              description: |-
+                                Force an immediate checkpoint at backup start instead of
+                                waiting for the next scheduled checkpoint.
+                              type: boolean
+                          type: object
+                          x-kubernetes-validations:
+                          - message: blockIncremental requires bundle to be true
+                            rule: '!has(self.blockIncremental) || !self.blockIncremental
+                              || (has(self.bundle) && self.bundle)'
+                        repository:
+                          description: |-
+                            PgBackRestRepository defines the storage repository for pgbackrest.
+                            Exactly one of s3, gcs, or azure must be specified.
+                          properties:
+                            azure:
+                              description: PgBackRestAzure defines the Azure Blob
+                                Storage configuration for pgbackrest.
+                              type: object
+                            gcs:
+                              description: PgBackRestGCS defines the Google Cloud
+                                Storage configuration for pgbackrest.
+                              type: object
+                            s3:
+                              description: PgBackRestS3 defines the S3-compatible
+                                storage configuration for pgbackrest.
+                              properties:
+                                accessKeyId:
+                                  description: The reference to the access key id
+                                  properties:
+                                    key:
+                                      description: The key to select
+                                      type: string
+                                    name:
+                                      description: Name of the referent.
+                                      type: string
+                                  required:
+                                  - key
+                                  - name
+                                  type: object
+                                bucket:
+                                  description: The S3 bucket name
+                                  type: string
+                                endpoint:
+                                  description: |-
+                                    The S3 endpoint, overriding the automatic endpoint discovery.
+                                    Required for non-AWS S3-compatible storage (e.g. MinIO).
+                                  type: string
+                                inheritFromIAMRole:
+                                  description: |-
+                                    Use IAM role-based authentication (e.g. IRSA, instance profile).
+                                    Sets pgbackrest repo1-s3-key-type=auto.
+                                  type: boolean
+                                region:
+                                  description: The S3 region
+                                  type: string
+                                secretAccessKey:
+                                  description: The reference to the secret access
+                                    key
+                                  properties:
+                                    key:
+                                      description: The key to select
+                                      type: string
+                                    name:
+                                      description: Name of the referent.
+                                      type: string
+                                  required:
+                                  - key
+                                  - name
+                                  type: object
+                              required:
+                              - bucket
+                              - region
+                              type: object
+                              x-kubernetes-validations:
+                              - message: either inheritFromIAMRole or both accessKeyId
+                                  and secretAccessKey must be specified, but not both
+                                rule: (self.inheritFromIAMRole == true) != (has(self.accessKeyId)
+                                  && has(self.secretAccessKey))
+                          type: object
+                          x-kubernetes-validations:
+                          - message: exactly one of s3, gcs, or azure must be specified
+                            rule: '(has(self.s3) ? 1 : 0) + (has(self.gcs) ? 1 : 0)
+                              + (has(self.azure) ? 1 : 0) == 1'
+                      required:
+                      - repository
+                      type: object
                     plugin:
                       description: |-
                         The configuration of the plugin that is taking care
@@ -4090,6 +4478,242 @@ spec:
                   - name
                   type: object
                 type: array
+              podSecurityContext:
+                description: |-
+                  Override the PodSecurityContext applied to every Pod of the cluster.
+                  When set, this overrides the operator's default PodSecurityContext for the cluster.
+                  If omitted, the operator defaults are used.
+                  This field doesn't have any effect if SecurityContextConstraints are present.
+                properties:
+                  appArmorProfile:
+                    description: |-
+                      appArmorProfile is the AppArmor options to use by the containers in this pod.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    properties:
+                      localhostProfile:
+                        description: |-
+                          localhostProfile indicates a profile loaded on the node that should be used.
+                          The profile must be preconfigured on the node to work.
+                          Must match the loaded name of the profile.
+                          Must be set if and only if type is "Localhost".
+                        type: string
+                      type:
+                        description: |-
+                          type indicates which kind of AppArmor profile will be applied.
+                          Valid options are:
+                            Localhost - a profile pre-loaded on the node.
+                            RuntimeDefault - the container runtime's default profile.
+                            Unconfined - no AppArmor enforcement.
+                        type: string
+                    required:
+                    - type
+                    type: object
+                  fsGroup:
+                    description: |-
+                      A special supplemental group that applies to all containers in a pod.
+                      Some volume types allow the Kubelet to change the ownership of that volume
+                      to be owned by the pod:
+
+                      1. The owning GID will be the FSGroup
+                      2. The setgid bit is set (new files created in the volume will be owned by FSGroup)
+                      3. The permission bits are OR'd with rw-rw----
+
+                      If unset, the Kubelet will not modify the ownership and permissions of any volume.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    format: int64
+                    type: integer
+                  fsGroupChangePolicy:
+                    description: |-
+                      fsGroupChangePolicy defines behavior of changing ownership and permission of the volume
+                      before being exposed inside Pod. This field will only apply to
+                      volume types which support fsGroup based ownership(and permissions).
+                      It will have no effect on ephemeral volume types such as: secret, configmaps
+                      and emptydir.
+                      Valid values are "OnRootMismatch" and "Always". If not specified, "Always" is used.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    type: string
+                  runAsGroup:
+                    description: |-
+                      The GID to run the entrypoint of the container process.
+                      Uses runtime default if unset.
+                      May also be set in SecurityContext.  If set in both SecurityContext and
+                      PodSecurityContext, the value specified in SecurityContext takes precedence
+                      for that container.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    format: int64
+                    type: integer
+                  runAsNonRoot:
+                    description: |-
+                      Indicates that the container must run as a non-root user.
+                      If true, the Kubelet will validate the image at runtime to ensure that it
+                      does not run as UID 0 (root) and fail to start the container if it does.
+                      If unset or false, no such validation will be performed.
+                      May also be set in SecurityContext.  If set in both SecurityContext and
+                      PodSecurityContext, the value specified in SecurityContext takes precedence.
+                    type: boolean
+                  runAsUser:
+                    description: |-
+                      The UID to run the entrypoint of the container process.
+                      Defaults to user specified in image metadata if unspecified.
+                      May also be set in SecurityContext.  If set in both SecurityContext and
+                      PodSecurityContext, the value specified in SecurityContext takes precedence
+                      for that container.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    format: int64
+                    type: integer
+                  seLinuxChangePolicy:
+                    description: |-
+                      seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.
+                      It has no effect on nodes that do not support SELinux or to volumes does not support SELinux.
+                      Valid values are "MountOption" and "Recursive".
+
+                      "Recursive" means relabeling of all files on all Pod volumes by the container runtime.
+                      This may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.
+
+                      "MountOption" mounts all eligible Pod volumes with `-o context` mount option.
+                      This requires all Pods that share the same volume to use the same SELinux label.
+                      It is not possible to share the same volume among privileged and unprivileged Pods.
+                      Eligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes
+                      whose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their
+                      CSIDriver instance. Other volumes are always re-labelled recursively.
+                      "MountOption" value is allowed only when SELinuxMount feature gate is enabled.
+
+                      If not specified and SELinuxMount feature gate is enabled, "MountOption" is used.
+                      If not specified and SELinuxMount feature gate is disabled, "MountOption" is used for ReadWriteOncePod volumes
+                      and "Recursive" for all other volumes.
+
+                      This field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.
+
+                      All Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    type: string
+                  seLinuxOptions:
+                    description: |-
+                      The SELinux context to be applied to all containers.
+                      If unspecified, the container runtime will allocate a random SELinux context for each
+                      container.  May also be set in SecurityContext.  If set in
+                      both SecurityContext and PodSecurityContext, the value specified in SecurityContext
+                      takes precedence for that container.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    properties:
+                      level:
+                        description: Level is SELinux level label that applies to
+                          the container.
+                        type: string
+                      role:
+                        description: Role is a SELinux role label that applies to
+                          the container.
+                        type: string
+                      type:
+                        description: Type is a SELinux type label that applies to
+                          the container.
+                        type: string
+                      user:
+                        description: User is a SELinux user label that applies to
+                          the container.
+                        type: string
+                    type: object
+                  seccompProfile:
+                    description: |-
+                      The seccomp options to use by the containers in this pod.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    properties:
+                      localhostProfile:
+                        description: |-
+                          localhostProfile indicates a profile defined in a file on the node should be used.
+                          The profile must be preconfigured on the node to work.
+                          Must be a descending path, relative to the kubelet's configured seccomp profile location.
+                          Must be set if type is "Localhost". Must NOT be set for any other type.
+                        type: string
+                      type:
+                        description: |-
+                          type indicates which kind of seccomp profile will be applied.
+                          Valid options are:
+
+                          Localhost - a profile defined in a file on the node should be used.
+                          RuntimeDefault - the container runtime default profile should be used.
+                          Unconfined - no profile should be applied.
+                        type: string
+                    required:
+                    - type
+                    type: object
+                  supplementalGroups:
+                    description: |-
+                      A list of groups applied to the first process run in each container, in
+                      addition to the container's primary GID and fsGroup (if specified).  If
+                      the SupplementalGroupsPolicy feature is enabled, the
+                      supplementalGroupsPolicy field determines whether these are in addition
+                      to or instead of any group memberships defined in the container image.
+                      If unspecified, no additional groups are added, though group memberships
+                      defined in the container image may still be used, depending on the
+                      supplementalGroupsPolicy field.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    items:
+                      format: int64
+                      type: integer
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  supplementalGroupsPolicy:
+                    description: |-
+                      Defines how supplemental groups of the first container processes are calculated.
+                      Valid values are "Merge" and "Strict". If not specified, "Merge" is used.
+                      (Alpha) Using the field requires the SupplementalGroupsPolicy feature gate to be enabled
+                      and the container runtime must implement support for this feature.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    type: string
+                  sysctls:
+                    description: |-
+                      Sysctls hold a list of namespaced sysctls used for the pod. Pods with unsupported
+                      sysctls (by the container runtime) might fail to launch.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    items:
+                      description: Sysctl defines a kernel parameter to be set
+                      properties:
+                        name:
+                          description: Name of a property to set
+                          type: string
+                        value:
+                          description: Value of a property to set
+                          type: string
+                      required:
+                      - name
+                      - value
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  windowsOptions:
+                    description: |-
+                      The Windows specific settings applied to all containers.
+                      If unspecified, the options within a container's SecurityContext will be used.
+                      If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.
+                      Note that this field cannot be set when spec.os.name is linux.
+                    properties:
+                      gmsaCredentialSpec:
+                        description: |-
+                          GMSACredentialSpec is where the GMSA admission webhook
+                          (https://github.com/kubernetes-sigs/windows-gmsa) inlines the contents of the
+                          GMSA credential spec named by the GMSACredentialSpecName field.
+                        type: string
+                      gmsaCredentialSpecName:
+                        description: GMSACredentialSpecName is the name of the GMSA
+                          credential spec to use.
+                        type: string
+                      hostProcess:
+                        description: |-
+                          HostProcess determines if a container should be run as a 'Host Process' container.
+                          All of a Pod's containers must have the same effective HostProcess value
+                          (it is not allowed to have a mix of HostProcess containers and non-HostProcess containers).
+                          In addition, if HostProcess is true then HostNetwork must also be set to true.
+                        type: boolean
+                      runAsUserName:
+                        description: |-
+                          The UserName in Windows to run the entrypoint of the container process.
+                          Defaults to the user specified in image metadata if unspecified.
+                          May also be set in PodSecurityContext. If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                        type: string
+                    type: object
+                type: object
               postgresGID:
                 default: 26
                 description: The GID of the `postgres` user inside the image, defaults
@@ -4375,7 +4999,10 @@ spec:
                 description: |-
                   Method to follow to upgrade the primary server during a rolling
                   update procedure, after all replicas have been successfully updated:
-                  it can be with a switchover (`switchover`) or in-place (`restart` - default)
+                  it can be with a switchover (`switchover`) or in-place (`restart` - default).
+                  Note: when using `switchover`, the operator will reject updates that change both
+                  the image name and PostgreSQL configuration parameters simultaneously to avoid
+                  configuration mismatches during the switchover process.
                 enum:
                 - switchover
                 - restart
@@ -5247,6 +5874,199 @@ spec:
                 required:
                 - type
                 type: object
+              securityContext:
+                description: |-
+                  Override the SecurityContext applied to every Container in the Pod of the cluster.
+                  When set, this overrides the operator's default Container SecurityContext.
+                  If omitted, the operator defaults are used.
+                properties:
+                  allowPrivilegeEscalation:
+                    description: |-
+                      AllowPrivilegeEscalation controls whether a process can gain more
+                      privileges than its parent process. This bool directly controls if
+                      the no_new_privs flag will be set on the container process.
+                      AllowPrivilegeEscalation is true always when the container is:
+                      1) run as Privileged
+                      2) has CAP_SYS_ADMIN
+                      Note that this field cannot be set when spec.os.name is windows.
+                    type: boolean
+                  appArmorProfile:
+                    description: |-
+                      appArmorProfile is the AppArmor options to use by this container. If set, this profile
+                      overrides the pod's appArmorProfile.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    properties:
+                      localhostProfile:
+                        description: |-
+                          localhostProfile indicates a profile loaded on the node that should be used.
+                          The profile must be preconfigured on the node to work.
+                          Must match the loaded name of the profile.
+                          Must be set if and only if type is "Localhost".
+                        type: string
+                      type:
+                        description: |-
+                          type indicates which kind of AppArmor profile will be applied.
+                          Valid options are:
+                            Localhost - a profile pre-loaded on the node.
+                            RuntimeDefault - the container runtime's default profile.
+                            Unconfined - no AppArmor enforcement.
+                        type: string
+                    required:
+                    - type
+                    type: object
+                  capabilities:
+                    description: |-
+                      The capabilities to add/drop when running containers.
+                      Defaults to the default set of capabilities granted by the container runtime.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    properties:
+                      add:
+                        description: Added capabilities
+                        items:
+                          description: Capability represent POSIX capabilities type
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      drop:
+                        description: Removed capabilities
+                        items:
+                          description: Capability represent POSIX capabilities type
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: atomic
+                    type: object
+                  privileged:
+                    description: |-
+                      Run container in privileged mode.
+                      Processes in privileged containers are essentially equivalent to root on the host.
+                      Defaults to false.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    type: boolean
+                  procMount:
+                    description: |-
+                      procMount denotes the type of proc mount to use for the containers.
+                      The default value is Default which uses the container runtime defaults for
+                      readonly paths and masked paths.
+                      This requires the ProcMountType feature flag to be enabled.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    type: string
+                  readOnlyRootFilesystem:
+                    description: |-
+                      Whether this container has a read-only root filesystem.
+                      Default is false.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    type: boolean
+                  runAsGroup:
+                    description: |-
+                      The GID to run the entrypoint of the container process.
+                      Uses runtime default if unset.
+                      May also be set in PodSecurityContext.  If set in both SecurityContext and
+                      PodSecurityContext, the value specified in SecurityContext takes precedence.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    format: int64
+                    type: integer
+                  runAsNonRoot:
+                    description: |-
+                      Indicates that the container must run as a non-root user.
+                      If true, the Kubelet will validate the image at runtime to ensure that it
+                      does not run as UID 0 (root) and fail to start the container if it does.
+                      If unset or false, no such validation will be performed.
+                      May also be set in PodSecurityContext.  If set in both SecurityContext and
+                      PodSecurityContext, the value specified in SecurityContext takes precedence.
+                    type: boolean
+                  runAsUser:
+                    description: |-
+                      The UID to run the entrypoint of the container process.
+                      Defaults to user specified in image metadata if unspecified.
+                      May also be set in PodSecurityContext.  If set in both SecurityContext and
+                      PodSecurityContext, the value specified in SecurityContext takes precedence.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    format: int64
+                    type: integer
+                  seLinuxOptions:
+                    description: |-
+                      The SELinux context to be applied to the container.
+                      If unspecified, the container runtime will allocate a random SELinux context for each
+                      container.  May also be set in PodSecurityContext.  If set in both SecurityContext and
+                      PodSecurityContext, the value specified in SecurityContext takes precedence.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    properties:
+                      level:
+                        description: Level is SELinux level label that applies to
+                          the container.
+                        type: string
+                      role:
+                        description: Role is a SELinux role label that applies to
+                          the container.
+                        type: string
+                      type:
+                        description: Type is a SELinux type label that applies to
+                          the container.
+                        type: string
+                      user:
+                        description: User is a SELinux user label that applies to
+                          the container.
+                        type: string
+                    type: object
+                  seccompProfile:
+                    description: |-
+                      The seccomp options to use by this container. If seccomp options are
+                      provided at both the pod & container level, the container options
+                      override the pod options.
+                      Note that this field cannot be set when spec.os.name is windows.
+                    properties:
+                      localhostProfile:
+                        description: |-
+                          localhostProfile indicates a profile defined in a file on the node should be used.
+                          The profile must be preconfigured on the node to work.
+                          Must be a descending path, relative to the kubelet's configured seccomp profile location.
+                          Must be set if type is "Localhost". Must NOT be set for any other type.
+                        type: string
+                      type:
+                        description: |-
+                          type indicates which kind of seccomp profile will be applied.
+                          Valid options are:
+
+                          Localhost - a profile defined in a file on the node should be used.
+                          RuntimeDefault - the container runtime default profile should be used.
+                          Unconfined - no profile should be applied.
+                        type: string
+                    required:
+                    - type
+                    type: object
+                  windowsOptions:
+                    description: |-
+                      The Windows specific settings applied to all containers.
+                      If unspecified, the options from the PodSecurityContext will be used.
+                      If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.
+                      Note that this field cannot be set when spec.os.name is linux.
+                    properties:
+                      gmsaCredentialSpec:
+                        description: |-
+                          GMSACredentialSpec is where the GMSA admission webhook
+                          (https://github.com/kubernetes-sigs/windows-gmsa) inlines the contents of the
+                          GMSA credential spec named by the GMSACredentialSpecName field.
+                        type: string
+                      gmsaCredentialSpecName:
+                        description: GMSACredentialSpecName is the name of the GMSA
+                          credential spec to use.
+                        type: string
+                      hostProcess:
+                        description: |-
+                          HostProcess determines if a container should be run as a 'Host Process' container.
+                          All of a Pod's containers must have the same effective HostProcess value
+                          (it is not allowed to have a mix of HostProcess containers and non-HostProcess containers).
+                          In addition, if HostProcess is true then HostNetwork must also be set to true.
+                        type: boolean
+                      runAsUserName:
+                        description: |-
+                          The UserName in Windows to run the entrypoint of the container process.
+                          Defaults to the user specified in image metadata if unspecified.
+                          May also be set in PodSecurityContext. If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                        type: string
+                    type: object
+                type: object
               serviceAccountTemplate:
                 description: Configure the generation of the service account
                 properties:
@@ -5308,6 +6128,13 @@ spec:
               storage:
                 description: Configuration of the storage of the instances
                 properties:
+                  mountPropagation:
+                    description: |-
+                      MountPropagation allows configuring the mount propagation mode for the volume.
+                      When set to "HostToContainer", mounts made on the host after the container
+                      starts will be visible inside the container (e.g. for NVMe-oF external mounts).
+                      If not set, Kubernetes defaults to "None".
+                    type: string
                   pvcTemplate:
                     description: Template to be used to generate the Persistent Volume
                       Claim
@@ -5560,6 +6387,13 @@ spec:
                     storage:
                       description: The storage configuration for the tablespace
                       properties:
+                        mountPropagation:
+                          description: |-
+                            MountPropagation allows configuring the mount propagation mode for the volume.
+                            When set to "HostToContainer", mounts made on the host after the container
+                            starts will be visible inside the container (e.g. for NVMe-oF external mounts).
+                            If not set, Kubernetes defaults to "None".
+                          type: string
                         pvcTemplate:
                           description: Template to be used to generate the Persistent
                             Volume Claim
@@ -5972,6 +6806,13 @@ spec:
                 description: Configuration of the storage for PostgreSQL WAL (Write-Ahead
                   Log)
                 properties:
+                  mountPropagation:
+                    description: |-
+                      MountPropagation allows configuring the mount propagation mode for the volume.
+                      When set to "HostToContainer", mounts made on the host after the container
+                      starts will be visible inside the container (e.g. for NVMe-oF external mounts).
+                      If not set, Kubernetes defaults to "None".
+                    type: string
                   pvcTemplate:
                     description: Template to be used to generate the Persistent Volume
                       Claim
@@ -6455,6 +7296,12 @@ spec:
                 description: |-
                   LastPromotionToken is the last verified promotion token that
                   was used to promote a replica cluster
+                type: string
+              lastRecoverabilityPoint:
+                description: |-
+                  The latest point in time that can be recovered to, stored as a date
+                  in RFC3339 format. Based on the last successfully archived WAL,
+                  from pg_stat_archiver.last_archived_time on the primary instance.
                 type: string
               lastSuccessfulBackup:
                 description: |-

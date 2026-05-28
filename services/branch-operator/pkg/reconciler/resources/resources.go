@@ -1,6 +1,8 @@
 package resources
 
 import (
+	"xata/services/branch-operator/api/v1alpha1"
+
 	barmanApi "github.com/cloudnative-pg/barman-cloud/pkg/api"
 	barmanPluginApi "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
@@ -209,20 +211,29 @@ func ObjectStoreSpec(
 }
 
 // ScheduledBackupSpec defines the ScheduledBackupSpec for a branch's scheduled backups.
-// It configures automated backups using the barman-cloud plugin.
-func ScheduledBackupSpec(clusterName, schedule string, suspend bool) apiv1.ScheduledBackupSpec {
-	return apiv1.ScheduledBackupSpec{
+// The method parameter determines the backup method: barman uses the barman-cloud
+// plugin, pgbackrest uses in-core pgbackrest with full backups.
+func ScheduledBackupSpec(clusterName, schedule string, suspend bool, method v1alpha1.BackupMethod) apiv1.ScheduledBackupSpec {
+	spec := apiv1.ScheduledBackupSpec{
 		Cluster: apiv1.LocalObjectReference{
 			Name: clusterName,
 		},
-		Method:    apiv1.BackupMethodPlugin,
 		Schedule:  schedule,
 		Immediate: new(true),
 		Suspend:   new(suspend),
-		PluginConfiguration: &apiv1.BackupPluginConfiguration{
-			Name: "barman-cloud.cloudnative-pg.io",
-		},
 	}
+
+	if method == v1alpha1.BackupMethodPgBackRest {
+		spec.Method = apiv1.BackupMethodPgBackRest
+		spec.PgBackRestBackupType = apiv1.PgBackRestBackupTypeFull
+	} else {
+		spec.Method = apiv1.BackupMethodPlugin
+		spec.PluginConfiguration = &apiv1.BackupPluginConfiguration{
+			Name: "barman-cloud.cloudnative-pg.io",
+		}
+	}
+
+	return spec
 }
 
 // Secret builds a BasicAuth Secret with the given name, username, and password.
