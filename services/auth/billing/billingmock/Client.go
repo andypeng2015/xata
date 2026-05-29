@@ -109,6 +109,100 @@ func (_c *Client_CreateCustomer_Call) Return(_a0 error) *Client_CreateCustomer_C
 	return _c
 }
 
+// CreateStripeCheckoutSession provides a mock function with given fields: ctx, externalCustomerID
+func (_m *Client) CreateStripeCheckoutSession(ctx context.Context, externalCustomerID string) (*billing.CheckoutSession, error) {
+	ret := _m.Called(ctx, externalCustomerID)
+
+	var r0 *billing.CheckoutSession
+	if rf, ok := ret.Get(0).(func(context.Context, string) *billing.CheckoutSession); ok {
+		r0 = rf(ctx, externalCustomerID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*billing.CheckoutSession)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, externalCustomerID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Client_CreateStripeCheckoutSession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateStripeCheckoutSession'
+type Client_CreateStripeCheckoutSession_Call struct {
+	*mock.Call
+}
+
+// CreateStripeCheckoutSession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - externalCustomerID string
+func (_e *Client_Expecter) CreateStripeCheckoutSession(ctx interface{}, externalCustomerID interface{}) *Client_CreateStripeCheckoutSession_Call {
+	return &Client_CreateStripeCheckoutSession_Call{Call: _e.mock.On("CreateStripeCheckoutSession", ctx, externalCustomerID)}
+}
+
+func (_c *Client_CreateStripeCheckoutSession_Call) Run(run func(ctx context.Context, externalCustomerID string)) *Client_CreateStripeCheckoutSession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *Client_CreateStripeCheckoutSession_Call) Return(_a0 *billing.CheckoutSession, _a1 error) *Client_CreateStripeCheckoutSession_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+// CreateStripePaymentMethodSession provides a mock function with given fields: ctx, externalCustomerID
+func (_m *Client) CreateStripePaymentMethodSession(ctx context.Context, externalCustomerID string) (*billing.PaymentMethodSession, error) {
+	ret := _m.Called(ctx, externalCustomerID)
+
+	var r0 *billing.PaymentMethodSession
+	if rf, ok := ret.Get(0).(func(context.Context, string) *billing.PaymentMethodSession); ok {
+		r0 = rf(ctx, externalCustomerID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*billing.PaymentMethodSession)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, externalCustomerID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Client_CreateStripePaymentMethodSession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateStripePaymentMethodSession'
+type Client_CreateStripePaymentMethodSession_Call struct {
+	*mock.Call
+}
+
+// CreateStripePaymentMethodSession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - externalCustomerID string
+func (_e *Client_Expecter) CreateStripePaymentMethodSession(ctx interface{}, externalCustomerID interface{}) *Client_CreateStripePaymentMethodSession_Call {
+	return &Client_CreateStripePaymentMethodSession_Call{Call: _e.mock.On("CreateStripePaymentMethodSession", ctx, externalCustomerID)}
+}
+
+func (_c *Client_CreateStripePaymentMethodSession_Call) Run(run func(ctx context.Context, externalCustomerID string)) *Client_CreateStripePaymentMethodSession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *Client_CreateStripePaymentMethodSession_Call) Return(_a0 *billing.PaymentMethodSession, _a1 error) *Client_CreateStripePaymentMethodSession_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
 // CustomerExists provides a mock function with given fields: ctx, externalCustomerID
 func (_m *Client) CustomerExists(ctx context.Context, externalCustomerID string) (bool, error) {
 	ret := _m.Called(ctx, externalCustomerID)

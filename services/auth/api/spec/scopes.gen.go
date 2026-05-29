@@ -96,6 +96,10 @@ func GetScopes(method, path string) []string {
 			return []string{"org:write"}
 		case "/organizations/:organizationID/api-keys":
 			return []string{"keys:write"}
+		case "/organizations/:organizationID/billing/checkout-session":
+			return []string{"org:write"}
+		case "/organizations/:organizationID/billing/payment-method-session":
+			return []string{"org:write"}
 		case "/organizations/:organizationID/deletion-request":
 			return []string{"org:write"}
 		case "/organizations/:organizationID/githubapp/installations":

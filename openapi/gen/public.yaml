@@ -25,6 +25,9 @@ tags:
   - name: Marketplace
     description: Operations for linking user accounts to cloud marketplace subscriptions
     x-displayName: Marketplace
+  - name: Billing
+    description: Internal organization billing operations
+    x-displayName: Billing
   - name: Gateway
     description: PostgreSQL connectivity via HTTP SQL, WebSocket wire protocol proxy, and native wire protocol.
     x-displayName: Gateway
@@ -606,6 +609,62 @@ paths:
             - org:read
       tags:
         - Organizations
+  /organizations/{organizationID}/billing/checkout-session:
+    post:
+      operationId: createBillingCheckoutSession
+      summary: Create a billing checkout session
+      description: Creates a Stripe checkout session used to activate card billing for an organization.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIDParam'
+      responses:
+        '200':
+          description: Billing checkout session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingCheckoutSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        5XX:
+          description: Unexpected Error
+      security:
+        - xata:
+            - org:write
+      tags:
+        - Billing
+      x-excluded: true
+  /organizations/{organizationID}/billing/payment-method-session:
+    post:
+      operationId: createBillingPaymentMethodSession
+      summary: Create a billing payment method session
+      description: Creates a Stripe setup-mode checkout session used to add or update an organization payment method.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIDParam'
+      responses:
+        '200':
+          description: Billing payment method session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingPaymentMethodSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        5XX:
+          description: Unexpected Error
+      security:
+        - xata:
+            - org:write
+      tags:
+        - Billing
+      x-excluded: true
   /marketplace/register:
     post:
       operationId: registerMarketplace
@@ -2721,6 +2780,24 @@ components:
         - created_at
         - expires_at
         - status
+    BillingCheckoutSessionResponse:
+      type: object
+      properties:
+        url:
+          description: Stripe checkout session URL
+          type: string
+          format: uri
+      required:
+        - url
+    BillingPaymentMethodSessionResponse:
+      type: object
+      properties:
+        url:
+          description: Stripe payment method session URL
+          type: string
+          format: uri
+      required:
+        - url
     MarketplaceRegisterRequest:
       description: Request to register with a cloud marketplace
       type: object
@@ -4325,6 +4402,7 @@ x-tagGroups:
       - Users
       - API Keys
       - Marketplace
+      - Billing
       - Webhooks
   - name: Gateway API
     tags:

@@ -77,6 +77,18 @@ type APIKeyPreview struct {
 	Scopes   []string `json:"scopes"`
 }
 
+// BillingCheckoutSessionResponse defines model for BillingCheckoutSessionResponse.
+type BillingCheckoutSessionResponse struct {
+	// Url Stripe checkout session URL
+	Url string `json:"url"`
+}
+
+// BillingPaymentMethodSessionResponse defines model for BillingPaymentMethodSessionResponse.
+type BillingPaymentMethodSessionResponse struct {
+	// Url Stripe payment method session URL
+	Url string `json:"url"`
+}
+
 // CreateAPIKeyRequest defines model for CreateAPIKeyRequest.
 type CreateAPIKeyRequest struct {
 	// Branches Limit access to these branches

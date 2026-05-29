@@ -159,6 +159,18 @@ func (s *publicHandler) GetOrganizationsList(c echo.Context) error {
 	}{Organizations: []spec.Organization{s.defaultOrg}})
 }
 
+func (s *publicHandler) CreateBillingCheckoutSession(ctx echo.Context, organizationID spec.OrganizationIDParam) error {
+	return s.withOrganizationAccess(ctx, organizationID, func() error {
+		return echo.ErrNotImplemented
+	})
+}
+
+func (s *publicHandler) CreateBillingPaymentMethodSession(ctx echo.Context, organizationID spec.OrganizationIDParam) error {
+	return s.withOrganizationAccess(ctx, organizationID, func() error {
+		return echo.ErrNotImplemented
+	})
+}
+
 // Create a new organization
 // (POST /organizations)
 func (s *publicHandler) CreateOrganization(ctx echo.Context) error {

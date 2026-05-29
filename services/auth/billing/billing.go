@@ -86,6 +86,14 @@ type StripeCustomer struct {
 	OrganizationID string
 }
 
+type CheckoutSession struct {
+	URL string
+}
+
+type PaymentMethodSession struct {
+	URL string
+}
+
 type Client interface {
 	// CreateCustomer creates a new customer in the billing system
 	CreateCustomer(ctx context.Context, name, email, externalCustomerID string, organizationsCount int, metadata OrbCustomerMetadata) error
@@ -120,6 +128,8 @@ type Client interface {
 	FinalizeSubscription(ctx context.Context, externalCustomerID string) error
 	// DeletePaymentMethod detaches the customer's default Stripe payment method, if any.
 	DeletePaymentMethod(ctx context.Context, externalCustomerID string) error
+	CreateStripeCheckoutSession(ctx context.Context, externalCustomerID string) (*CheckoutSession, error)
+	CreateStripePaymentMethodSession(ctx context.Context, externalCustomerID string) (*PaymentMethodSession, error)
 }
 
 type NoopBilling struct{}
@@ -186,4 +196,12 @@ func (n *NoopBilling) FinalizeSubscription(_ context.Context, _ string) error {
 
 func (n *NoopBilling) DeletePaymentMethod(_ context.Context, _ string) error {
 	return nil
+}
+
+func (n *NoopBilling) CreateStripeCheckoutSession(_ context.Context, _ string) (*CheckoutSession, error) {
+	return nil, nil
+}
+
+func (n *NoopBilling) CreateStripePaymentMethodSession(_ context.Context, _ string) (*PaymentMethodSession, error) {
+	return nil, nil
 }
