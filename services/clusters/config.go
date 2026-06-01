@@ -15,6 +15,8 @@ type Config struct {
 	DiskPoolNamespace           string            `env:"XATA_DISKPOOL_NAMESPACE" env-default:"openebs" env-description:"namespace where DiskPool resources are created"`
 	EnablePooler                bool              `env:"XATA_ENABLE_POOLER" env-default:"true" env-description:"enable PgBouncer connection pooler for new branches"`
 	XatastorEnabled             bool              `env:"XATA_XATASTOR_ENABLED" env-default:"false" env-description:"whether the xatastor StorageClass is deployed in this cell"`
+	PgBackRestBucket            string            `env:"XATA_PGBACKREST_BUCKET" env-default:"" env-description:"S3 bucket for pgbackrest backups"`
+	PgBackRestRegion            string            `env:"XATA_BACKUPS_REGION" env-default:"" env-description:"S3 region for pgbackrest backups"`
 
 	// VictoriaMetricsURL points at the cell-local VictoriaMetrics single-node
 	// instance used to back GetBranchMetrics. Empty means no metrics backend

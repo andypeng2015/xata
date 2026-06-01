@@ -22,3 +22,11 @@ data:
   VICTORIALOGS_URL: {{ .Values.config.observability.victoriaLogsURL | quote }}
   {{- end }}
   XATA_XATASTOR_ENABLED: {{ .Values.config.clusters.xatastor.enabled | default false | quote }}
+  {{- if .Values.config.clusters.pgbackrest }}
+  {{- if .Values.config.clusters.pgbackrest.bucket }}
+  XATA_PGBACKREST_BUCKET: {{ .Values.config.clusters.pgbackrest.bucket | quote }}
+  {{- end }}
+  {{- if .Values.config.clusters.pgbackrest.region }}
+  XATA_BACKUPS_REGION: {{ .Values.config.clusters.pgbackrest.region | quote }}
+  {{- end }}
+  {{- end }}
