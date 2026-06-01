@@ -116,11 +116,11 @@ spec:
                 secretKeyRef:
                   name: stripe-secret
                   key: stripe-webhook-secret
-            - name: SLACK_BILLING_NOTIFICATIONS_WEBHOOK_URL
+            - name: SLACK_BOT_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: slack-secret
-                  key: billing-notifications-webhook-url
+                  key: bot-token
             - name: TACKLE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -138,6 +138,8 @@ spec:
                 name: keycloak-api-settings
             - configMapRef:
                 name: otel-config
+            - configMapRef:
+                name: slack-config
             - secretRef:
                 name: auth-keycloak-initial-admin
             - secretRef:

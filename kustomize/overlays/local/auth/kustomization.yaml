@@ -24,4 +24,5 @@ resources:
   - posthog-secret.yaml
   - stripe-secret.yaml
   - slack-secret.yaml
+  - slack-config.yaml
   - tackle-secret.yaml
