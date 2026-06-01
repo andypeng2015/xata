@@ -91,20 +91,3 @@ func (r *BranchReconciler) recordXVolStatus(ctx context.Context, branch *v1alpha
 	branch.Status.PrimaryXVolName = xVolName
 	return r.setXVolInfoConditionToTrue(ctx, branch, v1alpha1.XVolInfoCollectedReason)
 }
-
-// xVolNameForPV determines the name of the XVol corresponding to the given PV
-func (r *BranchReconciler) xVolNameForPV(ctx context.Context, pvName string) (string, error) {
-	pv := &v1.PersistentVolume{}
-	err := r.Get(ctx, client.ObjectKey{Name: pvName}, pv)
-	if err != nil {
-		return "", err
-	}
-
-	// Determine the name of the XVol corresponding to the PV. This defaults to
-	// the PV name but can be overridden by an annotation on the PV
-	xVolName := pvName
-	if n, ok := pv.Annotations[v1alpha1.AwokenByXVolAnnotation]; ok {
-		xVolName = n
-	}
-	return xVolName, nil
-}

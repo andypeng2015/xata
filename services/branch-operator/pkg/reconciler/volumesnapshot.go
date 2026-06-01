@@ -165,24 +165,6 @@ func (r *BranchReconciler) ensureNoVolumeSnapshotExists(
 	return controllerutil.OperationResultUpdated, nil
 }
 
-// getClusterPVC returns the PVC name for a CNPG cluster, preferring the
-// current primary's PVC, falling back to dangling PVCs if available.
-func getClusterPVC(cluster *apiv1.Cluster) (string, error) {
-	if cluster.Status.CurrentPrimary != "" {
-		return cluster.Status.CurrentPrimary, nil
-	}
-
-	// If there's no current primary set, check the dangling PVCs for the cluster
-	// and pick one
-	if len(cluster.Status.DanglingPVC) > 0 {
-		return cluster.Status.DanglingPVC[0], nil
-	}
-
-	// If there's no current primary and no dangling PVCs the cluster can't be
-	// used for snapshots
-	return "", fmt.Errorf("no PVC found for cluster %s", cluster.Name)
-}
-
 // getClusterForBranch retrieves the CNPG cluster for the given Branch ID or
 // nil if the Branch has no Cluster
 func (r *BranchReconciler) getClusterForBranch(ctx context.Context, branchID string) (*apiv1.Cluster, error) {

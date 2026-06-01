@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var xvolGVK = schema.GroupVersionKind{
@@ -25,7 +26,7 @@ var xvolGVK = schema.GroupVersionKind{
 func TestXVolReconciliation(t *testing.T) {
 	t.Parallel()
 
-	t.Run("XVol is set to Retain and Branch is set as owner when cluster name is unset", func(t *testing.T) {
+	t.Run("only the primary XVol is set to Retain and owned by the Branch", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
@@ -40,9 +41,9 @@ func TestXVolReconciliation(t *testing.T) {
 				return getK8SObject(ctx, clusterName, &cluster)
 			})
 
-			// Model a Cluster with 2 replicas.
-			// Replicas 1 uses a PV that is annotated with the XVol name, modelling the xatastor-slot case.
-			// Replicas 2 uses a PV that where PV name == XVol name, modelling the non-slot case.
+			// Model a Cluster with a primary and a replica.
+			// The primary uses a PV that is annotated with the XVol name, modelling the xatastor-slot case.
+			// The replica uses a PV where PV name == XVol name, modelling the non-slot case.
 			primaryPVCName := clusterName + "-1"
 			primaryXVolName := clusterName + "-primary-xvol"
 			primaryPVName := clusterName + "-primary-pv"
@@ -52,9 +53,11 @@ func TestXVolReconciliation(t *testing.T) {
 			replicaXVolName := clusterName + "-replica-xvol"
 			replicaXVol := createBoundPVCAndXVol(ctx, t, replicaPVCName, replicaXVolName, "")
 
-			// Set the Cluster's status.HealthyPVC to reference both PVCs
+			// Set the Cluster's status to identify the primary PVC and list both
+			// PVCs as healthy
 			setClusterStatus(ctx, t, &cluster, apiv1.ClusterStatus{
-				HealthyPVC: []string{primaryPVCName, replicaPVCName},
+				CurrentPrimary: primaryPVCName,
+				HealthyPVC:     []string{primaryPVCName, replicaPVCName},
 			})
 
 			// Unset the cluster name on the Branch
@@ -63,27 +66,97 @@ func TestXVolReconciliation(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			// Expect both XVols to be patched to Retain and to have the Branch
-			// as an owner
-			for _, tc := range []struct {
-				name string
-				xvol *unstructured.Unstructured
-			}{
-				{primaryXVolName, primaryXVol},
-				{replicaXVolName, replicaXVol},
-			} {
-				requireEventuallyTrue(t, func() bool {
-					err := k8sClient.Get(ctx, client.ObjectKey{Name: tc.name}, tc.xvol)
-					if err != nil {
-						return false
-					}
-					dp, _, _ := unstructured.NestedString(tc.xvol.Object, "spec", "xvolReclaimPolicy")
-					return dp == "Retain"
-				})
+			// Expect the primary XVol to be patched to Retain and owned by the Branch
+			requireEventuallyTrue(t, func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: primaryXVolName}, primaryXVol)
+				if err != nil {
+					return false
+				}
+				dp, _, _ := unstructured.NestedString(primaryXVol.Object, "spec", "xvolReclaimPolicy")
+				return dp == "Retain"
+			})
+			require.Len(t, primaryXVol.GetOwnerReferences(), 1)
+			require.Equal(t, br.Name, primaryXVol.GetOwnerReferences()[0].Name)
 
-				require.Len(t, tc.xvol.GetOwnerReferences(), 1)
-				require.Equal(t, br.Name, tc.xvol.GetOwnerReferences()[0].Name)
-			}
+			// Get the replica XVol
+			err = k8sClient.Get(ctx, client.ObjectKey{Name: replicaXVolName}, replicaXVol)
+			require.NoError(t, err)
+
+			// Expect the replica XVol to be unpatched
+			dp, _, _ := unstructured.NestedString(replicaXVol.Object, "spec", "xvolReclaimPolicy")
+			require.Equal(t, "Delete", dp)
+			require.Empty(t, replicaXVol.GetOwnerReferences())
+		})
+	})
+
+	t.Run("a previously-retained replica XVol is un-retained", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branch := NewBranchBuilder().Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			clusterName := br.Name
+
+			// Wait for the reconciler to create the CNPG Cluster
+			cluster := apiv1.Cluster{}
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, clusterName, &cluster)
+			})
+
+			// Model a Cluster with a primary and a replica.
+			primaryPVCName := clusterName + "-1"
+			primaryXVolName := clusterName + "-primary-xvol"
+			primaryXVol := createBoundPVCAndXVol(ctx, t, primaryPVCName, primaryXVolName, "")
+
+			replicaPVCName := clusterName + "-2"
+			replicaXVolName := clusterName + "-replica-xvol"
+			replicaXVol := createBoundPVCAndXVol(ctx, t, replicaPVCName, replicaXVolName, "")
+
+			// Simulate the replica XVol having been retained and owned by the
+			// Branch from a previous reconciliation
+			err := unstructured.SetNestedField(replicaXVol.Object, "Retain", "spec", "xvolReclaimPolicy")
+			require.NoError(t, err)
+			err = controllerutil.SetOwnerReference(br, replicaXVol, k8sClient.Scheme())
+			require.NoError(t, err)
+			err = k8sClient.Update(ctx, replicaXVol)
+			require.NoError(t, err)
+
+			// Set the Cluster's status to identify the primary PVC and list
+			// both PVCs as healthy.
+			setClusterStatus(ctx, t, &cluster, apiv1.ClusterStatus{
+				CurrentPrimary: primaryPVCName,
+				HealthyPVC:     []string{primaryPVCName, replicaPVCName},
+			})
+
+			// Unset the cluster name on the Branch
+			err = retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Name = nil
+			})
+			require.NoError(t, err)
+
+			// Expect the primary XVol to be patched to Retain and owned by the Branch
+			requireEventuallyTrue(t, func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: primaryXVolName}, primaryXVol)
+				if err != nil {
+					return false
+				}
+				dp, _, _ := unstructured.NestedString(primaryXVol.Object, "spec", "xvolReclaimPolicy")
+				return dp == "Retain"
+			})
+			require.Len(t, primaryXVol.GetOwnerReferences(), 1)
+			require.Equal(t, br.Name, primaryXVol.GetOwnerReferences()[0].Name)
+
+			// Expect the replica XVol to be flipped back to Delete with the
+			// Branch owner reference removed.
+			requireEventuallyTrue(t, func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: replicaXVolName}, replicaXVol)
+				if err != nil {
+					return false
+				}
+				dp, _, _ := unstructured.NestedString(replicaXVol.Object, "spec", "xvolReclaimPolicy")
+				return dp == "Delete" && len(replicaXVol.GetOwnerReferences()) == 0
+			})
 		})
 	})
 
