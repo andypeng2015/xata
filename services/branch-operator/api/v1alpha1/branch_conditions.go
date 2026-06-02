@@ -2,8 +2,7 @@ package v1alpha1
 
 // Condition types for Branch `status.conditions` fields
 const (
-	BranchReadyConditionType       = "Ready"
-	XVolInfoAvailableConditionType = "XVolInfoAvailable"
+	BranchReadyConditionType = "Ready"
 )
 
 // Reason strings for Branch conditions
@@ -19,19 +18,10 @@ const (
 	ParentClusterUnhealthyReason   = "ParentClusterUnhealthy"
 	ParentClusterPVCNotFoundReason = "ParentClusterPVCNotFound"
 	ReconciliationFailedReason     = "ReconciliationFailed"
+	XVolNotFoundReason             = "XVolNotFound"
 
 	// Reason strings for the `Ready` Unknown condition
 	ReconciliationPausedReason = "ReconciliationPaused"
-
-	// Reason strings for the `XVolInfoAvailable` True condition
-	XVolInfoCollectedReason = "XVolInfoCollected"
-
-	// Reason strings for the `XVolInfoAvailable` False condition
-	XVolNotFoundReason           = "XVolNotFound"
-	XVolCRDNotInstalledReason    = "XVolCRDNotInstalled"
-	BranchHasNoClusterReason     = "BranchHasNoCluster"
-	ClusterPVCNotAvailableReason = "ClusterPVCNotAvailable"
-	PVNotBoundReason             = "PVNotBound"
 
 	// Shared reason strings for multiple conditions
 	AwaitingReconciliationReason = "AwaitingReconciliation"
@@ -50,12 +40,5 @@ var BranchConditionMessages = map[string]string{
 	AwaitingReconciliationReason:   "The branch is awaiting reconciliation",
 	ReconciliationPausedReason:     "Reconciliation has been paused",
 	ReconciliationFailedReason:     "An error occurred during reconciliation",
-
-	// Messages for the XVolInfoAvailable condition
-	XVolInfoCollectedReason:      "XVol information has been collected",
-	XVolNotFoundReason:           "No XVol found for the primary volume",
-	XVolCRDNotInstalledReason:    "The XVol CRD is not installed",
-	BranchHasNoClusterReason:     "The branch has no associated cluster",
-	ClusterPVCNotAvailableReason: "The cluster has no primary PVC available",
-	PVNotBoundReason:             "The PVC is not bound to a PV",
+	XVolNotFoundReason:             "No XVol found for the primary volume",
 }

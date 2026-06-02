@@ -5,21 +5,24 @@ import (
 	"fmt"
 
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
-	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"xata/services/branch-operator/api/v1alpha1"
 )
 
-// updateXVolStatus resolves the XVol associated with the Branch and reports
-// its availability via the XVolInfoAvailable condition
+// updateXVolStatus updates the Branch status with information about the
+// primary XVol for the Branch. It does nothing for non-pool branches because
+// primary XVols are only relevant for pool branches.
 func (r *BranchReconciler) updateXVolStatus(ctx context.Context, branch *v1alpha1.Branch) error {
-	// The XVol info is unavailable if the Branch has no associated Cluster
+	// If the Branch is not a pool branch, XVol info is not relevant
+	if !branch.HasWakeupPoolAnnotation() {
+		return nil
+	}
+
+	// If the Branch has no cluster (ie it's pool hibernated), there is no XVol
+	// info to report
 	if !branch.HasClusterName() {
-		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.BranchHasNoClusterReason)
+		return nil
 	}
 
 	// Get the Cluster associated with the Branch
@@ -29,65 +32,31 @@ func (r *BranchReconciler) updateXVolStatus(ctx context.Context, branch *v1alpha
 		Namespace: r.ClustersNamespace,
 	}, cluster)
 	if err != nil {
-		return fmt.Errorf("get cluster: %w", err)
+		return err
 	}
 
 	// Get the primary PVC name for the Cluster
 	pvcName, err := getClusterPVC(cluster)
 	if err != nil {
-		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.ClusterPVCNotAvailableReason)
+		return fmt.Errorf("update XVol status: %w", err)
 	}
 
-	// Get the PVC for the Cluster's current primary instance
-	pvc := &v1.PersistentVolumeClaim{}
-	err = r.Get(ctx, client.ObjectKey{
-		Name:      pvcName,
-		Namespace: r.ClustersNamespace,
-	}, pvc)
+	// Look up the XVol for the PV
+	xVol, err := r.getXVolForPVC(ctx, pvcName)
 	if err != nil {
-		return fmt.Errorf("get pvc %q: %w", pvcName, err)
+		return &ConditionError{
+			ConditionType:   v1alpha1.BranchReadyConditionType,
+			ConditionReason: v1alpha1.XVolNotFoundReason,
+			Err:             fmt.Errorf("find XVol for PVC %s: %w", pvcName, err),
+		}
 	}
 
-	// If the PVC does not have a bound PV there is nothing to look up
-	pvName := pvc.Spec.VolumeName
-	if pvName == "" {
-		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.PVNotBoundReason)
-	}
-
-	// Look up the XVol name for the PV
-	xVolName, err := r.xVolNameForPV(ctx, pvName)
-	if err != nil {
-		return fmt.Errorf("get xvol name for pv %q: %w", pvName, err)
-	}
-
-	// Record the XVol name on the Branch's status subresource
-	return r.recordXVolStatus(ctx, branch, xVolName)
-}
-
-// recordXVolStatus looks up the XVol corresponding to a PV and sets the
-// XVolInfoAvailable condition based on the result. On success the name is
-// recorded in PrimaryXVolName.
-func (r *BranchReconciler) recordXVolStatus(ctx context.Context, branch *v1alpha1.Branch, xVolName string) error {
-	xvol := &unstructured.Unstructured{}
-	xvol.SetGroupVersionKind(xvolGVK)
-
-	// Try to get XVol. If the API is not found (ie the CRD is not installed) set
-	// the condition to False with an appropriate reason
-	err := r.Get(ctx, client.ObjectKey{Name: xVolName}, xvol)
-	if meta.IsNoMatchError(err) {
-		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.XVolCRDNotInstalledReason)
-	}
-
-	// If there is no XVol corresponding to the PV set the condition to False
-	// with an appropriate reason.
-	if apierrors.IsNotFound(err) {
-		return r.setXVolInfoConditionToFalse(ctx, branch, v1alpha1.XVolNotFoundReason)
-	}
+	// The XVol exists, record its name on the Branch's status
+	branch.Status.PrimaryXVolName = xVol.GetName()
+	err = r.Status().Update(ctx, branch)
 	if err != nil {
 		return err
 	}
 
-	// The XVol exists, record the name and set the condition to True
-	branch.Status.PrimaryXVolName = xVolName
-	return r.setXVolInfoConditionToTrue(ctx, branch, v1alpha1.XVolInfoCollectedReason)
+	return nil
 }

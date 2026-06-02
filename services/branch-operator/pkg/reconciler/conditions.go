@@ -42,16 +42,8 @@ func (r *BranchReconciler) ensureStatusConditions(ctx context.Context, br *v1alp
 		Reason:             v1alpha1.AwaitingReconciliationReason,
 		Message:            v1alpha1.BranchConditionMessages[v1alpha1.AwaitingReconciliationReason],
 	}
-	volumeCondition := metav1.Condition{
-		Type:               v1alpha1.XVolInfoAvailableConditionType,
-		Status:             metav1.ConditionUnknown,
-		ObservedGeneration: br.Generation,
-		Reason:             v1alpha1.AwaitingReconciliationReason,
-		Message:            v1alpha1.BranchConditionMessages[v1alpha1.AwaitingReconciliationReason],
-	}
 
 	meta.SetStatusCondition(&br.Status.Conditions, readyCondition)
-	meta.SetStatusCondition(&br.Status.Conditions, volumeCondition)
 
 	return r.Status().Update(ctx, br)
 }
@@ -104,16 +96,6 @@ func (r *BranchReconciler) setReadyConditionTrue(ctx context.Context, br *v1alph
 // reason
 func (r *BranchReconciler) setReadyConditionUnknown(ctx context.Context, br *v1alpha1.Branch, reason string) error {
 	return r.setStatusCondition(ctx, br, v1alpha1.BranchReadyConditionType, metav1.ConditionUnknown, reason)
-}
-
-// setXVolInfoConditionToFalse sets the Branch XVolInfoAvailable condition to False with the given reason
-func (r *BranchReconciler) setXVolInfoConditionToFalse(ctx context.Context, br *v1alpha1.Branch, reason string) error {
-	return r.setStatusCondition(ctx, br, v1alpha1.XVolInfoAvailableConditionType, metav1.ConditionFalse, reason)
-}
-
-// setXVolInfoConditionToTrue sets the Branch XVolInfoAvailable condition to True with the given reason
-func (r *BranchReconciler) setXVolInfoConditionToTrue(ctx context.Context, br *v1alpha1.Branch, reason string) error {
-	return r.setStatusCondition(ctx, br, v1alpha1.XVolInfoAvailableConditionType, metav1.ConditionTrue, reason)
 }
 
 // setLastErrorStatus sets the LastError field in the Branch status

@@ -24,14 +24,19 @@ var xvolGVK = schema.GroupVersionKind{
 }
 
 // getClusterPVC returns the PVC name for a CNPG cluster, preferring the
-// current primary's PVC, falling back to dangling PVCs if available.
+// current primary's PVC, falling back to the target primary and then dangling
+// PVCs if available.
 func getClusterPVC(cluster *apiv1.Cluster) (string, error) {
 	if cluster.Status.CurrentPrimary != "" {
 		return cluster.Status.CurrentPrimary, nil
 	}
 
-	// If there's no current primary set, check the dangling PVCs for the cluster
-	// and pick one
+	if cluster.Status.TargetPrimary != "" {
+		return cluster.Status.TargetPrimary, nil
+	}
+
+	// If there's no current primary or target primary set, check the dangling
+	// PVCs for the cluster and pick one
 	if len(cluster.Status.DanglingPVC) > 0 {
 		return cluster.Status.DanglingPVC[0], nil
 	}

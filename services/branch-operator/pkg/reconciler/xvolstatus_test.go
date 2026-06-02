@@ -16,7 +16,7 @@ import (
 func TestXVolStatus(t *testing.T) {
 	t.Parallel()
 
-	t.Run("XVol info is unavailable when branch has no cluster", func(t *testing.T) {
+	t.Run("primary XVol is not set when branch has no cluster", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
@@ -26,36 +26,58 @@ func TestXVolStatus(t *testing.T) {
 			Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
-			// Wait for the XVolInfoAvailable condition to be set
+			// Wait for the Branch to be reconciled
 			requireEventuallyTrue(t, func() bool {
 				err := getK8SObject(ctx, br.Name, br)
 				if err != nil {
 					return false
 				}
-				c := meta.FindStatusCondition(br.Status.Conditions, v1alpha1.XVolInfoAvailableConditionType)
+				c := meta.FindStatusCondition(br.Status.Conditions, v1alpha1.BranchReadyConditionType)
 				if c == nil {
 					return false
 				}
-				return c.Status != metav1.ConditionUnknown
+				return c.Status == metav1.ConditionTrue
 			})
-
-			// Expect XVolInfoAvailable to be False because the Branch has no
-			// Cluster associated with it
-			c := meta.FindStatusCondition(br.Status.Conditions, v1alpha1.XVolInfoAvailableConditionType)
-			require.NotNil(t, c)
-			require.Equal(t, metav1.ConditionFalse, c.Status)
-			require.Equal(t, v1alpha1.BranchHasNoClusterReason, c.Reason)
 
 			// Assert PrimaryXVolName is empty
 			require.Empty(t, br.Status.PrimaryXVolName)
 		})
 	})
 
-	t.Run("XVol info available when Cluster exists", func(t *testing.T) {
+	t.Run("primary XVol is not set for a non-pool branch", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
+		// Create a Branch without a wakeup pool annotation
 		branch := NewBranchBuilder().Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			// Wait for the Branch to be reconciled
+			requireEventuallyTrue(t, func() bool {
+				err := getK8SObject(ctx, br.Name, br)
+				if err != nil {
+					return false
+				}
+				c := meta.FindStatusCondition(br.Status.Conditions, v1alpha1.BranchReadyConditionType)
+				if c == nil {
+					return false
+				}
+				return c.Status == metav1.ConditionTrue
+			})
+
+			// Assert PrimaryXVolName is empty
+			require.Empty(t, br.Status.PrimaryXVolName)
+		})
+	})
+
+	t.Run("PrimaryXVolName is set when Cluster exists", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		// Build a branch with a wakeup pool annotation
+		branch := NewBranchBuilder().
+			WithWakeupPool("pg18-tiny").
+			Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
 			clusterName := br.Name
@@ -75,27 +97,28 @@ func TestXVolStatus(t *testing.T) {
 
 			// Trigger re-reconciliation by updating a spec field
 			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
-				b.Spec.ClusterSpec.Instances = 2
+				b.Spec.ClusterSpec.SmartShutdownTimeout = new(int32(60))
 			})
 			require.NoError(t, err)
 
-			// Assert PrimaryXVolName is set and XVolInfoAvailable is True
+			// Assert status.primaryXVolName is set
 			requireEventuallyTrue(t, func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(br), br)
 				if err != nil {
 					return false
 				}
-				return br.Status.PrimaryXVolName == xvolName &&
-					meta.IsStatusConditionTrue(br.Status.Conditions, v1alpha1.XVolInfoAvailableConditionType)
+				return br.Status.PrimaryXVolName == xvolName
 			})
 		})
 	})
 
-	t.Run("PrimaryXVolName is retained when cluster name is removed", func(t *testing.T) {
+	t.Run("primaryXVolName is retained when cluster name is removed", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
-		branch := NewBranchBuilder().Build()
+		branch := NewBranchBuilder().
+			WithWakeupPool("pg18-tiny").
+			Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
 			clusterName := br.Name
@@ -134,29 +157,27 @@ func TestXVolStatus(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			// Wait for the XVolInfoAvailable condition to flip to False
+			// Wait for the Branch to be reconciled again
 			requireEventuallyTrue(t, func() bool {
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(br), br)
-				if err != nil {
+				branch := v1alpha1.Branch{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: br.Name}, &branch); err != nil {
 					return false
 				}
-				return meta.IsStatusConditionFalse(br.Status.Conditions, v1alpha1.XVolInfoAvailableConditionType)
+				return branch.Status.ObservedGeneration == branch.Generation
 			})
 
 			// PrimaryXVolName is retained after the cluster name is removed
-			c := meta.FindStatusCondition(br.Status.Conditions, v1alpha1.XVolInfoAvailableConditionType)
-			require.NotNil(t, c)
-			require.Equal(t, metav1.ConditionFalse, c.Status)
-			require.Equal(t, v1alpha1.BranchHasNoClusterReason, c.Reason)
 			require.Equal(t, xvolName, br.Status.PrimaryXVolName)
 		})
 	})
 
-	t.Run("PrimaryXVolName re-reconciles when primary PVC changes", func(t *testing.T) {
+	t.Run("PrimaryXVolName is updated when primary PVC changes", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
-		branch := NewBranchBuilder().Build()
+		branch := NewBranchBuilder().
+			WithWakeupPool("pg18-tiny").
+			Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
 			clusterName := br.Name
@@ -172,12 +193,13 @@ func TestXVolStatus(t *testing.T) {
 				CurrentPrimary: pvcNameA,
 			})
 
-			// Trigger a reconcile by scaling the cluster to 2 instances
+			// Trigger a reconcile by updating a spec field
 			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
-				b.Spec.ClusterSpec.Instances = 2
+				b.Spec.ClusterSpec.SmartShutdownTimeout = new(int32(60))
 			})
 			require.NoError(t, err)
 
+			// Wait for PrimaryXVolName to be set to the XVol for PVC A
 			requireEventuallyTrue(t, func() bool {
 				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(br), br); err != nil {
 					return false
@@ -195,12 +217,14 @@ func TestXVolStatus(t *testing.T) {
 			setClusterStatus(ctx, t, &cluster, apiv1.ClusterStatus{
 				CurrentPrimary: pvcNameB,
 			})
+
+			// Trigger re-reconciliation by updating a spec field
 			err = retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
-				b.Spec.ClusterSpec.Instances = 3
+				b.Spec.ClusterSpec.Instances = 2
 			})
 			require.NoError(t, err)
 
-			// PrimaryXVolName re-reconciles to B.
+			// PrimaryXVolName re-reconciles to the XVol for PVC B
 			requireEventuallyTrue(t, func() bool {
 				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(br), br); err != nil {
 					return false
@@ -214,7 +238,9 @@ func TestXVolStatus(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
-		branch := NewBranchBuilder().Build()
+		branch := NewBranchBuilder().
+			WithWakeupPool("pg-18-tiny").
+			Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
 			clusterName := br.Name
@@ -236,8 +262,9 @@ func TestXVolStatus(t *testing.T) {
 				CurrentPrimary: pvcName,
 			})
 
+			// Trigger re-reconciliation by updating a spec field
 			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
-				b.Spec.ClusterSpec.Instances = 2
+				b.Spec.ClusterSpec.SmartShutdownTimeout = new(int32(60))
 			})
 			require.NoError(t, err)
 
@@ -246,8 +273,69 @@ func TestXVolStatus(t *testing.T) {
 				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(br), br); err != nil {
 					return false
 				}
-				return br.Status.PrimaryXVolName == xvolName &&
-					meta.IsStatusConditionTrue(br.Status.Conditions, v1alpha1.XVolInfoAvailableConditionType)
+				return br.Status.PrimaryXVolName == xvolName
+			})
+		})
+	})
+
+	t.Run("reconciliation fails when a pool branch has no XVol", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branch := NewBranchBuilder().
+			WithWakeupPool("pg18-tiny").
+			Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			clusterName := br.Name
+
+			// Wait for the reconciler to create the CNPG Cluster
+			cluster := apiv1.Cluster{}
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, clusterName, &cluster)
+			})
+
+			// Create the PVC/PV/XVol set and point the Cluster's primary at it
+			xvolName, pvcName, xvol := createPVCAndXVol(ctx, t, clusterName)
+			setClusterStatus(ctx, t, &cluster, apiv1.ClusterStatus{
+				CurrentPrimary: pvcName,
+			})
+
+			// Trigger reconciliation by updating a spec field
+			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.SmartShutdownTimeout = new(int32(60))
+			})
+			require.NoError(t, err)
+
+			// Wait for PrimaryXVolName to be set
+			requireEventuallyTrue(t, func() bool {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(br), br); err != nil {
+					return false
+				}
+				return br.Status.PrimaryXVolName == xvolName
+			})
+
+			// Delete the XVol, leaving the PVC bound to a PV with no XVol
+			err = k8sClient.Delete(ctx, xvol)
+			require.NoError(t, err)
+
+			// Trigger re-reconciliation by updating a spec field
+			err = retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.SmartShutdownTimeout = new(int32(120))
+			})
+			require.NoError(t, err)
+
+			// Assert that the Ready condition flips to False with the XVolNotFound
+			// reason
+			requireEventuallyTrue(t, func() bool {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(br), br); err != nil {
+					return false
+				}
+				c := meta.FindStatusCondition(br.Status.Conditions, v1alpha1.BranchReadyConditionType)
+				if c == nil {
+					return false
+				}
+				return c.Status == metav1.ConditionFalse && c.Reason == v1alpha1.XVolNotFoundReason
 			})
 		})
 	})

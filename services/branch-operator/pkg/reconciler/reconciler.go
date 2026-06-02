@@ -148,6 +148,12 @@ func (r *BranchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	// Update XVol status fields on the Branch
+	if err = r.updateXVolStatus(ctx, branch); err != nil {
+		log.Error(err, "updating XVol status")
+		return ctrl.Result{}, err
+	}
+
 	// Reconcile XVols owner references for the branch
 	_, err = r.reconcileXVolOwnership(ctx, branch)
 	if err != nil {
@@ -210,12 +216,6 @@ func (r *BranchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	_, err = r.reconcileClustersService(ctx, branch)
 	if err != nil {
 		log.Error(err, "reconciling clusters Service")
-		return ctrl.Result{}, err
-	}
-
-	// Update XVol status fields on the Branch
-	if err = r.updateXVolStatus(ctx, branch); err != nil {
-		log.Error(err, "updating XVol status")
 		return ctrl.Result{}, err
 	}
 
