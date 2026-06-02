@@ -32,6 +32,12 @@ func (r *BranchReconciler) reconcileXVolOwnership(
 		return controllerutil.OperationResultNone, nil
 	}
 
+	// If the Branch is not a pool branch, there is no need to manage XVol
+	// ownership
+	if !branch.HasWakeupPoolAnnotation() {
+		return controllerutil.OperationResultNone, nil
+	}
+
 	// List all Clusters owned by the Branch.
 	var clusterList apiv1.ClusterList
 	err := r.List(ctx, &clusterList,
@@ -92,9 +98,6 @@ func (r *BranchReconciler) ensureXVolRetained(ctx context.Context, branch *v1alp
 	if err != nil {
 		return false, err
 	}
-	if xvol == nil {
-		return false, nil
-	}
 
 	// Get the current reclaim policy and check if the Branch is already an
 	// owner of the XVol.
@@ -145,9 +148,6 @@ func (r *BranchReconciler) ensureXVolNotRetained(ctx context.Context, branch *v1
 	xvol, err := r.getXVolForPVC(ctx, pvcName)
 	if err != nil {
 		return false, err
-	}
-	if xvol == nil {
-		return false, nil
 	}
 
 	// Get the current reclaim policy and check if the Branch is an owner of

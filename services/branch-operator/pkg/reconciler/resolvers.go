@@ -8,7 +8,6 @@ import (
 
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,9 +56,7 @@ func (r *BranchReconciler) xVolNameForPV(ctx context.Context, pvName string) (st
 	return xVolName, nil
 }
 
-// getXVolForPVC looks up the XVol backing the given PVC. It returns (nil, nil)
-// if the PVC has no bound PV, if the PV has no XVol, or if the XVol CRD is not
-// installed - in all of these cases there is no XVol to act on.
+// getXVolForPVC looks up the XVol backing the given PVC.
 func (r *BranchReconciler) getXVolForPVC(ctx context.Context, pvcName string) (*unstructured.Unstructured, error) {
 	// Get the PVC
 	var pvc corev1.PersistentVolumeClaim
@@ -67,13 +64,13 @@ func (r *BranchReconciler) getXVolForPVC(ctx context.Context, pvcName string) (*
 		Name:      pvcName,
 		Namespace: r.ClustersNamespace,
 	}, &pvc); err != nil {
-		return nil, client.IgnoreNotFound(err)
+		return nil, err
 	}
 
-	// If the PVC does not have a bound PV there is nothing to do
+	// Get the PV to which the PVC is bound
 	pvName := pvc.Spec.VolumeName
 	if pvName == "" {
-		return nil, nil
+		return nil, fmt.Errorf("PVC %q is not bound to a PV", pvcName)
 	}
 
 	// Get the name of the XVol corresponding to the PV
@@ -88,15 +85,7 @@ func (r *BranchReconciler) getXVolForPVC(ctx context.Context, pvcName string) (*
 	xvol.SetGroupVersionKind(xvolGVK)
 	err = r.Get(ctx, client.ObjectKey{Name: xVolName}, xvol)
 	if err != nil {
-		// If the XVol CRD is not installed, treat it the same as if the XVol did
-		// not exist - there is nothing to protect.
-		if meta.IsNoMatchError(err) {
-			return nil, nil
-		}
-		if client.IgnoreNotFound(err) == nil {
-			return nil, nil
-		}
-		return nil, err
+		return nil, fmt.Errorf("get xvol %q: %w", xVolName, err)
 	}
 
 	return xvol, nil

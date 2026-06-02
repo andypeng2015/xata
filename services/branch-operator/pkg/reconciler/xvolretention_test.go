@@ -30,7 +30,7 @@ func TestXVolReconciliation(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
-		branch := NewBranchBuilder().Build()
+		branch := NewBranchBuilder().WithWakeupPool("pg18-micro").Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
 			clusterName := br.Name
@@ -93,7 +93,7 @@ func TestXVolReconciliation(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
-		branch := NewBranchBuilder().Build()
+		branch := NewBranchBuilder().WithWakeupPool("pg18-micro").Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
 			clusterName := br.Name
@@ -183,6 +183,57 @@ func TestXVolReconciliation(t *testing.T) {
 			})
 
 			// Wait for reconciliation to complete (branch still has its cluster)
+			requireEventuallyTrue(t, func() bool {
+				b := v1alpha1.Branch{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: br.Name}, &b); err != nil {
+					return false
+				}
+				return b.Status.ObservedGeneration == b.Generation
+			})
+
+			// Expect the XVol reclaim policy to still be Delete
+			require.NoError(t, k8sClient.Get(ctx, client.ObjectKey{Name: xvolName}, xvol))
+			dp, _, _ := unstructured.NestedString(xvol.Object, "spec", "xvolReclaimPolicy")
+			require.Equal(t, "Delete", dp)
+
+			// Expect the XVol to have no owner references
+			require.Empty(t, xvol.GetOwnerReferences())
+		})
+	})
+
+	t.Run("XVol is not patched when branch is not a pool branch", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		// A Branch with no wakeup pool annotation
+		branch := NewBranchBuilder().Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			clusterName := br.Name
+
+			// Wait for the reconciler to create the CNPG Cluster
+			cluster := apiv1.Cluster{}
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, clusterName, &cluster)
+			})
+
+			xvolName, pvcName, xvol := createPVCAndXVol(ctx, t, clusterName)
+
+			// Set the Cluster's status to reference the PVC as the primary
+			setClusterStatus(ctx, t, &cluster, apiv1.ClusterStatus{
+				CurrentPrimary: pvcName,
+				HealthyPVC:     []string{pvcName},
+			})
+
+			// Unset the cluster name on the Branch so that the HasClusterName
+			// guard does not short-circuit reconcileXVolOwnership. Only the
+			// missing wakeup pool annotation should prevent XVol retention.
+			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Name = nil
+			})
+			require.NoError(t, err)
+
+			// Wait for reconciliation to observe the updated generation
 			requireEventuallyTrue(t, func() bool {
 				b := v1alpha1.Branch{}
 				if err := k8sClient.Get(ctx, client.ObjectKey{Name: br.Name}, &b); err != nil {

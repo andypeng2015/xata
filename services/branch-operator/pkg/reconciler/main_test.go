@@ -257,6 +257,16 @@ func (b *BranchBuilder) WithInheritedMetadata(im *v1alpha1.InheritedMetadata) *B
 	return b
 }
 
+// WithWakeupPool marks the Branch as a pool branch by setting the wakeup pool
+// annotation
+func (b *BranchBuilder) WithWakeupPool(pool string) *BranchBuilder {
+	if b.branch.Annotations == nil {
+		b.branch.Annotations = map[string]string{}
+	}
+	b.branch.Annotations[v1alpha1.WakeupPoolAnnotation] = pool
+	return b
+}
+
 // Build builds the v1alpha1.BranchSpec struct
 func (b *BranchBuilder) Build() v1alpha1.Branch {
 	return b.branch
