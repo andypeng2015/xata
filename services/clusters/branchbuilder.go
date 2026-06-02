@@ -240,14 +240,18 @@ func (b *BranchBuilder) WithUpdatesFrom(req *clustersv1.UpdatePostgresClusterReq
 	return b
 }
 
-// WithClusterFromPool sets the cluster name to the pool cluster, disables
-// backups (pool clusters don't have the barman-cloud plugin), and annotates the
-// branch with the wakeup pool name so that both the scale-to-zero sidecar and
-// the manual hibernation path know to use pool hibernation.
+// WithClusterFromPool sets the cluster name to the pool cluster and annotates
+// the branch with the wakeup pool name so that both the scale-to-zero sidecar
+// and the manual hibernation path know to use pool hibernation.
+//
+// Only pgbackrest backup method is support. It is configured inline on the
+// cluster spec and is baked into the pool definition.
 func (b *BranchBuilder) WithClusterFromPool(clusterName, wakeupPool string) *BranchBuilder {
 	if clusterName != "" {
 		b.branch.Spec.ClusterSpec.Name = &clusterName
-		b.branch.Spec.BackupSpec = nil
+		if !b.branch.Spec.BackupSpec.IsPgBackRest() {
+			b.branch.Spec.BackupSpec = nil
+		}
 		if b.branch.Annotations == nil {
 			b.branch.Annotations = make(map[string]string)
 		}

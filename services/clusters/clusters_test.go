@@ -397,6 +397,32 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 		},
 		{
+			name: "use_pool with pgbackrest - adopts pool cluster and keeps backups",
+			extraObjects: []client.Object{
+				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
+				poolClusterForTest(),
+			},
+			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
+				r.UsePool = new(true)
+				r.BackupConfiguration.BackupMethod = string(v1alpha1.BackupMethodPgBackRest)
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
+				b.Spec.BackupSpec.Method = v1alpha1.BackupMethodPgBackRest
+				b.Spec.BackupSpec.PgBackRest = &v1alpha1.PgBackRestSpec{
+					Bucket:              "test-pgbackrest-bucket",
+					Region:              "us-east-1",
+					InheritFromIAMRole:  true,
+					RetentionFullDays:   7,
+					CompressType:        DefaultPgBackRestCompressType,
+					ArchiveAsync:        DefaultPgBackRestArchiveAsync,
+					ArchivePushQueueMax: DefaultPgBackRestPushQueueMax,
+					ArchiveGetQueueMax:  DefaultPgBackRestGetQueueMax,
+				}
+				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool-slot"}
+			},
+		},
+		{
 			name: "use_pool with no matching pool - falls back to normal creation",
 			extraObjects: []client.Object{
 				poolForTest("other-storage-class", testImage, "2", "3996Mi"),
