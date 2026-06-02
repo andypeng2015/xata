@@ -1588,8 +1588,10 @@ type BackupConfiguration struct {
 	BackupSchedule  string                 `protobuf:"bytes,1,opt,name=backup_schedule,json=backupSchedule,proto3" json:"backup_schedule,omitempty"` //cron expression
 	BackupRetention string                 `protobuf:"bytes,2,opt,name=backup_retention,json=backupRetention,proto3" json:"backup_retention,omitempty"`
 	BackupsEnabled  bool                   `protobuf:"varint,3,opt,name=backups_enabled,json=backupsEnabled,proto3" json:"backups_enabled,omitempty"` // whether backups are enabled for this cluster
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// backup method: "barman" (default) or "pgbackrest"
+	BackupMethod  string `protobuf:"bytes,4,opt,name=backup_method,json=backupMethod,proto3" json:"backup_method,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BackupConfiguration) Reset() {
@@ -1641,6 +1643,13 @@ func (x *BackupConfiguration) GetBackupsEnabled() bool {
 		return x.BackupsEnabled
 	}
 	return false
+}
+
+func (x *BackupConfiguration) GetBackupMethod() string {
+	if x != nil {
+		return x.BackupMethod
+	}
+	return ""
 }
 
 type GetObjectStoreRequest struct {
@@ -3183,11 +3192,12 @@ const file_clusters_v1_clusters_proto_rawDesc = "" +
 	"\x13STATUS_TYPE_HEALTHY\x10\x01\x12\x19\n" +
 	"\x15STATUS_TYPE_TRANSIENT\x10\x02\x12\x15\n" +
 	"\x11STATUS_TYPE_FAULT\x10\x03\x12\x1a\n" +
-	"\x16STATUS_TYPE_HIBERNATED\x10\x04\"\x92\x01\n" +
+	"\x16STATUS_TYPE_HIBERNATED\x10\x04\"\xb7\x01\n" +
 	"\x13BackupConfiguration\x12'\n" +
 	"\x0fbackup_schedule\x18\x01 \x01(\tR\x0ebackupSchedule\x12)\n" +
 	"\x10backup_retention\x18\x02 \x01(\tR\x0fbackupRetention\x12'\n" +
-	"\x0fbackups_enabled\x18\x03 \x01(\bR\x0ebackupsEnabled\"'\n" +
+	"\x0fbackups_enabled\x18\x03 \x01(\bR\x0ebackupsEnabled\x12#\n" +
+	"\rbackup_method\x18\x04 \x01(\tR\fbackupMethod\"'\n" +
 	"\x15GetObjectStoreRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"P\n" +
 	"\x16GetObjectStoreResponse\x126\n" +

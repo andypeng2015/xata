@@ -16,7 +16,9 @@ func TestApiToClustersBackupConfig(t *testing.T) {
 		name           string
 		backupConfig   *spec.BackupConfiguration
 		backupsEnabled bool
+		usePgBackRest  bool
 		wantSchedule   bool
+		wantMethod     string
 	}{
 		{
 			name:           "backups disabled returns config with BackupsEnabled false",
@@ -25,22 +27,40 @@ func TestApiToClustersBackupConfig(t *testing.T) {
 			wantSchedule:   false,
 		},
 		{
-			name:           "backups enabled with no config returns default",
+			name:           "backups enabled with no config returns default barman",
 			backupConfig:   nil,
 			backupsEnabled: true,
 			wantSchedule:   true,
+			wantMethod:     BackupMethodBarman,
 		},
 		{
-			name:           "backups enabled with config returns schedule",
+			name:           "backups enabled with config returns schedule barman",
 			backupConfig:   &spec.BackupConfiguration{BackupTime: new("0:14:30")},
 			backupsEnabled: true,
 			wantSchedule:   true,
+			wantMethod:     BackupMethodBarman,
+		},
+		{
+			name:           "pgbackrest with no config returns default pgbackrest",
+			backupConfig:   nil,
+			backupsEnabled: true,
+			usePgBackRest:  true,
+			wantSchedule:   true,
+			wantMethod:     BackupMethodPgBackRest,
+		},
+		{
+			name:           "pgbackrest with config returns schedule pgbackrest",
+			backupConfig:   &spec.BackupConfiguration{BackupTime: new("0:14:30")},
+			backupsEnabled: true,
+			usePgBackRest:  true,
+			wantSchedule:   true,
+			wantMethod:     BackupMethodPgBackRest,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := apiToClustersBackupConfig(tt.backupConfig, tt.backupsEnabled)
+			result := apiToClustersBackupConfig(tt.backupConfig, tt.backupsEnabled, tt.usePgBackRest)
 
 			assert.Equal(t, tt.backupsEnabled, result.BackupsEnabled)
 
@@ -50,6 +70,10 @@ func TestApiToClustersBackupConfig(t *testing.T) {
 			} else {
 				assert.Empty(t, result.BackupSchedule)
 				assert.Empty(t, result.BackupRetention)
+			}
+
+			if tt.wantMethod != "" {
+				assert.Equal(t, tt.wantMethod, result.BackupMethod)
 			}
 		})
 	}

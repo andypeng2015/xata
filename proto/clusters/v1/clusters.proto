@@ -248,6 +248,8 @@ message BackupConfiguration {
   string backup_schedule = 1; //cron expression
   string backup_retention = 2;
   bool backups_enabled = 3; // whether backups are enabled for this cluster
+  // backup method: "barman" (default) or "pgbackrest"
+  string backup_method = 4;
 }
 
 message GetObjectStoreRequest {

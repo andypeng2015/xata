@@ -275,8 +275,14 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		WithDefaultVolumeSnapshotClass(volumeSnapshotClass).
 		WithDefaultNodeSelector(c.config.ClustersNodeSelector).
 		WithPooler(c.config.EnablePooler).
+		WithPgBackRestS3(c.config.PgBackRestBucket, c.config.PgBackRestRegion).
 		WithXataUtilsPreloadLibrary().
 		WithMandatoryPostgresParameters()
+
+	// Fail fast if pgbackrest is requested but the cell isn't configured for it
+	if branch := branchBuilder.Build(); branch.Spec.BackupSpec.IsPgBackRest() && branch.Spec.BackupSpec.PgBackRest.Bucket == "" {
+		return nil, status.Errorf(codes.FailedPrecondition, "pgbackrest backup method requested but XATA_PGBACKREST_BUCKET is not configured in this cell")
+	}
 
 	// If use_pool is set, we look for a create pool matching the request. If one
 	// is found, a cluster from that pool is selected and used to instantiate the

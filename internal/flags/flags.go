@@ -44,6 +44,10 @@ var (
 		Name:           "useXatastor",
 		DefaultEnabled: false,
 	}
+	UsePgBackRest = openfeature.FeatureFlag{
+		Name:           "usePgBackRest",
+		DefaultEnabled: false,
+	}
 	BranchLogs = openfeature.FeatureFlag{
 		Name:           "branchLogs",
 		DefaultEnabled: false,

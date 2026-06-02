@@ -747,7 +747,7 @@ func TestCreateBranch(t *testing.T) {
 						"work_mem":        "2259kB",
 					},
 					PreloadLibraries: []string{"pg_stat_statements", "auto_explain"},
-				}, OrganizationId: apitest.TestOrganization, ProjectId: "project_id", BackupConfiguration: &clustersv1.BackupConfiguration{BackupSchedule: "0 23 23 * * 2", BackupRetention: "2d", BackupsEnabled: true}}).
+				}, OrganizationId: apitest.TestOrganization, ProjectId: "project_id", BackupConfiguration: &clustersv1.BackupConfiguration{BackupSchedule: "0 23 23 * * 2", BackupRetention: "2d", BackupsEnabled: true, BackupMethod: BackupMethodBarman}}).
 							Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
 				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
@@ -974,6 +974,7 @@ func TestCreateBranch(t *testing.T) {
 							BackupSchedule:  "0 23 23 * * 2",
 							BackupRetention: "2d",
 							BackupsEnabled:  true,
+							BackupMethod:    BackupMethodBarman,
 						},
 						DataSource: &clustersv1.CreatePostgresClusterRequest_ClusterSnapshot{
 							ClusterSnapshot: &clustersv1.ClusterSnapshot{
@@ -1012,6 +1013,7 @@ func TestCreateBranch(t *testing.T) {
 							BackupSchedule:  "0 23 23 * * 2",
 							BackupRetention: "2d",
 							BackupsEnabled:  true,
+							BackupMethod:    BackupMethodBarman,
 						},
 						DataSource: &clustersv1.CreatePostgresClusterRequest_ClusterSnapshot{
 							ClusterSnapshot: &clustersv1.ClusterSnapshot{
@@ -1073,6 +1075,7 @@ func TestCreateBranch(t *testing.T) {
 						BackupSchedule:  "0 23 23 * * 2",
 						BackupRetention: "2d",
 						BackupsEnabled:  true,
+						BackupMethod:    BackupMethodBarman,
 					},
 					OrganizationId: apitest.TestOrganization,
 					ProjectId:      "project_id",
@@ -1124,6 +1127,7 @@ func TestCreateBranch(t *testing.T) {
 							BackupSchedule:  "0 23 23 * * 2",
 							BackupRetention: "2d",
 							BackupsEnabled:  true,
+							BackupMethod:    BackupMethodBarman,
 						},
 						OrganizationId: apitest.TestOrganization,
 						ProjectId:      "project_id",
@@ -1175,6 +1179,7 @@ func TestCreateBranch(t *testing.T) {
 							BackupSchedule:  "0 23 23 * * 2",
 							BackupRetention: "2d",
 							BackupsEnabled:  true,
+							BackupMethod:    BackupMethodBarman,
 						},
 						OrganizationId: apitest.TestOrganization,
 						ProjectId:      "project_id",
@@ -1276,6 +1281,7 @@ func TestCreateBranch(t *testing.T) {
 							BackupSchedule:  "0 23 23 * * 2",
 							BackupRetention: "2d",
 							BackupsEnabled:  true,
+							BackupMethod:    BackupMethodBarman,
 						},
 						OrganizationId: apitest.TestOrganization,
 						ProjectId:      "project_id",
@@ -1335,6 +1341,7 @@ func TestCreateBranch(t *testing.T) {
 							BackupSchedule:  "0 23 23 * * 2",
 							BackupRetention: "2d",
 							BackupsEnabled:  true,
+							BackupMethod:    BackupMethodBarman,
 						},
 						OrganizationId: apitest.TestOrganization,
 						ProjectId:      "project_id",

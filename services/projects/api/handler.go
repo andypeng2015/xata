@@ -48,6 +48,8 @@ const (
 	MinRetentionPeriod           = 2
 	MaxRetentionPeriod           = 35
 	DefaultBackupFrequency       = "weekly"
+	BackupMethodBarman           = "barman"
+	BackupMethodPgBackRest       = "pgbackrest"
 
 	backupTimestampLayout = "2006-01-02 15:04:05 -0700 MST"
 )
@@ -677,6 +679,8 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 
 		ctx := c.Request().Context()
 		useXatastor := s.feat.BoolValue(ctx, flags.UseXatastor)
+		usePgBackRest := s.feat.BoolValue(ctx, flags.UsePgBackRest)
+		log.Ctx(ctx).Info().Bool("usePgBackRest", usePgBackRest).Msg("pgbackrest feature flag")
 
 		claims := api.GetUserClaims(c)
 		if claims != nil && !useXatastor {
@@ -762,13 +766,14 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 			}, func(branch *store.Branch) error {
 				scaleToZero := apiToClustersScaleToZero(body.ScaleToZero, createClusterPayload.ParentID, project)
 				createClusterPayload.Configuration.ScaleToZero = scaleToZero
+				log.Ctx(ctx).Info().Bool("usePgBackRest", usePgBackRest).Msg("pgbackrest feature flag in the store")
 				request := clustersv1.CreatePostgresClusterRequest{
 					Id:                  branch.ID,
 					ParentId:            branch.ParentID,
 					OrganizationId:      organizationID,
 					ProjectId:           projectID,
 					Configuration:       &createClusterPayload.Configuration,
-					BackupConfiguration: apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled),
+					BackupConfiguration: apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled, usePgBackRest),
 				}
 				if branch.ParentID != nil {
 					request.DataSource = &clustersv1.CreatePostgresClusterRequest_ClusterSnapshot{
@@ -1923,6 +1928,8 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 		ctx := c.Request().Context()
 
 		useXatastor := s.feat.BoolValue(ctx, flags.UseXatastor)
+		usePgBackRest := s.feat.BoolValue(ctx, flags.UsePgBackRest)
+		log.Ctx(ctx).Info().Bool("usePgBackRest", usePgBackRest).Msg("pgbackrest feature flag")
 
 		// restore must happen in the same cell where the backup exists
 		// otherwise we don't have access to the source object store
@@ -2002,7 +2009,7 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 							ClusterId: branchID, // the source branch ID
 						},
 					},
-					BackupConfiguration: apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled),
+					BackupConfiguration: apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled, usePgBackRest),
 				}
 
 				client, err := s.cells.GetCellConnection(ctx, organizationID, createClusterPayload.CellID)

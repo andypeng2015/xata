@@ -20,6 +20,12 @@ const (
 	LabelBranchID                  = "xata.io/branchID"
 	LabelXatastorAntiAffinityGroup = "xatastor.xata.io/anti-affinity-group"
 	XataUtilsPreloadName           = "xatautils"
+
+	DefaultPgBackRestRetentionDays = 7
+	DefaultPgBackRestCompressType  = "lz4"
+	DefaultPgBackRestArchiveAsync  = true
+	DefaultPgBackRestPushQueueMax  = "2GiB"
+	DefaultPgBackRestGetQueueMax   = "2GiB"
 )
 
 // BranchBuilder builds Branch resources.
@@ -204,9 +210,31 @@ func (b *BranchBuilder) WithUpdatesFrom(req *clustersv1.UpdatePostgresClusterReq
 		branchSpec.ClusterSpec.Postgres.SharedPreloadLibraries = update.GetPreloadLibraries()
 	}
 
-	// Update backup configuration
+	// Update backup configuration. When no existing BackupSpec, create one
+	// from scratch (enables backups on a branch that didn't have them).
+	// When an existing spec exists, merge schedule/retention to preserve
+	// the backup method and pgbackrest settings.
 	if update.BackupConfiguration != nil {
-		branchSpec.BackupSpec = backupSpec(update.GetBackupConfiguration())
+		if branchSpec.BackupSpec == nil {
+			branchSpec.BackupSpec = backupSpec(update.GetBackupConfiguration())
+		} else {
+			bc := update.GetBackupConfiguration()
+			if bc.GetBackupSchedule() != "" {
+				if branchSpec.BackupSpec.ScheduledBackup == nil {
+					branchSpec.BackupSpec.ScheduledBackup = &v1alpha1.ScheduledBackupSpec{}
+				}
+				branchSpec.BackupSpec.ScheduledBackup.Schedule = bc.GetBackupSchedule()
+			}
+			if bc.GetBackupRetention() != "" {
+				branchSpec.BackupSpec.Retention = bc.GetBackupRetention()
+				if branchSpec.BackupSpec.IsPgBackRest() {
+					var parsed int
+					if _, err := fmt.Sscanf(bc.GetBackupRetention(), "%dd", &parsed); err == nil && parsed > 0 {
+						branchSpec.BackupSpec.PgBackRest.RetentionFullDays = parsed
+					}
+				}
+			}
+		}
 	}
 
 	return b
@@ -248,6 +276,16 @@ func (b *BranchBuilder) WithDefaultStorageClass(sc string) *BranchBuilder {
 func (b *BranchBuilder) WithDefaultVolumeSnapshotClass(vsc string) *BranchBuilder {
 	if b.branch.Spec.ClusterSpec.Storage.VolumeSnapshotClass == nil {
 		b.branch.Spec.ClusterSpec.Storage.VolumeSnapshotClass = new(vsc)
+	}
+	return b
+}
+
+// WithPgBackRestS3 sets the S3 bucket and region on the PgBackRest spec.
+// Only applies when the backup method is pgbackrest.
+func (b *BranchBuilder) WithPgBackRestS3(bucket, region string) *BranchBuilder {
+	if b.branch.Spec.BackupSpec != nil && b.branch.Spec.BackupSpec.IsPgBackRest() {
+		b.branch.Spec.BackupSpec.PgBackRest.Bucket = bucket
+		b.branch.Spec.BackupSpec.PgBackRest.Region = region
 	}
 	return b
 }
@@ -351,10 +389,31 @@ func backupSpec(b *clustersv1.BackupConfiguration) *v1alpha1.BackupSpec {
 		}
 	}
 
-	return &v1alpha1.BackupSpec{
+	spec := &v1alpha1.BackupSpec{
 		ScheduledBackup: sbSpec,
 		Retention:       b.GetBackupRetention(),
 	}
+
+	if b.GetBackupMethod() == string(v1alpha1.BackupMethodPgBackRest) {
+		spec.Method = v1alpha1.BackupMethodPgBackRest
+
+		retentionDays := DefaultPgBackRestRetentionDays
+		var parsed int
+		if _, err := fmt.Sscanf(b.GetBackupRetention(), "%dd", &parsed); err == nil && parsed > 0 {
+			retentionDays = parsed
+		}
+
+		spec.PgBackRest = &v1alpha1.PgBackRestSpec{
+			InheritFromIAMRole:  true,
+			RetentionFullDays:   retentionDays,
+			CompressType:        DefaultPgBackRestCompressType,
+			ArchiveAsync:        DefaultPgBackRestArchiveAsync,
+			ArchivePushQueueMax: DefaultPgBackRestPushQueueMax,
+			ArchiveGetQueueMax:  DefaultPgBackRestGetQueueMax,
+		}
+	}
+
+	return spec
 }
 
 // restoreSpec converts a CreatePostgresClusterRequest data source to a *v1alpha1.RestoreSpec

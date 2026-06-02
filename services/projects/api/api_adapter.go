@@ -355,7 +355,7 @@ func generateSchedule(cron string) string {
 	return fmt.Sprintf("%s:%s:%s", dayOfWeek, hour, minute)
 }
 
-func apiToClustersBackupConfig(backupConfig *spec.BackupConfiguration, backupsEnabled bool) *clustersv1.BackupConfiguration {
+func apiToClustersBackupConfig(backupConfig *spec.BackupConfiguration, backupsEnabled bool, usePgBackRest bool) *clustersv1.BackupConfiguration {
 	// if backups are disabled, return nil
 	if !backupsEnabled {
 		return &clustersv1.BackupConfiguration{
@@ -365,11 +365,17 @@ func apiToClustersBackupConfig(backupConfig *spec.BackupConfiguration, backupsEn
 
 	// if nothing was set via the API request, use defaults = weekly, sunday random
 	if backupConfig == nil {
-		return &clustersv1.BackupConfiguration{
+		cfg := &clustersv1.BackupConfiguration{
 			BackupSchedule:  generateRandomBackupCron(),
 			BackupRetention: fmt.Sprintf("%dd", DefaultBackupRetentionPeriod),
 			BackupsEnabled:  backupsEnabled,
 		}
+		if usePgBackRest {
+			cfg.BackupMethod = BackupMethodPgBackRest
+		} else {
+			cfg.BackupMethod = BackupMethodBarman
+		}
+		return cfg
 	}
 
 	var backupConfiguration clustersv1.BackupConfiguration
@@ -386,6 +392,11 @@ func apiToClustersBackupConfig(backupConfig *spec.BackupConfiguration, backupsEn
 		backupConfiguration.BackupRetention = fmt.Sprintf("%dd", *backupConfig.RetentionPeriod)
 	}
 	backupConfiguration.BackupsEnabled = backupsEnabled
+	if usePgBackRest {
+		backupConfiguration.BackupMethod = BackupMethodPgBackRest
+	} else {
+		backupConfiguration.BackupMethod = BackupMethodBarman
+	}
 	return &backupConfiguration
 }
 
