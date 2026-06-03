@@ -12,7 +12,7 @@ import (
 )
 
 func TestNewFilter_NoConfigMap(t *testing.T) {
-	client := fake.NewSimpleClientset()
+	client := fake.NewClientset()
 	ctx := t.Context()
 
 	f, err := NewFilter(ctx, client, "test-ns", "ipfiltering")
@@ -54,7 +54,7 @@ func TestNewFilter_WithRules(t *testing.T) {
 		},
 	}
 
-	client := fake.NewSimpleClientset(cm)
+	client := fake.NewClientset(cm)
 	ctx := t.Context()
 
 	f, err := NewFilter(ctx, client, "test-ns", "ipfiltering")
@@ -130,7 +130,7 @@ func TestFilter_ConfigMapUpdate(t *testing.T) {
 		},
 	}
 
-	client := fake.NewSimpleClientset(cm)
+	client := fake.NewClientset(cm)
 	ctx := t.Context()
 
 	f, err := NewFilter(ctx, client, "test-ns", "ipfiltering")
@@ -185,7 +185,7 @@ func TestFilter_ConfigMapDeleted(t *testing.T) {
 		},
 	}
 
-	client := fake.NewSimpleClientset(cm)
+	client := fake.NewClientset(cm)
 	ctx := t.Context()
 
 	f, err := NewFilter(ctx, client, "test-ns", "ipfiltering")
