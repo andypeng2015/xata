@@ -413,6 +413,54 @@ func TestClusterSpec(t *testing.T) {
 						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
 							WithImmediateCheckpoint(true))).
 					WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+						WithStanzaName(testBranchName).
+						WithRepository(apiv1ac.PgBackRestRepository().
+							WithS3(apiv1ac.PgBackRestS3().
+								WithBucket("test-bucket").
+								WithRegion("us-east-1").
+								WithInheritFromIAMRole(true))).
+						WithOptions(apiv1ac.PgBackRestOptions().
+							WithCompressType("lz4").
+							WithArchiveAsync(true).
+							WithArchivePushQueueMax("2GiB").
+							WithArchiveGetQueueMax("2GiB").
+							WithBundle(true).
+							WithBlockIncremental(true).
+							WithStartFast(true).
+							WithDelta(true).
+							WithPriority(19).
+							WithRetention(apiv1ac.PgBackRestRetention().
+								WithFull(7).
+								WithFullType("time")))).
+					WithTarget(apiv1.BackupTargetStandby)),
+		},
+		{
+			name: "pgbackrest stanza name override (same-name restore)",
+			cfgModifier: func(cfg *resources.ClusterConfig) {
+				cfg.BackupSpec = &v1alpha1.BackupSpec{
+					Method: v1alpha1.BackupMethodPgBackRest,
+					PgBackRest: &v1alpha1.PgBackRestSpec{
+						Bucket:              "test-bucket",
+						Region:              "us-east-1",
+						InheritFromIAMRole:  true,
+						RetentionFullDays:   7,
+						CompressType:        "lz4",
+						ArchiveAsync:        true,
+						ArchivePushQueueMax: "2GiB",
+						ArchiveGetQueueMax:  "2GiB",
+						StanzaName:          "test-branch-restore-1",
+					},
+				}
+			},
+			expected: baseExpectedSpec().
+				WithBackup(apiv1ac.BackupConfiguration().
+					WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
+						WithClassName("snapshot-class").
+						WithOnline(true).
+						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
+							WithImmediateCheckpoint(true))).
+					WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+						WithStanzaName("test-branch-restore-1").
 						WithRepository(apiv1ac.PgBackRestRepository().
 							WithS3(apiv1ac.PgBackRestS3().
 								WithBucket("test-bucket").
@@ -459,6 +507,7 @@ func TestClusterSpec(t *testing.T) {
 						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
 							WithImmediateCheckpoint(true))).
 					WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+						WithStanzaName(testBranchName).
 						WithRepository(apiv1ac.PgBackRestRepository().
 							WithS3(apiv1ac.PgBackRestS3().
 								WithBucket("test-bucket").
@@ -519,6 +568,7 @@ func TestClusterSpec(t *testing.T) {
 						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
 							WithImmediateCheckpoint(true))).
 					WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+						WithStanzaName(testBranchName).
 						WithRepository(apiv1ac.PgBackRestRepository().
 							WithS3(apiv1ac.PgBackRestS3().
 								WithBucket("s3://example-backups").
@@ -572,6 +622,7 @@ func TestClusterSpec(t *testing.T) {
 						WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
 							WithImmediateCheckpoint(true))).
 					WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+						WithStanzaName(testBranchName).
 						WithRepository(apiv1ac.PgBackRestRepository().
 							WithS3(apiv1ac.PgBackRestS3().
 								WithBucket("test-bucket").
@@ -606,7 +657,7 @@ func TestClusterSpec(t *testing.T) {
 									WithRegion("us-east-1").
 									WithInheritFromIAMRole(true))).
 							WithOptions(apiv1ac.PgBackRestOptions().
-								WithRepoPath("/source-cluster"))),
+								WithRepoPath("source-cluster"))),
 				),
 		},
 		{
@@ -877,4 +928,31 @@ func baseExpectedSpec() *apiv1ac.ClusterSpecApplyConfiguration {
 		WithPrimaryUpdateStrategy(apiv1.PrimaryUpdateStrategy("unsupervised")).
 		WithPrimaryUpdateMethod(apiv1.PrimaryUpdateMethod("switchover")).
 		WithSmartShutdownTimeout(resources.DefaultSmartShutdownTimeout)
+}
+
+// TestExternalClustersPgBackRestRepoPath guards against a double-slash in the
+// restore source repo path: RepoPath must be the bare stanza name, because the
+// instance manager prepends the leading "/" when writing repo1-path. A leading
+// "/" here would produce "//<name>", which pgbackrest rejects.
+func TestExternalClustersPgBackRestRepoPath(t *testing.T) {
+	ext := resources.ExternalClusters(resources.ClusterConfig{
+		RestoreSpec: &v1alpha1.RestoreSpec{
+			Type: v1alpha1.RestoreTypeObjectStore,
+			Name: "source-cluster",
+		},
+		BackupSpec: &v1alpha1.BackupSpec{
+			Method: v1alpha1.BackupMethodPgBackRest,
+			PgBackRest: &v1alpha1.PgBackRestSpec{
+				Bucket:             "test-bucket",
+				Region:             "us-east-1",
+				InheritFromIAMRole: true,
+			},
+		},
+	})
+
+	require.Len(t, ext, 1)
+	require.NotNil(t, ext[0].PgBackRest)
+	require.NotNil(t, ext[0].PgBackRest.Options)
+	require.NotNil(t, ext[0].PgBackRest.Options.RepoPath)
+	require.Equal(t, "source-cluster", *ext[0].PgBackRest.Options.RepoPath)
 }

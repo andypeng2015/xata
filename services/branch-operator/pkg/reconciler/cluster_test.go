@@ -214,6 +214,10 @@ func TestClusterReconciliation(t *testing.T) {
 			// WAL archiving is enabled, so the skip annotation should be "disabled"
 			require.Equal(t, "disabled", cluster.Annotations[reconciler.SkipWALArchivingAnnotation])
 
+			// Branch clusters are never suspended: the pgbackrest suspended flag
+			// is "disabled" (clears any value set while the cluster was in a pool)
+			require.Equal(t, "disabled", cluster.Annotations["cnpg.io/pgBackRestSuspended"])
+
 			// Disable WAL archiving on the Branch
 			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
 				b.Spec.BackupSpec.WALArchiving = v1alpha1.WALArchivingModeDisabled

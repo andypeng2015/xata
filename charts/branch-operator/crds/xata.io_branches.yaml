@@ -133,6 +133,12 @@ spec:
                           full backups.
                         minimum: 1
                         type: integer
+                      stanzaName:
+                        description: |-
+                          StanzaName overrides the pgbackrest stanza this branch archives to.
+                          When empty it defaults to the branch name.
+                        pattern: ^[A-Za-z0-9._-]+$
+                        type: string
                     required:
                     - bucket
                     - region

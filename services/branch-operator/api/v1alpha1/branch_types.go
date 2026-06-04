@@ -470,6 +470,12 @@ type PgBackRestSpec struct {
 	// RepoPath overrides the storage path prefix. Defaults to /<clusterName>.
 	// +optional
 	RepoPath string `json:"repoPath,omitempty"`
+
+	// StanzaName overrides the pgbackrest stanza this branch archives to.
+	// When empty it defaults to the branch name.
+	// +optional
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._-]+$`
+	StanzaName string `json:"stanzaName,omitempty"`
 }
 
 // ScheduledBackupSpec configures periodic base backups

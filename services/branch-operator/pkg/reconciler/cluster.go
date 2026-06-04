@@ -7,6 +7,7 @@ import (
 
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	apiv1ac "github.com/xataio/xata-cnpg/pkg/client/applyconfiguration/api/v1"
+	"github.com/xataio/xata-cnpg/pkg/utils"
 	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -133,6 +134,12 @@ func clusterAnnotations(branch *v1alpha1.Branch) map[string]string {
 	} else {
 		annotations[SkipWALArchivingAnnotation] = "disabled"
 	}
+
+	// Branch clusters always archive (never suspended): clear the pgbackrest
+	// suspended flag the clusterpool-operator sets on warm-pool clusters, so an
+	// adopted cluster resumes archiving + stanza-create. archive_mode is
+	// untouched, so this is restart-free.
+	annotations[utils.PgBackRestSuspended] = "disabled"
 
 	return annotations
 }

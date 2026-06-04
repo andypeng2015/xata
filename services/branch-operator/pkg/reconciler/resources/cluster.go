@@ -217,7 +217,7 @@ func ClusterSpec(
 				WithParameters(BarmanPluginParameters(branchName, cfg.GetServerName())),
 		).
 		WithResources(cfg.Resources).
-		WithBackup(backupConfiguration(cfg)).
+		WithBackup(backupConfiguration(branchName, cfg)).
 		WithProbes(apiv1ac.ProbesConfiguration().
 			WithStartup(apiv1ac.ProbeWithStrategy().
 				WithTimeoutSeconds(5).
@@ -309,9 +309,12 @@ func ExternalClusters(cfg ClusterConfig) []*apiv1ac.ExternalClusterApplyConfigur
 	if cfg.IsPgBackRest() {
 		pgb := cfg.PgBackRest
 
-		// The source branch's repo path — pgbackrest defaults to /<clusterName>
+		// The source branch's repo path is its stanza (= the restore source name).
+		// RepoPath is the bare prefix; the instance manager prepends the leading
+		// "/" when it writes repo1-path, so do NOT add one here (else repo1-path
+		// becomes "//<name>", which pgbackrest rejects).
 		options := apiv1ac.PgBackRestOptions().
-			WithRepoPath("/" + cfg.RestoreSpec.Name)
+			WithRepoPath(cfg.RestoreSpec.Name)
 
 		return []*apiv1ac.ExternalClusterApplyConfiguration{
 			apiv1ac.ExternalCluster().
@@ -400,7 +403,7 @@ func smartShutdownTimeout(t *int32) int32 {
 // Volume snapshot config is always included regardless of backup method.
 // For barman, backup storage is configured via the separate ObjectStore CR.
 // For pgbackrest, backup storage is configured inline on the Cluster.
-func backupConfiguration(cfg ClusterConfig) *apiv1ac.BackupConfigurationApplyConfiguration {
+func backupConfiguration(branchName string, cfg ClusterConfig) *apiv1ac.BackupConfigurationApplyConfiguration {
 	backup := apiv1ac.BackupConfiguration().
 		WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
 			WithClassName(cfg.Storage.GetVolumeSnapshotClass()).
@@ -436,8 +439,20 @@ func backupConfiguration(cfg ClusterConfig) *apiv1ac.BackupConfigurationApplyCon
 		options = options.WithRepoPath(pgb.RepoPath)
 	}
 
+	// Pin the stanza to the branch name so backups stay continuous even when the
+	// underlying cluster is recreated (e.g. warm-pool wakeups, where the cluster
+	// name changes). repoPath defaults to the stanza. An explicit StanzaName
+	// override is used when restoring a branch under the same name, so the
+	// restored branch writes to a fresh stanza instead of the one it restored
+	// from.
+	stanza := branchName
+	if pgb.StanzaName != "" {
+		stanza = pgb.StanzaName
+	}
+
 	return backup.
 		WithPgBackRest(apiv1ac.PgBackRestConfiguration().
+			WithStanzaName(stanza).
 			WithRepository(apiv1ac.PgBackRestRepository().WithS3(pgbackrestS3(pgb, cfg.BackupCredentials))).
 			WithOptions(options)).
 		WithTarget(apiv1.BackupTargetStandby)

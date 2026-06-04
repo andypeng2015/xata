@@ -46,6 +46,9 @@ type PgBackRestSpecApplyConfiguration struct {
 	ArchiveGetQueueMax *string `json:"archiveGetQueueMax,omitempty"`
 	// RepoPath overrides the storage path prefix. Defaults to /<clusterName>.
 	RepoPath *string `json:"repoPath,omitempty"`
+	// StanzaName overrides the pgbackrest stanza this branch archives to.
+	// When empty it defaults to the branch name.
+	StanzaName *string `json:"stanzaName,omitempty"`
 }
 
 // PgBackRestSpecApplyConfiguration constructs a declarative configuration of the PgBackRestSpec type for use with
@@ -139,5 +142,13 @@ func (b *PgBackRestSpecApplyConfiguration) WithArchiveGetQueueMax(value string) 
 // If called multiple times, the RepoPath field is set to the value of the last call.
 func (b *PgBackRestSpecApplyConfiguration) WithRepoPath(value string) *PgBackRestSpecApplyConfiguration {
 	b.RepoPath = &value
+	return b
+}
+
+// WithStanzaName sets the StanzaName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the StanzaName field is set to the value of the last call.
+func (b *PgBackRestSpecApplyConfiguration) WithStanzaName(value string) *PgBackRestSpecApplyConfiguration {
+	b.StanzaName = &value
 	return b
 }
