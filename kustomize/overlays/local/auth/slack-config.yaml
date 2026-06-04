@@ -4,4 +4,5 @@ metadata:
   name: slack-config
   namespace: xata
 data:
+  SLACK_CHANNEL_BILLING_ACTIVITY_ID: ""
   SLACK_CHANNEL_BILLING_NOTIFICATIONS_ID: ""
