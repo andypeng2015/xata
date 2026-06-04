@@ -11,15 +11,7 @@
   "servers": [
     {
       "url": "https://api.xata.tech",
-      "description": "xata PROD"
-    },
-    {
-      "url": "https://api.staging.maki.cooking",
-      "description": "xata STAGING"
-    },
-    {
-      "url": "https://api.dev.maki.cooking",
-      "description": "xata DEV"
+      "description": "Xata API"
     }
   ],
   "tags": [
@@ -1323,31 +1315,7 @@
       "servers": [
         {
           "url": "https://{branch}.{region}.xata.tech",
-          "description": "xata PROD",
-          "variables": {
-            "branch": {
-              "default": "my-branch"
-            },
-            "region": {
-              "default": "us-east-1"
-            }
-          }
-        },
-        {
-          "url": "https://{branch}.{region}.staging.maki.cooking",
-          "description": "xata STAGING",
-          "variables": {
-            "branch": {
-              "default": "my-branch"
-            },
-            "region": {
-              "default": "us-east-1"
-            }
-          }
-        },
-        {
-          "url": "https://{branch}.{region}.dev.maki.cooking",
-          "description": "xata DEV",
+          "description": "Xata Gateway",
           "variables": {
             "branch": {
               "default": "my-branch"
@@ -1519,31 +1487,7 @@
       "servers": [
         {
           "url": "https://{branch}.{region}.xata.tech",
-          "description": "xata PROD",
-          "variables": {
-            "branch": {
-              "default": "my-branch"
-            },
-            "region": {
-              "default": "us-east-1"
-            }
-          }
-        },
-        {
-          "url": "https://{branch}.{region}.staging.maki.cooking",
-          "description": "xata STAGING",
-          "variables": {
-            "branch": {
-              "default": "my-branch"
-            },
-            "region": {
-              "default": "us-east-1"
-            }
-          }
-        },
-        {
-          "url": "https://{branch}.{region}.dev.maki.cooking",
-          "description": "xata DEV",
+          "description": "Xata Gateway",
           "variables": {
             "branch": {
               "default": "my-branch"

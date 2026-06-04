@@ -14,21 +14,7 @@ paths:
   /sql:
     servers:
       - url: 'https://{branch}.{region}.xata.tech'
-        description: xata PROD
-        variables:
-          branch:
-            default: my-branch
-          region:
-            default: us-east-1
-      - url: 'https://{branch}.{region}.staging.maki.cooking'
-        description: xata STAGING
-        variables:
-          branch:
-            default: my-branch
-          region:
-            default: us-east-1
-      - url: 'https://{branch}.{region}.dev.maki.cooking'
-        description: xata DEV
+        description: Xata Gateway
         variables:
           branch:
             default: my-branch
@@ -143,21 +129,7 @@ paths:
   /v2:
     servers:
       - url: 'https://{branch}.{region}.xata.tech'
-        description: xata PROD
-        variables:
-          branch:
-            default: my-branch
-          region:
-            default: us-east-1
-      - url: 'https://{branch}.{region}.staging.maki.cooking'
-        description: xata STAGING
-        variables:
-          branch:
-            default: my-branch
-          region:
-            default: us-east-1
-      - url: 'https://{branch}.{region}.dev.maki.cooking'
-        description: xata DEV
+        description: Xata Gateway
         variables:
           branch:
             default: my-branch

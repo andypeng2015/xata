@@ -46,9 +46,7 @@ function addPublicServers() {
         Root: {
             leave(root) {
                 root.servers = [
-                    { url: "https://api.xata.tech", description: "xata PROD" },
-                    { url: "https://api.staging.maki.cooking", description: "xata STAGING" },
-                    { url: "https://api.dev.maki.cooking", description: "xata DEV" },
+                    { url: "https://api.xata.tech", description: "Xata API" },
                 ];
             },
         },
