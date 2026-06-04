@@ -28,6 +28,7 @@ type Customer struct {
 	CustomerID            string
 	CustomerExternalID    string
 	Name                  string
+	Email                 string
 	PaymentProviderID     string
 	Subscriptions         []Subscription
 	Credits               []Credit
@@ -65,6 +66,8 @@ type Invoice struct {
 	Total          float64
 	Currency       string
 	Status         string
+	InvoiceDate    time.Time
+	DueDate        time.Time
 	IssuedAt       time.Time
 	PaidAt         time.Time
 	AutoCollection InvoiceAutoCollection
@@ -94,6 +97,11 @@ type PaymentMethodSession struct {
 	URL string
 }
 
+type StripePaymentMethodCard struct {
+	ID    string
+	Last4 string
+}
+
 type Client interface {
 	// CreateCustomer creates a new customer in the billing system
 	CreateCustomer(ctx context.Context, name, email, externalCustomerID string, organizationsCount int, metadata OrbCustomerMetadata) error
@@ -101,12 +109,16 @@ type Client interface {
 	// FetchCustomer retrieves a customer record from the billing system.
 	// The customerID parameter should be the Orb internal customer ID (not the external customer ID).
 	FetchCustomer(ctx context.Context, customerID string) (*Customer, error)
+	// FetchCustomerByExternalID retrieves a customer record by the external customer ID.
+	FetchCustomerByExternalID(ctx context.Context, externalCustomerID string) (*Customer, error)
 	// FetchStripeCustomer retrieves a Stripe customer by their Stripe customer ID.
 	FetchStripeCustomer(ctx context.Context, stripeCustomerID string) (*StripeCustomer, error)
 	// FetchPaymentIntentPaymentMethodID retrieves the payment method attached to a Stripe payment intent.
 	FetchPaymentIntentPaymentMethodID(ctx context.Context, paymentIntentID string) (string, error)
 	// FetchSetupIntentPaymentMethodID retrieves the payment method attached to a Stripe setup intent.
 	FetchSetupIntentPaymentMethodID(ctx context.Context, setupIntentID string) (string, error)
+	// FetchStripePaymentMethodCard retrieves Stripe card details for a payment method.
+	FetchStripePaymentMethodCard(ctx context.Context, paymentMethodID string) (*StripePaymentMethodCard, error)
 	// FetchInvoice retrieves an orb invoice. invoiceID is an Orb internal invoice id
 	FetchInvoice(ctx context.Context, invoiceID string) (*Invoice, error)
 	// EnsureDefaultPaymentMethod sets paymentMethodID as the Stripe customer's default payment method
@@ -146,6 +158,10 @@ func (n *NoopBilling) FetchCustomer(ctx context.Context, externalCustomerID stri
 	return nil, nil
 }
 
+func (n *NoopBilling) FetchCustomerByExternalID(_ context.Context, _ string) (*Customer, error) {
+	return nil, nil
+}
+
 func (n *NoopBilling) FetchInvoice(_ context.Context, _ string) (*Invoice, error) {
 	return nil, nil
 }
@@ -160,6 +176,10 @@ func (n *NoopBilling) FetchPaymentIntentPaymentMethodID(_ context.Context, _ str
 
 func (n *NoopBilling) FetchSetupIntentPaymentMethodID(_ context.Context, _ string) (string, error) {
 	return "", nil
+}
+
+func (n *NoopBilling) FetchStripePaymentMethodCard(_ context.Context, _ string) (*StripePaymentMethodCard, error) {
+	return nil, nil
 }
 
 func (n *NoopBilling) EnsureDefaultPaymentMethod(_ context.Context, _, _ string) error {

@@ -372,6 +372,53 @@ func (_c *Client_FetchCustomer_Call) Return(_a0 *billing.Customer, _a1 error) *C
 	return _c
 }
 
+// FetchCustomerByExternalID provides a mock function with given fields: ctx, externalCustomerID
+func (_m *Client) FetchCustomerByExternalID(ctx context.Context, externalCustomerID string) (*billing.Customer, error) {
+	ret := _m.Called(ctx, externalCustomerID)
+
+	var r0 *billing.Customer
+	if rf, ok := ret.Get(0).(func(context.Context, string) *billing.Customer); ok {
+		r0 = rf(ctx, externalCustomerID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*billing.Customer)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, externalCustomerID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Client_FetchCustomerByExternalID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FetchCustomerByExternalID'
+type Client_FetchCustomerByExternalID_Call struct {
+	*mock.Call
+}
+
+// FetchCustomerByExternalID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - externalCustomerID string
+func (_e *Client_Expecter) FetchCustomerByExternalID(ctx interface{}, externalCustomerID interface{}) *Client_FetchCustomerByExternalID_Call {
+	return &Client_FetchCustomerByExternalID_Call{Call: _e.mock.On("FetchCustomerByExternalID", ctx, externalCustomerID)}
+}
+
+func (_c *Client_FetchCustomerByExternalID_Call) Run(run func(ctx context.Context, externalCustomerID string)) *Client_FetchCustomerByExternalID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *Client_FetchCustomerByExternalID_Call) Return(_a0 *billing.Customer, _a1 error) *Client_FetchCustomerByExternalID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
 // FetchInvoice provides a mock function with given fields: ctx, invoiceID
 func (_m *Client) FetchInvoice(ctx context.Context, invoiceID string) (*billing.Invoice, error) {
 	ret := _m.Called(ctx, invoiceID)
@@ -552,6 +599,53 @@ func (_c *Client_FetchStripeCustomer_Call) Run(run func(ctx context.Context, str
 }
 
 func (_c *Client_FetchStripeCustomer_Call) Return(_a0 *billing.StripeCustomer, _a1 error) *Client_FetchStripeCustomer_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+// FetchStripePaymentMethodCard provides a mock function with given fields: ctx, paymentMethodID
+func (_m *Client) FetchStripePaymentMethodCard(ctx context.Context, paymentMethodID string) (*billing.StripePaymentMethodCard, error) {
+	ret := _m.Called(ctx, paymentMethodID)
+
+	var r0 *billing.StripePaymentMethodCard
+	if rf, ok := ret.Get(0).(func(context.Context, string) *billing.StripePaymentMethodCard); ok {
+		r0 = rf(ctx, paymentMethodID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*billing.StripePaymentMethodCard)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, paymentMethodID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Client_FetchStripePaymentMethodCard_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FetchStripePaymentMethodCard'
+type Client_FetchStripePaymentMethodCard_Call struct {
+	*mock.Call
+}
+
+// FetchStripePaymentMethodCard is a helper method to define mock.On call
+//   - ctx context.Context
+//   - paymentMethodID string
+func (_e *Client_Expecter) FetchStripePaymentMethodCard(ctx interface{}, paymentMethodID interface{}) *Client_FetchStripePaymentMethodCard_Call {
+	return &Client_FetchStripePaymentMethodCard_Call{Call: _e.mock.On("FetchStripePaymentMethodCard", ctx, paymentMethodID)}
+}
+
+func (_c *Client_FetchStripePaymentMethodCard_Call) Run(run func(ctx context.Context, paymentMethodID string)) *Client_FetchStripePaymentMethodCard_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *Client_FetchStripePaymentMethodCard_Call) Return(_a0 *billing.StripePaymentMethodCard, _a1 error) *Client_FetchStripePaymentMethodCard_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
