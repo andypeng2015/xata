@@ -32,7 +32,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
 
@@ -785,14 +784,14 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 				usePool := s.feat.BoolValue(ctx, flags.UseClusterPool)
 				log.Ctx(ctx).Info().Bool("usePool", usePool).Msg("cluster pool feature flag")
 				if usePool {
-					request.UsePool = proto.Bool(true)
+					request.UsePool = new(true)
 				}
 
 				if branch.ParentID == nil {
 					useXatastor := s.feat.BoolValue(ctx, flags.UseXatastor)
 					log.Ctx(ctx).Info().Bool("useXatastor", useXatastor).Msg("xatastor feature flag")
 					if useXatastor {
-						request.UseXatastor = proto.Bool(true)
+						request.UseXatastor = new(true)
 					}
 				}
 

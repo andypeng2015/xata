@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"time"
@@ -1545,9 +1546,7 @@ func (s *sqlProjectStore) GetOrgLimits(ctx context.Context, orgID, projectID str
 		return nil, fmt.Errorf("iterate org limits: %w", err)
 	}
 
-	for k, v := range projectLimits {
-		orgLimits[k] = v
-	}
+	maps.Copy(orgLimits, projectLimits)
 	return orgLimits, nil
 }
 

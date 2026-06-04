@@ -150,11 +150,11 @@ func extractPostgresMajor(imageName string) string {
 		return ""
 	}
 	tag := parts[1]
-	dotIdx := strings.Index(tag, ".")
-	if dotIdx < 0 {
+	before, _, ok := strings.Cut(tag, ".")
+	if !ok {
 		return tag
 	}
-	return tag[:dotIdx]
+	return before
 }
 
 // orphanCluster removes the cluster from its pool by clearing its

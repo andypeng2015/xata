@@ -20,6 +20,7 @@ linters:
     - nolintlint
     - staticcheck
     - unused
+    - modernize
   settings:
     errorlint:
       errorf: true

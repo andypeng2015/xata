@@ -216,9 +216,7 @@ func TestGetExtension(t *testing.T) {
 
 			if ext == nil {
 				t.Fatal("Expected extension, got nil")
-			}
-
-			if ext.Name != tc.extensionName {
+			} else if ext.Name != tc.extensionName {
 				t.Errorf("Expected name %s, got %s", tc.extensionName, ext.Name)
 			}
 

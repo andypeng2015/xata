@@ -510,8 +510,8 @@ func TestStepForMetric(t *testing.T) {
 	}
 }
 
-func labelValue(s string) *interface{} {
-	var v interface{} = s
+func labelValue(s string) *any {
+	var v any = s
 	return &v
 }
 

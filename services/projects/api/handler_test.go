@@ -3879,7 +3879,7 @@ func TestBranchLogs(t *testing.T) {
 			branchID: branchID,
 			req: func() spec.BranchLogsRequest {
 				filters := []spec.LogFilter{instanceFilter(branchID + "-1")}
-				for i := 0; i < 16; i++ {
+				for range 16 {
 					filters = append(filters, bodyFilter(spec.Contains, "x"))
 				}
 				return spec.BranchLogsRequest{Start: start, End: end, Filters: &filters}

@@ -35,7 +35,7 @@ type ParsedHeaders struct {
 
 func parseXataAgent(xataAgentHeader string) ParsedXataAgent {
 	var result ParsedXataAgent
-	for _, part := range strings.Split(xataAgentHeader, ";") {
+	for part := range strings.SplitSeq(xataAgentHeader, ";") {
 		k, v, ok := parsePair(part)
 		if !ok {
 			continue

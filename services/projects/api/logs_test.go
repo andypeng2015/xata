@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/utils/ptr"
 
 	"xata/services/projects/api/spec"
 	"xata/services/projects/metrics"
@@ -19,31 +18,31 @@ func TestValidateLogFilter_Valid(t *testing.T) {
 		want   metrics.LogFilter
 	}{
 		"instance in": {
-			filter: spec.LogFilter{Field: spec.Instance, Op: spec.In, Values: ptr.To([]string{"br-test-0", "br-test-1"})},
+			filter: spec.LogFilter{Field: spec.Instance, Op: spec.In, Values: new([]string{"br-test-0", "br-test-1"})},
 			want:   metrics.LogFilter{Field: "instance", Op: "in", Values: []string{"br-test-0", "br-test-1"}},
 		},
 		"level in": {
-			filter: spec.LogFilter{Field: spec.Level, Op: spec.In, Values: ptr.To([]string{"error", "warning"})},
+			filter: spec.LogFilter{Field: spec.Level, Op: spec.In, Values: new([]string{"error", "warning"})},
 			want:   metrics.LogFilter{Field: "level", Op: "in", Values: []string{"error", "warning"}},
 		},
 		"process in": {
-			filter: spec.LogFilter{Field: spec.Process, Op: spec.In, Values: ptr.To([]string{"checkpointer"})},
+			filter: spec.LogFilter{Field: spec.Process, Op: spec.In, Values: new([]string{"checkpointer"})},
 			want:   metrics.LogFilter{Field: "process", Op: "in", Values: []string{"checkpointer"}},
 		},
 		"body contains": {
-			filter: spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: ptr.To("checkpoint")},
+			filter: spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: new("checkpoint")},
 			want:   metrics.LogFilter{Field: "body", Op: "contains", Value: "checkpoint"},
 		},
 		"body icontains": {
-			filter: spec.LogFilter{Field: spec.Body, Op: spec.Icontains, Value: ptr.To("checkpoint")},
+			filter: spec.LogFilter{Field: spec.Body, Op: spec.Icontains, Value: new("checkpoint")},
 			want:   metrics.LogFilter{Field: "body", Op: "icontains", Value: "checkpoint"},
 		},
 		"body regex": {
-			filter: spec.LogFilter{Field: spec.Body, Op: spec.Regex, Value: ptr.To("^conn")},
+			filter: spec.LogFilter{Field: spec.Body, Op: spec.Regex, Value: new("^conn")},
 			want:   metrics.LogFilter{Field: "body", Op: "regex", Value: "^conn"},
 		},
 		"body iregex": {
-			filter: spec.LogFilter{Field: spec.Body, Op: spec.Iregex, Value: ptr.To("^conn")},
+			filter: spec.LogFilter{Field: spec.Body, Op: spec.Iregex, Value: new("^conn")},
 			want:   metrics.LogFilter{Field: "body", Op: "iregex", Value: "^conn"},
 		},
 	}
@@ -68,51 +67,51 @@ func TestValidateLogFilter_Rejected(t *testing.T) {
 		wantParam string
 	}{
 		"instance rejects non-in op": {
-			filter:    spec.LogFilter{Field: spec.Instance, Op: spec.Contains, Value: ptr.To("x")},
+			filter:    spec.LogFilter{Field: spec.Instance, Op: spec.Contains, Value: new("x")},
 			wantParam: "filters[0].op",
 		},
 		"in op requires non-empty values": {
-			filter:    spec.LogFilter{Field: spec.Instance, Op: spec.In, Values: ptr.To([]string{})},
+			filter:    spec.LogFilter{Field: spec.Instance, Op: spec.In, Values: new([]string{})},
 			wantParam: "filters[0].values",
 		},
 		"in op rejects too many values": {
-			filter:    spec.LogFilter{Field: spec.Process, Op: spec.In, Values: ptr.To(tooManyValues)},
+			filter:    spec.LogFilter{Field: spec.Process, Op: spec.In, Values: new(tooManyValues)},
 			wantParam: "filters[0].values",
 		},
 		"in op rejects a stray value": {
-			filter:    spec.LogFilter{Field: spec.Instance, Op: spec.In, Values: ptr.To([]string{"x"}), Value: ptr.To("y")},
+			filter:    spec.LogFilter{Field: spec.Instance, Op: spec.In, Values: new([]string{"x"}), Value: new("y")},
 			wantParam: "filters[0].value",
 		},
 		"level rejects unknown level name": {
-			filter:    spec.LogFilter{Field: spec.Level, Op: spec.In, Values: ptr.To([]string{"trace"})},
+			filter:    spec.LogFilter{Field: spec.Level, Op: spec.In, Values: new([]string{"trace"})},
 			wantParam: "filters[0].values",
 		},
 		"body requires a non-empty value": {
-			filter:    spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: ptr.To("")},
+			filter:    spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: new("")},
 			wantParam: "filters[0].value",
 		},
 		"body rejects an over-long value": {
-			filter:    spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: ptr.To(longValue)},
+			filter:    spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: new(longValue)},
 			wantParam: "filters[0].value",
 		},
 		"body rejects values alongside a scalar op": {
-			filter:    spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: ptr.To("x"), Values: ptr.To([]string{"y"})},
+			filter:    spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: new("x"), Values: new([]string{"y"})},
 			wantParam: "filters[0].values",
 		},
 		"body rejects the in op": {
-			filter:    spec.LogFilter{Field: spec.Body, Op: spec.In, Values: ptr.To([]string{"x"})},
+			filter:    spec.LogFilter{Field: spec.Body, Op: spec.In, Values: new([]string{"x"})},
 			wantParam: "filters[0].value",
 		},
 		"body rejects an invalid regex": {
-			filter:    spec.LogFilter{Field: spec.Body, Op: spec.Regex, Value: ptr.To("(")},
+			filter:    spec.LogFilter{Field: spec.Body, Op: spec.Regex, Value: new("(")},
 			wantParam: "filters[0].value",
 		},
 		"unknown op is rejected": {
-			filter:    spec.LogFilter{Field: spec.Body, Op: spec.LogFilterOp("eq"), Value: ptr.To("x")},
+			filter:    spec.LogFilter{Field: spec.Body, Op: spec.LogFilterOp("eq"), Value: new("x")},
 			wantParam: "filters[0].op",
 		},
 		"unknown field is rejected": {
-			filter:    spec.LogFilter{Field: spec.LogFilterField("trace_id"), Op: spec.Contains, Value: ptr.To("x")},
+			filter:    spec.LogFilter{Field: spec.LogFilterField("trace_id"), Op: spec.Contains, Value: new("x")},
 			wantParam: "filters[0].field",
 		},
 	}
@@ -130,8 +129,8 @@ func TestValidateLogFilter_Rejected(t *testing.T) {
 func TestValidateLogFilters(t *testing.T) {
 	t.Run("aggregates valid filters in order", func(t *testing.T) {
 		got, err := validateLogFilters(testBranch, []spec.LogFilter{
-			{Field: spec.Instance, Op: spec.In, Values: ptr.To([]string{"br-test-0"})},
-			{Field: spec.Body, Op: spec.Icontains, Value: ptr.To("slow")},
+			{Field: spec.Instance, Op: spec.In, Values: new([]string{"br-test-0"})},
+			{Field: spec.Body, Op: spec.Icontains, Value: new("slow")},
 		})
 		require.NoError(t, err)
 		require.Equal(t, []metrics.LogFilter{
@@ -143,7 +142,7 @@ func TestValidateLogFilters(t *testing.T) {
 	t.Run("rejects more than the filter cap", func(t *testing.T) {
 		filters := make([]spec.LogFilter, maxLogFilters+1)
 		for i := range filters {
-			filters[i] = spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: ptr.To("x")}
+			filters[i] = spec.LogFilter{Field: spec.Body, Op: spec.Contains, Value: new("x")}
 		}
 		_, err := validateLogFilters(testBranch, filters)
 		require.Error(t, err)
@@ -154,8 +153,8 @@ func TestValidateLogFilters(t *testing.T) {
 
 	t.Run("surfaces the offending filter index", func(t *testing.T) {
 		_, err := validateLogFilters(testBranch, []spec.LogFilter{
-			{Field: spec.Instance, Op: spec.In, Values: ptr.To([]string{"br-test-0"})},
-			{Field: spec.Body, Op: spec.Contains, Value: ptr.To("")},
+			{Field: spec.Instance, Op: spec.In, Values: new([]string{"br-test-0"})},
+			{Field: spec.Body, Op: spec.Contains, Value: new("")},
 		})
 		require.Error(t, err)
 		var invalid ErrorInvalidParam
@@ -170,11 +169,11 @@ func TestValidateLogsLimit(t *testing.T) {
 		wantErr bool
 	}{
 		"nil limit defaults later":  {limit: nil, wantErr: false},
-		"in-range limit":            {limit: ptr.To(500), wantErr: false},
-		"max limit allowed":         {limit: ptr.To(MaxLogLimit), wantErr: false},
-		"zero is rejected":          {limit: ptr.To(0), wantErr: true},
-		"negative is rejected":      {limit: ptr.To(-1), wantErr: true},
-		"above the cap is rejected": {limit: ptr.To(MaxLogLimit + 1), wantErr: true},
+		"in-range limit":            {limit: new(500), wantErr: false},
+		"max limit allowed":         {limit: new(MaxLogLimit), wantErr: false},
+		"zero is rejected":          {limit: new(0), wantErr: true},
+		"negative is rejected":      {limit: new(-1), wantErr: true},
+		"above the cap is rejected": {limit: new(MaxLogLimit + 1), wantErr: true},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {

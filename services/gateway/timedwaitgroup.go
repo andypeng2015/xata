@@ -17,7 +17,7 @@ import (
 type timedWaitGroup struct {
 	mu              sync.Mutex
 	closed          bool          // indicate that the drainer is closed.
-	connectionCount int64         // Protected by atomic operations
+	connectionCount atomic.Int64  // Protected by atomic operations
 	completeChan    chan struct{} // Closed when all connections are done
 	drainingTimeout time.Duration
 }
@@ -48,13 +48,13 @@ func (d *timedWaitGroup) Add(delta int) error {
 		return errDrainerClosed
 	}
 
-	atomic.AddInt64(&d.connectionCount, int64(delta))
+	d.connectionCount.Add(int64(delta))
 	return nil
 }
 
 // Done decrements the TimedWaitGroup counter by one.
 func (d *timedWaitGroup) Done() {
-	newCount := atomic.AddInt64(&d.connectionCount, -1)
+	newCount := d.connectionCount.Add(-1)
 
 	// If this was the last connection and we're closed, signal completion
 	if newCount == 0 {
@@ -80,7 +80,7 @@ func (d *timedWaitGroup) Wait(ctx context.Context) error {
 	d.mu.Lock()
 	d.closed = true
 	d.mu.Unlock()
-	if atomic.LoadInt64(&d.connectionCount) == 0 || d.drainingTimeout == 0 {
+	if d.connectionCount.Load() == 0 || d.drainingTimeout == 0 {
 		d.signalCompletion()
 		return nil
 	}
@@ -118,5 +118,5 @@ func (d *timedWaitGroup) signalCompletion() {
 
 // GetCount returns the current value of the counter.
 func (d *timedWaitGroup) GetCount() int64 {
-	return atomic.LoadInt64(&d.connectionCount)
+	return d.connectionCount.Load()
 }

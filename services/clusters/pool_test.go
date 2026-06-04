@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -106,7 +105,7 @@ func TestFindPoolCluster(t *testing.T) {
 					Kind:       cpv1alpha1.ClusterPoolKind,
 					UID:        poolUID,
 					Name:       "test-pool",
-					Controller: ptr.To(true),
+					Controller: new(true),
 				},
 			},
 		},
@@ -175,7 +174,7 @@ func TestFindPoolCluster(t *testing.T) {
 					Name:      "pool-cluster-unhealthy",
 					Namespace: namespace,
 					OwnerReferences: []metav1.OwnerReference{
-						{APIVersion: cpv1alpha1.GroupVersion.String(), Kind: cpv1alpha1.ClusterPoolKind, UID: poolUID, Name: "test-pool", Controller: ptr.To(true)},
+						{APIVersion: cpv1alpha1.GroupVersion.String(), Kind: cpv1alpha1.ClusterPoolKind, UID: poolUID, Name: "test-pool", Controller: new(true)},
 					},
 				},
 				Status: apiv1.ClusterStatus{
@@ -383,7 +382,7 @@ func TestFindHealthyClusterInPool(t *testing.T) {
 		Kind:       cpv1alpha1.ClusterPoolKind,
 		UID:        poolUID,
 		Name:       "test-pool",
-		Controller: ptr.To(true),
+		Controller: new(true),
 	}
 
 	now := metav1.Now()

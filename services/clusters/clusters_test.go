@@ -2261,7 +2261,7 @@ func poolClusterForTest() *apiv1.Cluster {
 					Kind:       cpv1alpha1.ClusterPoolKind,
 					UID:        "pool-uid-123",
 					Name:       "test-pool",
-					Controller: ptr.To(true),
+					Controller: new(true),
 				},
 			},
 		},
