@@ -121,6 +121,18 @@ spec:
                 secretKeyRef:
                   name: slack-secret
                   key: bot-token
+            - name: CUSTOMER_IO_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: customerio
+                  key: CUSTOMER_IO_API_KEY
+                  optional: true
+            - name: CUSTOMER_IO_IS_PRODUCTION
+              valueFrom:
+                configMapKeyRef:
+                  name: customerio-config
+                  key: CUSTOMER_IO_IS_PRODUCTION
+                  optional: true
             - name: TACKLE_CLIENT_ID
               valueFrom:
                 secretKeyRef:

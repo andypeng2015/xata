@@ -7,13 +7,15 @@ import (
 
 //go:generate go run github.com/vektra/mockery/v3 --output billingmock --outpkg billingmock --with-expecter --name Client
 
+const TrialCreditExpiryDays = 15
+
 type Subscription struct {
 	ID string
 }
 
 type Credit struct {
 	ID                    string
-	Amount                int64
+	Amount                float64
 	MaximumInitialBalance float64
 	ExpiryDate            time.Time
 }
