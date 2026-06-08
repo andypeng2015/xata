@@ -35,7 +35,7 @@ Wait until all resources are up. This might take a long time when you run it for
 curl -fsSL https://xata.io/install.sh | bash
 
 # Authenticate to a local profile. Sign in with email dev@xata.tech and password Xata1234!
-xata auth login --profile local --env local --force
+xata auth login --profile local --issuer http://localhost:8080/realms/xata --api-url http://localhost:5001 --client-secret devsecret
 
 # Set the profile
 xata auth switch local
