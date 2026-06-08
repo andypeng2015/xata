@@ -50,7 +50,7 @@ config:
 
 realmImport:
   ttlSecondsAfterFinished: 86400
-  image: adorsys/keycloak-config-cli:latest-26
+  image: adorsys/keycloak-config-cli:6.5.1-26.5.5
   # Name of a ConfigMap providing realm.json. When set, the chart does not
   # generate its own ConfigMap from files/realm.json.
   configMapName: ""
