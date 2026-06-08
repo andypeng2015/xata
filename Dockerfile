@@ -5,7 +5,7 @@
 #
 # Builder stage: used as cache for building the image in the future
 #
-FROM --platform=$BUILDPLATFORM golang:1.26.3 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.4 AS builder
 
 WORKDIR /xata
 
@@ -39,11 +39,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go build -buildvcs=true -o server ./${SERVICE_PATH:-services/${SERVICE_NAME}}/cmd
 
 # 🔧 Debug tools stage (builds only if needed)
-FROM golang:1.26.3 AS delve
+FROM golang:1.26.4 AS delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
 # 🐞 Final debug image (with Delve)
-FROM golang:1.26.3 AS debug
+FROM golang:1.26.4 AS debug
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=binary /xata/server /server
 COPY --from=delve /go/bin/dlv /dlv

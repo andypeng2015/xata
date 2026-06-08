@@ -1,6 +1,6 @@
 module xata
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
