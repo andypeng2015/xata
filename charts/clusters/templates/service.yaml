@@ -3,8 +3,15 @@ kind: Service
 metadata:
   name: clusters
   namespace: {{ .Release.Namespace }}
+{{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
 spec:
-  type: ClusterIP
+  type: {{ .Values.service.type }}
+{{- with .Values.service.loadBalancerClass }}
+  loadBalancerClass: {{ . }}
+{{- end }}
   ports:
     - name: grpc
       port: {{ .Values.service.grpcPort }}

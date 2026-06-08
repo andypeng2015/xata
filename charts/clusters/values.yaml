@@ -7,6 +7,9 @@ imagePullSecrets: []
 
 service:
   grpcPort: 5002
+  type: ClusterIP
+  loadBalancerClass: ""
+  annotations: {}
 
 config:
   clusters:
