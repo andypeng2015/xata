@@ -1859,10 +1859,6 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 // (POST /organizations/{organizationID}/projects/{projectID}/branches/{branchID}/logs)
 func (s *handler) BranchLogs(c echo.Context, organizationID spec.OrganizationID, projectID string, branchID string) error {
 	return s.withOrganizationAccess(c, organizationID, All, func() error {
-		if !s.feat.BoolValue(c.Request().Context(), flags.BranchLogs) {
-			return echo.NewHTTPError(http.StatusNotFound)
-		}
-
 		var req spec.BranchLogsRequest
 		if err := c.Bind(&req); err != nil {
 			return err

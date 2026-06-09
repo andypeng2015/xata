@@ -48,10 +48,6 @@ var (
 		Name:           "usePgBackRest",
 		DefaultEnabled: false,
 	}
-	BranchLogs = openfeature.FeatureFlag{
-		Name:           "branchLogs",
-		DefaultEnabled: false,
-	}
 	// BranchObservabilityPerCell enables the X-Xata-Observability-Backend
 	// header, letting the console force branch metrics & logs to a specific
 	// backend. When false (default), the header is ignored and the backend is

@@ -3487,7 +3487,7 @@ func TestBranchLogs(t *testing.T) {
 	mockClusters := protomocks.NewClustersServiceClient(t)
 	mockCells := cellsmock.NewCellsMock(t, mockClusters)
 	mockMetrics := metricsmock.NewClient(t)
-	feat := openfeaturetest.NewClient(map[openfeature.FeatureFlag]bool{flags.BranchLogs: true})
+	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 
 	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", mockMetrics, mockMetrics, sched, analyticsmocks.NewClient(t), nil, nil)

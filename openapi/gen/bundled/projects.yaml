@@ -1151,8 +1151,6 @@ paths:
       tags:
         - Branches
         - Logs
-      x-excluded: true
-      x-internal: true
   /organizations/{organizationID}/projects/{projectID}/branches/{branchID}/postgres-config:
     get:
       operationId: getBranchPostgresConfig
