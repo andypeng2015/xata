@@ -89,6 +89,62 @@ func TestBuildClusterStatus(t *testing.T) {
 				"c-1": {Status: InstanceStatusUnknown, Primary: true},
 			},
 		},
+		"healthy with xata role pending downgrades to transient": {
+			cluster: &apiv1.Cluster{
+				Spec: apiv1.ClusterSpec{
+					Managed: &apiv1.ManagedConfiguration{
+						Roles: []apiv1.RoleConfiguration{{Name: "xata"}},
+					},
+				},
+				Status: apiv1.ClusterStatus{
+					Phase:          apiv1.PhaseHealthy,
+					Instances:      1,
+					ReadyInstances: 1,
+					CurrentPrimary: "c-1",
+					InstancesStatus: map[apiv1.PodStatus][]string{
+						apiv1.PodHealthy: {"c-1"},
+					},
+					ManagedRolesStatus: apiv1.ManagedRoles{
+						ByStatus: map[apiv1.RoleStatus][]string{
+							apiv1.RoleStatusPendingReconciliation: {"xata"},
+						},
+					},
+				},
+			},
+			wantStatus:     apiv1.PhaseHealthy,
+			wantStatusType: clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT,
+			wantInstances: map[string]*clustersv1.InstanceStatus{
+				"c-1": {Status: string(apiv1.PodHealthy), Primary: true},
+			},
+		},
+		"healthy with xata role reconciled stays healthy": {
+			cluster: &apiv1.Cluster{
+				Spec: apiv1.ClusterSpec{
+					Managed: &apiv1.ManagedConfiguration{
+						Roles: []apiv1.RoleConfiguration{{Name: "xata"}},
+					},
+				},
+				Status: apiv1.ClusterStatus{
+					Phase:          apiv1.PhaseHealthy,
+					Instances:      1,
+					ReadyInstances: 1,
+					CurrentPrimary: "c-1",
+					InstancesStatus: map[apiv1.PodStatus][]string{
+						apiv1.PodHealthy: {"c-1"},
+					},
+					ManagedRolesStatus: apiv1.ManagedRoles{
+						ByStatus: map[apiv1.RoleStatus][]string{
+							apiv1.RoleStatusReconciled: {"xata"},
+						},
+					},
+				},
+			},
+			wantStatus:     apiv1.PhaseHealthy,
+			wantStatusType: clustersv1.ClusterStatus_STATUS_TYPE_HEALTHY,
+			wantInstances: map[string]*clustersv1.InstanceStatus{
+				"c-1": {Status: string(apiv1.PodHealthy), Primary: true},
+			},
+		},
 		"hibernated trumps healthy phase": {
 			cluster: &apiv1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{

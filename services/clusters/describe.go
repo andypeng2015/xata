@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"fmt"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -102,7 +103,20 @@ func BuildClusterStatus(cluster *apiv1.Cluster) *clustersv1.ClusterStatus {
 		status.StatusType = clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT
 	}
 
+	// Pooled clusters report Phase=Healthy before CNPG syncs the branch's `xata`
+	// password, so connecting would fail. Hold at TRANSIENT until the role is reconciled.
+	if status.StatusType == clustersv1.ClusterStatus_STATUS_TYPE_HEALTHY && !xataRoleReconciled(cluster) {
+		status.StatusType = clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT
+	}
+
 	return &status
+}
+
+func xataRoleReconciled(cluster *apiv1.Cluster) bool {
+	if !cluster.ContainsManagedRolesConfiguration() {
+		return true
+	}
+	return slices.Contains(cluster.Status.ManagedRolesStatus.ByStatus[apiv1.RoleStatusReconciled], "xata")
 }
 
 func instancesReconciled(status *clustersv1.ClusterStatus) bool {
