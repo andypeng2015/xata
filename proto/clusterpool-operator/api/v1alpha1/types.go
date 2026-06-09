@@ -21,6 +21,44 @@ type ClusterPoolSpec struct {
 	// pool will use this spec.
 	// +kubebuilder:validation:Required
 	ClusterSpec cnpgv1.ClusterSpec `json:"clusterSpec"`
+
+	// PoolerSpec, when set, pre-provisions a PgBouncer PoolerSpec for every Cluster in
+	// the pool, named "<cluster>-pooler". A Branch that claims a pool cluster
+	// adopts its pooler the same way it adopts the cluster, so the pooler is
+	// already running when the branch wakes up.
+	// +optional
+	PoolerSpec *PoolerSpec `json:"poolerSpec,omitempty"`
+}
+
+// PoolerSpec defines the desired state of a pre-provisioned PgBouncer Pooler
+// for Clusters in the pool. Its fields mirror the branch-operator's
+// Branch.Spec.Pooler so a pre-walmed pooler matches what the Branch applies
+// when it adopts the pooler.
+type PoolerSpec struct {
+	// Instances is the number of PgBouncer instances. Values below 1 are
+	// treated as 1 so the pooler stays warm while waiting in the pool.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=5
+	// +optional
+	// +kubebuilder:default:=1
+	Instances int32 `json:"instances,omitempty"`
+
+	// Mode is the PgBouncer pool mode.
+	// +kubebuilder:validation:Enum=session;transaction
+	// +optional
+	// +kubebuilder:default:="session"
+	Mode string `json:"mode,omitempty"`
+
+	// MaxClientConn is the maximum number of client connections to PgBouncer.
+	// +optional
+	// +kubebuilder:default:="100"
+	MaxClientConn string `json:"maxClientConn,omitempty"`
+
+	// DefaultPoolSize overrides the PgBouncer default_pool_size parameter.
+	// When empty the PgBouncer default is left in place.
+	// +optional
+	// +kubebuilder:validation:Pattern="^[1-9][0-9]*$"
+	DefaultPoolSize string `json:"defaultPoolSize,omitempty"`
 }
 
 // ClusterPoolStatus defines the observed state of a ClusterPool
