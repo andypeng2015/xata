@@ -280,8 +280,8 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		WithMandatoryPostgresParameters()
 
 	// Fail fast if pgbackrest is requested but the cell isn't configured for it
-	if branch := branchBuilder.Build(); branch.Spec.BackupSpec.IsPgBackRest() && branch.Spec.BackupSpec.PgBackRest.Bucket == "" {
-		return nil, status.Errorf(codes.FailedPrecondition, "pgbackrest backup method requested but XATA_PGBACKREST_BUCKET is not configured in this cell")
+	if branch := branchBuilder.Build(); branch.Spec.BackupSpec.IsPgBackRest() && (branch.Spec.BackupSpec.PgBackRest.Bucket == "" || branch.Spec.BackupSpec.PgBackRest.Region == "") {
+		return nil, status.Errorf(codes.FailedPrecondition, "pgbackrest backup method requested but XATA_PGBACKREST_BUCKET/XATA_BACKUPS_REGION is not configured in this cell")
 	}
 
 	// If use_pool is set, we look for a create pool matching the request. If one

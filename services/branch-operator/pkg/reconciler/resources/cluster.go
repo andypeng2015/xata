@@ -202,20 +202,12 @@ func ClusterSpec(
 		WithImagePullSecrets(imagePullSecrets...).
 		WithEnableSuperuserAccess(true).
 		WithSuperuserSecret(corev1ac.LocalObjectReference().
-			WithName(branchName+"-superuser")).
+			WithName(branchName + "-superuser")).
 		WithBootstrap(bootstrap).
 		WithPostgresConfiguration(apiv1ac.PostgresConfiguration().
 			WithParameters(PostgresParametersToMap(cfg.Postgres)).
 			WithAdditionalLibraries(cfg.Postgres.GetSharedPreloadLibraries()...)).
-		WithPlugins(
-			apiv1ac.PluginConfiguration().
-				WithName("cnpg-i-scale-to-zero.xata.io"),
-			apiv1ac.PluginConfiguration().
-				WithName("barman-cloud.cloudnative-pg.io").
-				WithEnabled(cfg.RequiresBarmanPlugin()).
-				WithIsWALArchiver(true).
-				WithParameters(BarmanPluginParameters(branchName, cfg.GetServerName())),
-		).
+		WithPlugins(clusterPlugins(branchName, cfg)...).
 		WithResources(cfg.Resources).
 		WithBackup(backupConfiguration(branchName, cfg)).
 		WithProbes(apiv1ac.ProbesConfiguration().
@@ -400,6 +392,26 @@ func smartShutdownTimeout(t *int32) int32 {
 }
 
 // backupConfiguration builds the CNPG BackupConfiguration for the cluster.
+// clusterPlugins returns the plugin configurations for the CNPG Cluster.
+// The scale-to-zero plugin is always included. The barman-cloud plugin is
+// only included when barman is the backup method.
+func clusterPlugins(branchName string, cfg ClusterConfig) []*apiv1ac.PluginConfigurationApplyConfiguration {
+	plugins := []*apiv1ac.PluginConfigurationApplyConfiguration{
+		apiv1ac.PluginConfiguration().
+			WithName("cnpg-i-scale-to-zero.xata.io"),
+	}
+
+	if !cfg.IsPgBackRest() {
+		plugins = append(plugins, apiv1ac.PluginConfiguration().
+			WithName("barman-cloud.cloudnative-pg.io").
+			WithEnabled(cfg.RequiresBarmanPlugin()).
+			WithIsWALArchiver(true).
+			WithParameters(BarmanPluginParameters(branchName, cfg.GetServerName())))
+	}
+
+	return plugins
+}
+
 // Volume snapshot config is always included regardless of backup method.
 // For barman, backup storage is configured via the separate ObjectStore CR.
 // For pgbackrest, backup storage is configured inline on the Cluster.
