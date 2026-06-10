@@ -15,18 +15,21 @@ spec:
   hostnames:
     - {{ .Values.httpRoute.hostname }}
   rules:
+    {{- /* Gateway API allows at most 8 matches per rule, so split patterns across rules. */}}
+    {{- range chunk 8 .Values.httpRoute.pathPatterns }}
     - backendRefs:
         - group: ""
           kind: Service
-          name: {{ .Chart.Name }}
-          port: {{ .Values.service.httpPort }}
+          name: {{ $.Chart.Name }}
+          port: {{ $.Values.service.httpPort }}
           weight: 1
       matches:
-        {{- range .Values.httpRoute.pathPatterns }}
+        {{- range . }}
         - path:
             type: RegularExpression
             value: {{ . | quote }}
         {{- end }}
       timeouts:
         request: 60s
+    {{- end }}
 {{- end }}
