@@ -134,14 +134,16 @@ func TestPoolerReconciliation(t *testing.T) {
 				return getK8SObject(ctx, br.Name+reconciler.PoolerSuffix, &pooler)
 			})
 
-			// Verify labels are set on the Pooler resource
+			// Org/project labels are set on the Pooler resource.
 			require.Equal(t, "org-123", pooler.Labels["xata.io/organizationID"])
 			require.Equal(t, "proj-456", pooler.Labels["xata.io/projectID"])
 
-			// Verify labels are propagated to the pod template
+			// They are deliberately kept off the pod template: the template is
+			// branch-agnostic so a pre-warmed pool pooler can be adopted without
+			// rolling its PgBouncer pod.
 			require.NotNil(t, pooler.Spec.Template)
-			require.Equal(t, "org-123", pooler.Spec.Template.ObjectMeta.Labels["xata.io/organizationID"])
-			require.Equal(t, "proj-456", pooler.Spec.Template.ObjectMeta.Labels["xata.io/projectID"])
+			require.NotContains(t, pooler.Spec.Template.ObjectMeta.Labels, "xata.io/organizationID")
+			require.NotContains(t, pooler.Spec.Template.ObjectMeta.Labels, "xata.io/projectID")
 		})
 	})
 

@@ -11,8 +11,8 @@ import (
 	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"xata/internal/cnpg/pooler"
 	"xata/services/branch-operator/api/v1alpha1"
-	"xata/services/branch-operator/pkg/reconciler/resources"
 )
 
 const PoolerSuffix = "-pooler"
@@ -65,9 +65,15 @@ func (r *BranchReconciler) reconcilePooler(
 		return err
 	}
 
-	// Build and apply the desired Pooler configuration. The Pooler is owned by
-	// the Cluster not the Branch since the Pooler's lifecycle is bound to the
-	// Cluster, not the Branch.
+	// The pooler scales to zero instances while the branch is hibernated.
+	instances := branch.Spec.Pooler.Instances
+	if branch.Spec.ClusterSpec.Hibernation.IsEnabled() {
+		instances = 0
+	}
+
+	// Org/project labels live on the Pooler resource (not the pod template):
+	// the pod template is kept branch-agnostic so a pre-warmed pool pooler can
+	// be adopted without rolling its PgBouncer pod.
 	ac := apiv1ac.Pooler(poolerName, r.ClustersNamespace).
 		WithLabels(clusterLabels(branch.Spec.InheritedMetadata)).
 		WithOwnerReferences(metav1ac.OwnerReference().
@@ -77,14 +83,12 @@ func (r *BranchReconciler) reconcilePooler(
 			WithUID(cluster.UID).
 			WithBlockOwnerDeletion(true).
 			WithController(false)).
-		WithSpec(resources.PoolerSpec(
+		WithSpec(pooler.Spec(
 			branch.ClusterName(),
-			branch.Spec.Pooler.Instances,
-			branch.Spec.ClusterSpec.Hibernation.IsEnabled(),
+			instances,
 			apiv1.PgBouncerPoolMode(branch.Spec.Pooler.Mode),
 			branch.Spec.Pooler.MaxClientConn,
 			defaultPoolSize(branch),
-			branch.Spec.InheritedMetadata.GetLabels(),
 			r.ImagePullSecrets,
 			r.Tolerations,
 			branch.Spec.ClusterSpec.Affinity.GetNodeSelector(),
