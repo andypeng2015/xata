@@ -27,7 +27,6 @@ func TestBuildLogsQL_AppendsBranchScope(t *testing.T) {
 	require.Contains(t, q, `kubernetes.container_name:="postgres"`)
 	require.Contains(t, q, `logger:in ("postgres","pgaudit")`, "scopes to postgres and pgaudit, drops instance-manager / barman")
 	require.Contains(t, q, `branch_id:="br-1"`)
-	require.Contains(t, q, `kubernetes.pod_name:~"^br-1-"`, "legacy fallback for pre-branch_id rows")
 	require.NotContains(t, q, "_time:<", "no resume clause when cursor is empty")
 }
 
@@ -131,7 +130,7 @@ func TestBuildLogsQL_FullQueryLocksScopeAndFields(t *testing.T) {
 
 	want := `kubernetes.namespace_name:="xata-clusters" AND kubernetes.container_name:="postgres"` +
 		` AND logger:in ("postgres","pgaudit")` +
-		` AND (branch_id:="br-1" OR kubernetes.pod_name:~"^br-1-")` +
+		` AND branch_id:="br-1"` +
 		` AND _time:<2024-10-27T03:33:20Z` +
 		` AND kubernetes.pod_name:in ("br-1-0")` +
 		` AND severity_text:in ("ERROR","FATAL","PANIC","CRITICAL")` +

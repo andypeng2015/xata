@@ -196,14 +196,10 @@ func (q *MetricsQuerier) Query(ctx context.Context, branchID string, metrics, in
 	g, gctx := errgroup.WithContext(ctx)
 	for mi, m := range metrics {
 		info := infos[mi]
-		scopedMatchers := buildMatchers(q.namespace, branchID, instances, info.AdditionalLabels, info.ExcludeLabels)
-		// TODO(cleanup after one month): once retentionPeriod (30d) has elapsed
-		// from the deploy that introduced branch_id, drop legacyMatchers and the
-		// surrounding OR; series stamped before then carry no branch_id label.
-		legacyMatchers := buildLegacyPodMatchers(q.namespace, branchID, instances, info.AdditionalLabels, info.ExcludeLabels)
+		matchers := buildMatchers(q.namespace, branchID, instances, info.AdditionalLabels, info.ExcludeLabels)
 		for ai, agg := range aggregations {
 			g.Go(func() error {
-				query, err := buildPromQL(info, agg, scopedMatchers, legacyMatchers, step)
+				query, err := buildPromQL(info, agg, matchers, step)
 				if err != nil {
 					return fmt.Errorf("build promql (metric=%s agg=%s): %w", m, agg, err)
 				}
@@ -241,22 +237,8 @@ func (q *MetricsQuerier) Query(ctx context.Context, branchID string, metrics, in
 // buildPromQL assembles the PromQL expression for a metric/aggregation pair.
 // Counters get `<spaceAgg> by (pod) (<temporalAgg>(<metric>{matchers}[window]))`;
 // gauges get `<spaceAgg> by (pod) (<metric>{matchers})` with the user-supplied
-// agg as the space aggregation when the metric has no fixed default. The
-// scoped and legacy matcher pairs are unioned with PromQL `or`; LHS wins per
-// label set, so post-deploy series shadow the legacy fallback automatically.
-func buildPromQL(info MetricInfo, userAgg, scopedMatchers, legacyMatchers string, step time.Duration) (string, error) {
-	scoped, err := buildPromQLClause(info, userAgg, scopedMatchers, step)
-	if err != nil {
-		return "", err
-	}
-	legacy, err := buildPromQLClause(info, userAgg, legacyMatchers, step)
-	if err != nil {
-		return "", err
-	}
-	return scoped + " or " + legacy, nil
-}
-
-func buildPromQLClause(info MetricInfo, userAgg, matchers string, step time.Duration) (string, error) {
+// agg as the space aggregation when the metric has no fixed default.
+func buildPromQL(info MetricInfo, userAgg, matchers string, step time.Duration) (string, error) {
 	switch info.Kind {
 	case Counter:
 		// Counter rate windows must clamp to >= 4 * scrape_interval so a
@@ -301,20 +283,9 @@ func rateWindow(step time.Duration) time.Duration {
 // is always added so a buggy or malicious caller cannot read another
 // branch's samples by omitting the instance list.
 func buildMatchers(namespace, branchID string, instances []string, extra, exclude map[string]string) string {
-	return joinMatchers(namespace, fmt.Sprintf(`branch_id=%q`, branchID), instances, extra, exclude)
-}
-
-// buildLegacyPodMatchers renders the pre-branch_id matcher set, scoping by
-// pod-name prefix. TODO(cleanup after one month): remove once retention has
-// aged past the branch_id rollout.
-func buildLegacyPodMatchers(namespace, branchID string, instances []string, extra, exclude map[string]string) string {
-	return joinMatchers(namespace, fmt.Sprintf(`pod=~%q`, "^"+regexp.QuoteMeta(branchID)+"-.*"), instances, extra, exclude)
-}
-
-func joinMatchers(namespace, scope string, instances []string, extra, exclude map[string]string) string {
 	parts := []string{
 		fmt.Sprintf(`namespace=%q`, namespace),
-		scope,
+		fmt.Sprintf(`branch_id=%q`, branchID),
 	}
 	if len(instances) > 0 {
 		parts = append(parts, fmt.Sprintf(`pod=~%q`, "^("+strings.Join(quotedRegexAlts(instances), "|")+")$"))

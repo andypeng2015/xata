@@ -162,10 +162,7 @@ func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeBeforeNa
 	// (logger="backup") and actual postgres records (logger="postgres").
 	// Match SigNoz behaviour and only surface the latter.
 	b.WriteString(` AND logger:in ("postgres","pgaudit")`)
-	// TODO(cleanup after one month): drop the pod_name regex disjunct once
-	// VictoriaLogs retentionPeriod (30d) has aged past the branch_id
-	// rollout; rows from before then carry no branch_id field.
-	fmt.Fprintf(&b, ` AND (branch_id:=%q OR kubernetes.pod_name:~%q)`, branchID, "^"+regexp.QuoteMeta(branchID)+"-")
+	fmt.Fprintf(&b, ` AND branch_id:=%q`, branchID)
 	if resumeBeforeNanos > 0 {
 		fmt.Fprintf(&b, " AND _time:<%s", time.Unix(0, resumeBeforeNanos).UTC().Format(time.RFC3339Nano))
 	}

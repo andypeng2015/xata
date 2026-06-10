@@ -90,7 +90,6 @@ func TestGetMetric(t *testing.T) {
 				assert.Contains(t, *spec.Filter.Expression, `k8s.pod.name IN ["pod-1"]`)
 				assert.Contains(t, *spec.Filter.Expression, `k8s.namespace.name = "xata-clusters"`)
 				assert.Contains(t, *spec.Filter.Expression, `branch_id = "br-123"`)
-				assert.Contains(t, *spec.Filter.Expression, `k8s.pod.name REGEXP "^br-123-"`, "legacy fallback for pre-branch_id rows")
 			},
 		},
 		{

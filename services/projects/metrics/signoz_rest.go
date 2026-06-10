@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -240,6 +239,12 @@ func buildMetricsFilterExpression(namespace, branchID string, instances []string
 	return filter.And(parts...).Render()
 }
 
+// branchScopeFilter returns the per-branch predicate enforced server-side so
+// a caller cannot read other branches' data by omitting the instance filter.
+func branchScopeFilter(branchID string) filter.Expr {
+	return filter.Eq("branch_id", branchID)
+}
+
 func buildMetricQueries(metricName string, step int, aggregations []string, filterExpr string) ([]signoz.Querybuildertypesv5QueryEnvelope, map[string]string, error) {
 	info := sigNozMetricName[metricName]
 	stepInterval, err := buildStepInterval(step)
@@ -305,18 +310,6 @@ func stepForMetric(metricName string, step int) int {
 		return step
 	}
 	return max(step, counterRateWindowSeconds)
-}
-
-// branchScopeFilter returns the per-branch predicate, OR'd with the
-// pre-branch_id pod-name regex so queries still hit data emitted before the
-// branch_id attribute was added.
-// TODO(cleanup after one month): drop the Regexp fallback once SigNoz
-// retention has aged past the branch_id rollout.
-func branchScopeFilter(branchID string) filter.Expr {
-	return filter.Or(
-		filter.Eq("branch_id", branchID),
-		filter.Regexp("k8s.pod.name", "^"+regexp.QuoteMeta(branchID)+"-"),
-	)
 }
 
 func (sc *SigNozClient) GetLogs(ctx context.Context, _organizationID, _cellID string, start, end time.Time, branchID string, userFilters []LogFilter, limit int, cursor string) (*BranchLogs, error) {
