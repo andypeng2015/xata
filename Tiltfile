@@ -142,23 +142,6 @@ def create_resources():
     k8s_resource(workload='import-keycloak-realm', resource_deps=['auth-keycloak'], labels='auth')
     k8s_resource(workload='auth-keycloak', resource_deps=['keycloak-operator', 'bootstrap-db'], labels='auth')
 
-    # Signoz
-    helm_repo('signoz-charts', 'https://charts.signoz.io', labels='repos')
-    helm_resource(
-        name='signoz-local',
-        chart='signoz-charts/signoz',
-        namespace='signoz',
-        resource_deps=['signoz-charts'],
-        flags=[
-            '--create-namespace',
-            '-f=kustomize/overlays/local/signoz-values.yaml',
-            '--timeout=10m',
-            '--wait=false',
-            '--version=0.117.1',
-        ],
-        labels='monitoring',
-    )
-
     # Per-cell metrics & logs stack (VictoriaMetrics + VictoriaLogs + Vector).
     k8s_resource('victoria-metrics', port_forwards=8428, labels='monitoring')
     k8s_resource('victoria-logs', port_forwards=9428, labels='monitoring')
@@ -226,6 +209,12 @@ cfg = config.parse()
 create_resources()
 
 groups_by_label = {
+    'monitoring': [
+        'victoria-metrics',
+        'victoria-logs',
+        'vmagent',
+        'vector',
+    ],
     'cnpg': [
         'cnpg-controller-manager',
         'scale-to-zero',
