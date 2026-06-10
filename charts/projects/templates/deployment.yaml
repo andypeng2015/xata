@@ -122,8 +122,6 @@ spec:
               value: {{ .Values.postgres.sslmode | quote }}
             - name: OTEL_SERVICE_NAME
               value: {{ .Values.observability.serviceName | quote }}
-            - name: XATA_CLUSTERS_NAMESPACE
-              value: {{ .Values.dependencies.clustersNamespace | quote }}
             - name: SCHEDULER_CONFIG_PATH
               value: "/config/scheduler.yaml"
             - name: POSTGRES_DB

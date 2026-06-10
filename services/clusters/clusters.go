@@ -68,9 +68,8 @@ type ClustersService struct {
 	clusterCacheOk     chan struct{}
 	clusterCacheCancel context.CancelFunc
 
-	// Observability queriers — nil when no per-cell backend is configured.
-	// In that case GetBranchMetrics/GetBranchLogs return Unimplemented and
-	// the projects service falls through to the legacy SigNoz path.
+	// Observability queriers — nil when no per-cell backend is configured,
+	// in which case GetBranchMetrics/GetBranchLogs return Unimplemented.
 	metricsQuerier *observability.MetricsQuerier
 	logsQuerier    *observability.LogsQuerier
 }

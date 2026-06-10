@@ -84,13 +84,9 @@ type handler struct {
 	// defaultGatewayHostPort is the host:port of the gateway service, used to build connection strings
 	defaultGatewayHostPort string
 
-	// metricsClient is the legacy SigNoz-backed metrics client.
+	// metricsClient routes branch metric/log queries to the per-cell
+	// VictoriaMetrics/VictoriaLogs backend via the clusters gRPC service.
 	metricsClient metrics.Client
-
-	// cellsMetricsClient routes branch metric/log queries to the per-cell
-	// observability backend via the clusters gRPC service. Selected per
-	// request by start time, or by the observabilityBackendHeader override.
-	cellsMetricsClient metrics.Client
 
 	// postgresConfigProvider is the provider for PostgreSQL configuration operations
 	postgresConfigProvider postgrescfg.PostgresConfigProvider
@@ -99,14 +95,13 @@ type handler struct {
 	imageProvider postgresversions.ImageProvider
 }
 
-func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cells.Cells, gatewayHostPort string, metricsClient metrics.Client, cellsMetricsClient metrics.Client, scheduler *scheduler.Scheduler, analytics analytics.Client, postgresConfigProvider postgrescfg.PostgresConfigProvider, imageProvider postgresversions.ImageProvider) spec.ServerInterface {
+func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cells.Cells, gatewayHostPort string, metricsClient metrics.Client, scheduler *scheduler.Scheduler, analytics analytics.Client, postgresConfigProvider postgrescfg.PostgresConfigProvider, imageProvider postgresversions.ImageProvider) spec.ServerInterface {
 	return &handler{
 		feat:                   feat,
 		store:                  store,
 		cells:                  cells,
 		defaultGatewayHostPort: gatewayHostPort,
 		metricsClient:          metricsClient,
-		cellsMetricsClient:     cellsMetricsClient,
 		sched:                  scheduler,
 		analytics:              analytics,
 		postgresConfigProvider: postgresConfigProvider,
@@ -114,51 +109,11 @@ func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cel
 	}
 }
 
-// observabilityBackendHeader is an internal, undocumented HTTP header the
-// console can set to override per-request backend routing. It is
-// intentionally absent from the OpenAPI spec. Recognised values: "signoz",
-// "victoria". Honoured only when the BranchObservabilityPerCell feature flag
-// is enabled for the org; otherwise the header is ignored and the backend is
-// chosen automatically by request time range.
-const observabilityBackendHeader = "X-Xata-Observability-Backend"
-
-const (
-	observabilityBackendSigNoz   = "signoz"
-	observabilityBackendVictoria = "victoria"
-)
-
-// vmDataAvailableSince is the earliest timestamp for which the per-cell
-// VictoriaMetrics/VictoriaLogs backend has data. Queries whose start time
-// pre-dates this cutoff fall back to SigNoz, which retains the full history.
-// Temporary — remove once the VM retention window covers the SigNoz one.
-var vmDataAvailableSince = time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
-
 // maxMetricsPerRequest bounds the per-request fan-out to the backend (one
 // HTTP/PromQL call per metric). It matches the `metrics` maxItems in the
 // OpenAPI spec, but is enforced here because requests are not validated
 // against the spec at runtime.
 const maxMetricsPerRequest = 15
-
-// selectMetricsClient returns the metrics client for the current request.
-// By default it picks automatically by time range: the per-cell VM backend
-// for ranges within its retention window, SigNoz otherwise (it keeps the full
-// history). The BranchObservabilityPerCell flag enables the
-// observabilityBackendHeader override, letting the console force a specific
-// backend for debugging and side-by-side comparison.
-func (s *handler) selectMetricsClient(c echo.Context, start time.Time) metrics.Client {
-	if s.feat.BoolValue(c.Request().Context(), flags.BranchObservabilityPerCell) {
-		switch strings.ToLower(c.Request().Header.Get(observabilityBackendHeader)) {
-		case observabilityBackendSigNoz:
-			return s.metricsClient
-		case observabilityBackendVictoria:
-			return s.cellsMetricsClient
-		}
-	}
-	if start.Before(vmDataAvailableSince) {
-		return s.metricsClient
-	}
-	return s.cellsMetricsClient
-}
 
 // Get list of regions available for the organization
 // (GET /organizations/{organizationID}/regions)
@@ -1830,7 +1785,7 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 			return err
 		}
 
-		results, err := s.selectMetricsClient(c, req.Start).GetMetrics(c.Request().Context(), organizationID, branch.CellID, req.Start, req.End, branchID, metricNames, instances, stringArrayValue(req.Aggregations))
+		results, err := s.metricsClient.GetMetrics(c.Request().Context(), organizationID, branch.CellID, req.Start, req.End, branchID, metricNames, instances, stringArrayValue(req.Aggregations))
 		if err != nil {
 			return fmt.Errorf("get metrics for branch [%s]: %w", branchID, err)
 		}
@@ -1887,7 +1842,7 @@ func (s *handler) BranchLogs(c echo.Context, organizationID spec.OrganizationID,
 			return err
 		}
 
-		logs, err := s.selectMetricsClient(c, req.Start).GetLogs(
+		logs, err := s.metricsClient.GetLogs(
 			c.Request().Context(),
 			organizationID,
 			branch.CellID,

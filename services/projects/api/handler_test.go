@@ -70,18 +70,11 @@ func TestMain(m *testing.M) {
 
 const defaultStorage = int32(250)
 
-// createNewSigNozClient creates a metrics client for testing, ignoring errors
-func createNewSigNozClient(t *testing.T) metrics.Client {
-	client, err := metrics.NewSigNozClient("", "", "")
-	require.NoError(t, err)
-	return client
-}
-
 func TestListRegions(t *testing.T) {
 	mockStore := mocks.NewProjectsStore(t)
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	// Test list regions
@@ -125,7 +118,7 @@ func TestCreateProject(t *testing.T) {
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
-	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, mockAnalytics, nil, nil)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, mockAnalytics, nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	// Test create a project
@@ -242,7 +235,7 @@ func TestListProjects(t *testing.T) {
 	mockStore := mocks.NewProjectsStore(t)
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	// Test create a project
@@ -305,7 +298,7 @@ func TestListProjectsFiltersByClaims(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			feat := openfeaturetest.NewClient(nil)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(tc.claims)
 
 			mockStore.EXPECT().ListProjects(mock.Anything, apitest.TestOrganization).Return(projects, nil)
@@ -333,7 +326,7 @@ func TestDeleteProject(t *testing.T) {
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
-	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, mockAnalytics, nil, nil)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, mockAnalytics, nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	// Test delete a project
@@ -370,7 +363,7 @@ func TestGetProject(t *testing.T) {
 	mockStore := mocks.NewProjectsStore(t)
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	// Test get a project
@@ -540,7 +533,7 @@ func TestUpdateProject(t *testing.T) {
 				mockAnalytics.EXPECT().Track(mock.Anything, mock.Anything).Return()
 			}
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, mockAnalytics, nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, mockAnalytics, nil, nil)
 
 			c, rec := e.PATCH("/organizations/" + apitest.TestOrganization + "/projects/123").WithJSONBody(tt.jsonBody).Context()
 			err := handler.UpdateProject(c, apitest.TestOrganization, "123")
@@ -574,7 +567,7 @@ func TestAuth(t *testing.T) {
 	mockStore := mocks.NewProjectsStore(t)
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	wantErr := api.ErrorAuthorizationFailed{Reason: fmt.Sprintf("no access to organization [%s]", noAccessOrgID)}
@@ -605,7 +598,7 @@ func TestAuthDisabledOrg(t *testing.T) {
 	mockAnalytics := analyticsmocks.NewClient(t)
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, mockAnalytics, nil, nil)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, mockAnalytics, nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaimsDisabled)
 
 	wantErr := ErrorOrganizationDisabled{OrganizationID: noWriteAccessOrgID}
@@ -650,7 +643,7 @@ func TestCreateBranch(t *testing.T) {
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
-	handler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, mockAnalytics, mockPostgresConfig, mockImageProvider)
+	handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, mockAnalytics, mockPostgresConfig, mockImageProvider)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	now := time.Now()
@@ -1853,7 +1846,7 @@ func TestCreateBranchDisabled(t *testing.T) {
 
 	feat := openfeaturetest.NewClient(map[openfeature.FeatureFlag]bool{flags.BranchCreationDisabled: true})
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+	handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	c, _ := e.POST("/organizations/" + apitest.TestOrganization + "/projects").Context()
@@ -2184,7 +2177,7 @@ func TestRestoreFromBackup(t *testing.T) {
 			if tt.expectSuccess {
 				mockAnalytics.EXPECT().Track(mock.Anything, mock.Anything).Return()
 			}
-			handler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, mockAnalytics, mockPostgresConfig, mockImageProvider)
+			handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, mockAnalytics, mockPostgresConfig, mockImageProvider)
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 			tt.setupMocks(mockStore, mockClusters, mockPostgresConfig, mockImageProvider)
@@ -2227,7 +2220,7 @@ func TestListBranches(t *testing.T) {
 
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+	handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	branches := []store.Branch{
@@ -2307,7 +2300,7 @@ func TestListBranchesFiltersByClaims(t *testing.T) {
 			mockCells := cellsmock.NewCellsMock(t, mockClusters)
 			feat := openfeaturetest.NewClient(nil)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(tc.claims)
 
 			mockStore.EXPECT().ListBranches(mock.Anything, apitest.TestOrganization, "project_id").Return(branches, nil)
@@ -2503,7 +2496,7 @@ func TestGetBackup(t *testing.T) {
 
 			feat := openfeaturetest.NewClient(nil)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 			// Make the request
@@ -2542,7 +2535,7 @@ func TestGetBackupErrorTypes(t *testing.T) {
 
 		feat := openfeaturetest.NewClient(nil)
 		sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-		handler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+		handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 		e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 		backupID := "missing-backup-123"
@@ -2572,7 +2565,7 @@ func TestDescribeBranch(t *testing.T) {
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
 	mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchDescribedEvent(apitest.TestOrganization, "project_id", "branchID")).Return().Maybe()
-	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, mockAnalytics, mockPostgresConfig, nil)
+	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", nil, sched, mockAnalytics, mockPostgresConfig, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	branch := store.Branch{
@@ -3001,7 +2994,7 @@ func TestDescribeBranchXataUser(t *testing.T) {
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
 	mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchDescribedEvent(apitest.TestOrganization, "project_id", "branchID")).Return().Once()
-	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, mockAnalytics, mockPostgresConfig, nil)
+	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", nil, sched, mockAnalytics, mockPostgresConfig, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	branch := store.Branch{
@@ -3070,7 +3063,7 @@ func TestBranchMetrics(t *testing.T) {
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 
-	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", mockMetrics, mockMetrics, sched, analyticsmocks.NewClient(t), nil, nil)
+	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", mockMetrics, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	convertAggs := func(aggs []spec.BranchMetricsRequestAggregations) []string {
@@ -3395,99 +3388,13 @@ func TestBranchMetrics(t *testing.T) {
 	}
 }
 
-// TestBranchObservabilityPerCellFlag asserts the per-cell observability
-// selection logic. Backend selection is time-aware by default, flag or not:
-// requests whose start falls inside the VM retention window go to the per-cell
-// client, older requests fall back to SigNoz so charts aren't half-empty. The
-// X-Xata-Observability-Backend header overrides that decision in either
-// direction for debugging and side-by-side comparison, but only when the
-// BranchObservabilityPerCell flag is on; otherwise it is ignored.
-func TestBranchObservabilityPerCellFlag(t *testing.T) {
-	branchID := "branchID"
-	cellID := "cell-A"
-	preCutoff := vmDataAvailableSince.Add(-24 * time.Hour)
-	postCutoff := vmDataAvailableSince.Add(24 * time.Hour)
-	respShape := func(label string) []metrics.BranchMetrics {
-		return []metrics.BranchMetrics{{
-			Metric: string(spec.Cpu),
-			Unit:   label,
-			Series: []metrics.MetricSeries{},
-		}}
-	}
-
-	tests := map[string]struct {
-		flagOn       bool
-		header       string // empty == header not set
-		start        time.Time
-		expectClient string // "signoz" or "cells"
-	}{
-		"flag off, no header, start ≥ cutoff (auto)        → cells":  {flagOn: false, start: postCutoff, expectClient: "cells"},
-		"flag off, no header, start < cutoff (auto)        → signoz": {flagOn: false, start: preCutoff, expectClient: "signoz"},
-		"flag off, header=signoz (ignored), start ≥ cutoff → cells":  {flagOn: false, header: "signoz", start: postCutoff, expectClient: "cells"},
-		"flag off, header=victoria (ignored), start < cutoff→signoz": {flagOn: false, header: "victoria", start: preCutoff, expectClient: "signoz"},
-		"flag on, no header, start ≥ cutoff (auto)         → cells":  {flagOn: true, start: postCutoff, expectClient: "cells"},
-		"flag on, no header, start < cutoff (auto fallback)→ signoz": {flagOn: true, start: preCutoff, expectClient: "signoz"},
-		"flag on, header=signoz, start ≥ cutoff (override) → signoz": {flagOn: true, header: "signoz", start: postCutoff, expectClient: "signoz"},
-		"flag on, header=victoria, start < cutoff (override)→ cells": {flagOn: true, header: "victoria", start: preCutoff, expectClient: "cells"},
-		"flag on, header=Victoria (case-insensitive)       → cells":  {flagOn: true, header: "Victoria", start: postCutoff, expectClient: "cells"},
-		"flag on, header=garbage, start ≥ cutoff (→ auto)  → cells":  {flagOn: true, header: "garbage", start: postCutoff, expectClient: "cells"},
-		"flag on, header=garbage, start < cutoff (→ auto)  → signoz": {flagOn: true, header: "garbage", start: preCutoff, expectClient: "signoz"},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			start := tt.start
-			end := start.Add(time.Hour)
-			req := spec.BranchMetricsRequest{
-				Start:        start,
-				End:          end,
-				Metrics:      []spec.BranchMetricName{spec.Cpu},
-				Instances:    &[]string{branchID + "-1"},
-				Aggregations: []spec.BranchMetricsRequestAggregations{"avg"},
-			}
-
-			mockStore := mocks.NewProjectsStore(t)
-			mockClusters := protomocks.NewClustersServiceClient(t)
-			mockCells := cellsmock.NewCellsMock(t, mockClusters)
-			signozClient := metricsmock.NewClient(t)
-			cellsClient := metricsmock.NewClient(t)
-			feat := openfeaturetest.NewClient(map[openfeature.FeatureFlag]bool{
-				flags.BranchObservabilityPerCell: tt.flagOn,
-			})
-			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-
-			apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", signozClient, cellsClient, sched, analyticsmocks.NewClient(t), nil, nil)
-			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
-
-			mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", branchID).Return(&store.Branch{ID: branchID, CellID: cellID}, nil).Once()
-			mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: branchID}).Return(&clustersv1.DescribePostgresClusterResponse{
-				Id:     branchID,
-				Status: &clustersv1.ClusterStatus{Instances: map[string]*clustersv1.InstanceStatus{branchID + "-1": {}}},
-			}, nil).Once()
-
-			if tt.expectClient == "signoz" {
-				signozClient.EXPECT().GetMetrics(mock.Anything, apitest.TestOrganization, cellID, start, end, branchID, []string{string(spec.Cpu)}, *req.Instances, []string{"avg"}).Return(respShape("signoz"), nil).Once()
-			} else {
-				cellsClient.EXPECT().GetMetrics(mock.Anything, apitest.TestOrganization, cellID, start, end, branchID, []string{string(spec.Cpu)}, *req.Instances, []string{"avg"}).Return(respShape("cells"), nil).Once()
-			}
-
-			rb := e.POST("/organizations/" + apitest.TestOrganization + "/projects/project_id/branches/" + branchID + "/metrics").WithJSONBody(req)
-			if tt.header != "" {
-				rb = rb.WithHeader("X-Xata-Observability-Backend", tt.header)
-			}
-			c, rec := rb.Context()
-			require.NoError(t, apiHandler.BranchMetrics(c, apitest.TestOrganization, "project_id", branchID))
-			rec.MustCode(http.StatusOK)
-		})
-	}
-}
-
 func TestBranchLogs(t *testing.T) {
 	mockStore := mocks.NewProjectsStore(t)
 	mockClusters := protomocks.NewClustersServiceClient(t)
 	mockCells := cellsmock.NewCellsMock(t, mockClusters)
 	mockMetrics := metricsmock.NewClient(t)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
+
 	e := apitest.New(t).WithClaims(apitest.TestClaims)
 
 	branchID := "branchID"
@@ -3953,7 +3860,7 @@ func TestBranchLogs(t *testing.T) {
 			tc.setupMocks()
 
 			feat := openfeaturetest.NewClient(map[openfeature.FeatureFlag]bool{flags.PgAuditLogs: tc.pgAuditOn})
-			apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", mockMetrics, mockMetrics, sched, analyticsmocks.NewClient(t), nil, nil)
+			apiHandler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", mockMetrics, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			c, rec := e.POST("/").WithJSONBody(tc.req).Context()
 			err := apiHandler.BranchLogs(c, apitest.TestOrganization, "project_id", tc.branchID)
@@ -3982,7 +3889,7 @@ func TestGetBranchCredentials(t *testing.T) {
 
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+	handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	projectID := "project_id"
@@ -4077,7 +3984,7 @@ func TestRotateBranchCredentials(t *testing.T) {
 
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+	handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	rotateBranchCredentialsTests := []struct {
@@ -4157,7 +4064,7 @@ func TestUpdateBranch(t *testing.T) {
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
 	mockAnalytics.EXPECT().Track(mock.Anything, mock.Anything).Return().Maybe()
-	handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, mockAnalytics, mockPostgresConfig, mockImageProvider)
+	handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", nil, sched, mockAnalytics, mockPostgresConfig, mockImageProvider)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	updateBranchTests := []struct {
@@ -5462,7 +5369,7 @@ func TestDeleteBranch(t *testing.T) {
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
-	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, mockAnalytics, nil, nil)
+	apiHandler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, mockAnalytics, nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	branch := store.Branch{
@@ -5589,7 +5496,7 @@ func TestHandler_GetDefaultProjectLimits(t *testing.T) {
 	mockImageProvider := postgresversionsmocks.NewImageProvider(t)
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	want := spec.ProjectLimits{
@@ -5678,7 +5585,7 @@ func TestHandler_GetOrganizationLimits(t *testing.T) {
 			mockImageProvider := postgresversionsmocks.NewImageProvider(t)
 			feat := openfeaturetest.NewClient(nil)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			h := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
+			h := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(tc.claims)
 
 			if tc.overrides != nil {
@@ -5709,7 +5616,7 @@ func TestLimitsEndpointsConsistency(t *testing.T) {
 	mockImageProvider := postgresversionsmocks.NewImageProvider(t)
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	h := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
+	h := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, mockImageProvider)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	cProj, recProj := e.GET("/organizations/" + apitest.TestOrganization + "/projects/limits").Context()
@@ -6056,7 +5963,7 @@ func TestGetBranchPostgresConfig(t *testing.T) {
 
 			feat := openfeaturetest.NewClient(nil)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, mockCells, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), mockPostgresConfig, nil)
+			handler := NewAPIHandler(feat, mockStore, mockCells, "", nil, sched, analyticsmocks.NewClient(t), mockPostgresConfig, nil)
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 			tt.setupMocks(mockStore, mockClient)
@@ -6182,7 +6089,7 @@ func TestListInstanceTypes(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			tt.setupMocks(mockStore)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			c, rec := e.GET("/organizations/" + apitest.TestOrganization + "/instanceTypes?region=" + tt.region).Context()
 			err := handler.ListInstanceTypes(c, apitest.TestOrganization, spec.ListInstanceTypesParams{Region: tt.region})
@@ -6456,7 +6363,7 @@ func TestListImages(t *testing.T) {
 
 			feat := openfeaturetest.NewClient(tt.featureFlags)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), mockPostgresConfig, mockImageProvider)
+			handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", nil, sched, analyticsmocks.NewClient(t), mockPostgresConfig, mockImageProvider)
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 			// Pass mocks to setupMocks function
@@ -6618,7 +6525,7 @@ func TestListExtensions(t *testing.T) {
 
 			feat := openfeaturetest.NewClient(nil)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), mockPostgresConfig, mockImageProvider)
+			handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", nil, sched, analyticsmocks.NewClient(t), mockPostgresConfig, mockImageProvider)
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 			tt.setupMocks(mockStore, mockImageProvider)
@@ -6659,7 +6566,7 @@ func TestListRegionsWithBackupsEnabled(t *testing.T) {
 	mockStore := mocks.NewProjectsStore(t)
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-	handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+	handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	// Test list regions with backupsEnabled field
@@ -6872,7 +6779,7 @@ func TestEditingDisabledOrgFails(t *testing.T) {
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
-	handler := NewAPIHandler(feat, nil, nil, "", createNewSigNozClient(t), nil, sched, mockAnalytics, nil, nil)
+	handler := NewAPIHandler(feat, nil, nil, "", nil, sched, mockAnalytics, nil, nil)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaimsDisabled)
 
 	createBranchTests := []struct {
@@ -6955,7 +6862,7 @@ func TestCreateGithubAppInstallation(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			tt.setupMocks(mockStore)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			c, rec := e.POST("/organizations/" + apitest.TestOrganization + "/githubapp/installations").WithJSONBody(tt.jsonBody).Context()
 			err := handler.CreateGithubAppInstallation(c, apitest.TestOrganization)
@@ -7032,7 +6939,7 @@ func TestListGithubAppInstallations(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			tt.setupMocks(mockStore)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			c, rec := e.GET("/organizations/" + apitest.TestOrganization + "/githubapp/installations").Context()
 			err := handler.ListGithubAppInstallations(c, apitest.TestOrganization)
@@ -7127,7 +7034,7 @@ func TestUpdateGithubAppInstallation(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			tt.setupMocks(mockStore)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			c, rec := e.PUT("/organizations/" + apitest.TestOrganization + "/githubapp/installations/" + tt.githubInstallationID).WithJSONBody(tt.jsonBody).Context()
 			err := handler.UpdateGithubAppInstallation(c, apitest.TestOrganization, tt.githubInstallationID)
@@ -7207,7 +7114,7 @@ func TestGetGithubRepository(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			tt.setupMocks(mockStore)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
@@ -7320,7 +7227,7 @@ func TestCreateGithubRepository(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			tt.setupMocks(mockStore)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			c, rec := e.POST("/organizations/" + apitest.TestOrganization + "/projects/" + tt.projectID + "/branches/" + tt.branchID + "/githubapp/repository").WithJSONBody(tt.jsonBody).Context()
 			err := handler.CreateGithubRepository(c, apitest.TestOrganization, tt.projectID, tt.branchID)
@@ -7419,7 +7326,7 @@ func TestUpdateGithubRepository(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			tt.setupMocks(mockStore)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			c, rec := e.PUT("/organizations/" + apitest.TestOrganization + "/projects/" + tt.projectID + "/branches/" + tt.branchID + "/githubapp/repository").WithJSONBody(tt.jsonBody).Context()
 			err := handler.UpdateGithubRepository(c, apitest.TestOrganization, tt.projectID, tt.branchID)
@@ -7476,7 +7383,7 @@ func TestDeleteGithubRepository(t *testing.T) {
 			mockStore := mocks.NewProjectsStore(t)
 			tt.setupMocks(mockStore)
 			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
-			handler := NewAPIHandler(feat, mockStore, nil, "", createNewSigNozClient(t), nil, sched, analyticsmocks.NewClient(t), nil, nil)
+			handler := NewAPIHandler(feat, mockStore, nil, "", nil, sched, analyticsmocks.NewClient(t), nil, nil)
 
 			c, rec := e.DELETE("/organizations/" + apitest.TestOrganization + "/projects/" + tt.projectID + "/branches/" + tt.branchID + "/githubapp/repository").Context()
 			err := handler.DeleteGithubRepository(c, apitest.TestOrganization, tt.projectID, tt.branchID)

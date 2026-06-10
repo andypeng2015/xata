@@ -54,7 +54,6 @@ xataSecrets:
 dependencies:
   authGrpcUrl: "auth:5002"
   clustersGrpcUrl: "clusters:5002"
-  clustersNamespace: "xata-clusters"
 
 gateway:
   hostport: ""
@@ -69,7 +68,7 @@ observability:
   otelConfigMap: otel-config
 
 externalSecrets:
-  projectsSecret: projects-secret
+  projectsSecret: ""
   posthogSecret: posthog
   customerioSecret: ""
 

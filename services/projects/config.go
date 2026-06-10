@@ -22,15 +22,6 @@ type Config struct {
 	// BranchTreeMaxDepth is the maximum depth of the branch tree
 	BranchTreeMaxDepth int32 `env:"BRANCH_TREE_MAX_DEPTH" env-default:"50" env-description:"The maximum depth of the branch tree"`
 
-	// SigNozAPIUrl is the base URL for the SigNoz API
-	SigNozAPIUrl string `env:"SIGNOZ_API_URL" env-default:"https://xata.eu.signoz.cloud" env-description:"The base URL for the SigNoz API"`
-
-	// SignozAPIKey is the API key for SigNoz REST API, used for retrieval of metrics
-	SignozAPIKey string `env:"SIGNOZ_API_KEY" env-default:"" env-description:"API key for SigNoz REST API"`
-
-	// ClustersNamespace is the k8s namespaces where the CNPG clusters are running
-	ClustersNamespace string `env:"XATA_CLUSTERS_NAMESPACE" env-default:"" env-description:"The k8s namespaces where the CNPG clusters are running"`
-
 	// SchedulerConfigPath is the path to the scheduler configuration file
 	SchedulerConfigPath string `env:"SCHEDULER_CONFIG_PATH" env-default:"/config/scheduler.yaml" env-description:"Path to the scheduler configuration YAML file"`
 

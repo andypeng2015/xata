@@ -11,9 +11,3 @@ helmCharts:
 
 helmGlobals:
   chartHome: ../../../../charts
-
-resources:
-  - signoz-secret.yaml
-  - signoz-setup-job.yaml
-  - signoz-setup-serviceaccount.yaml
-  - signoz-setup-rbac.yaml

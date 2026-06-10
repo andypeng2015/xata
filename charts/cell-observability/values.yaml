@@ -110,20 +110,9 @@ vmagent:
 
       # role:pod (not role:node) so pod labels are available to the relabel
       # step and branch_id can be attached at scrape time. The pod-equality
-      # metric_relabel below drops other pods on the same node returned by
-      # the shared kubelet scrape. The cnpg_io_podRole=instance keep filter
-      # bounds the fan-out to typically 1-3 scrapes per node.
-      #
-      # This deliberately diverges from the SigNoz OTel path
-      # (kustomize/overlays/local/signoz-values.yaml) and infra-new
-      # PR #1682, which keep role:node and enrich cadvisor series after the
-      # fact via OTel's groupbyattrs + k8sattributes processors. vmagent has
-      # no equivalent post-scrape enrichment, so the only ways to attach
-      # branch_id with role:node would be a query-time group_left join with
-      # a separate pod_info series, or a custom relabel pipeline keyed on a
-      # pod-info cache. Both are higher-friction than the keepequal trick
-      # for the current cnpg-instance-only scrape; revisit if vmagent CPU
-      # /memory becomes the bottleneck or if scrape coverage broadens.
+      # metric_relabel below drops other pods on the same node returned by the
+      # shared kubelet scrape; the cnpg_io_podRole=instance keep filter bounds
+      # the fan-out to typically 1-3 scrapes per node.
       - job_name: cadvisor
         kubernetes_sd_configs: [{role: pod}]
         scheme: https

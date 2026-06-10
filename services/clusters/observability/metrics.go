@@ -49,9 +49,7 @@ type MetricInfo struct {
 }
 
 // metricCatalog maps Xata metric names to their PromQL definitions. Names use
-// the Prometheus underscore form preserved by Vector's remote_write sink; the
-// SigNoz catalog in services/projects/metrics/signoz_rest.go uses the OTel
-// dotted form for the same series.
+// the Prometheus underscore form preserved by Vector's remote_write sink.
 var metricCatalog = map[string]MetricInfo{
 	"cpu":                  {PromName: "container_cpu_usage_seconds_total", Unit: "percentage", Kind: Counter, TemporalAggDefault: "rate", WithinPodCombiner: "sum", ExcludeLabels: map[string]string{"container": ""}},
 	"memory":               {PromName: "container_memory_working_set_bytes", Unit: "bytes", Kind: Gauge, SpaceAggDefault: "avg"},
@@ -86,8 +84,7 @@ var validAggregations = map[string]struct{}{
 	"sum": {},
 }
 
-// CalculateStep picks a step interval based on the queried time range. Mirrors
-// the bucketing in the legacy SigNoz client to keep response shapes stable.
+// CalculateStep picks a step interval based on the queried time range.
 func CalculateStep(start, end time.Time) time.Duration {
 	diff := end.Sub(start)
 	switch {

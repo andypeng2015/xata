@@ -43,7 +43,7 @@ func TestRouterCORS(t *testing.T) {
 
 	assert.Equal(t, rec.Result().StatusCode, http.StatusNoContent)
 	assert.Equal(t, []string{"*"}, rec.Header()["Access-Control-Allow-Origin"])
-	assert.Equal(t, []string{"Origin,Content-Length,Content-Type,Authorization,User-Agent,X-Xata-Client-ID,X-Xata-Session-ID,X-Xata-Agent,X-Xata-Observability-Backend,X-Features,Timing-Allow-Origin"}, rec.Header()["Access-Control-Allow-Headers"])
+	assert.Equal(t, []string{"Origin,Content-Length,Content-Type,Authorization,User-Agent,X-Xata-Client-ID,X-Xata-Session-ID,X-Xata-Agent,X-Features,Timing-Allow-Origin"}, rec.Header()["Access-Control-Allow-Headers"])
 	assert.Equal(t, []string{"GET,HEAD,PUT,PATCH,POST,DELETE"}, rec.Header()["Access-Control-Allow-Methods"])
 	assert.Equal(t, []string{"7200"}, rec.Header()["Access-Control-Max-Age"])
 }

@@ -160,7 +160,6 @@ def create_resources():
     )
 
     # Per-cell metrics & logs stack (VictoriaMetrics + VictoriaLogs + Vector).
-    # Runs alongside SigNoz so devs can flip the BranchObservabilityPerCell
     k8s_resource('victoria-metrics', port_forwards=8428, labels='monitoring')
     k8s_resource('victoria-logs', port_forwards=9428, labels='monitoring')
     k8s_resource('vmagent', labels='monitoring')

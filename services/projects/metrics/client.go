@@ -9,17 +9,17 @@ import (
 
 type Client interface {
 	// GetMetrics returns the time serie(s) for the given metrics and
-	// timeframe in a single backend round-trip. branchID is required by the
-	// per-cell backend to enforce branch scope on the pod label; the legacy
-	// SigNoz client ignores it. Results are returned in the same order as
+	// timeframe in a single backend round-trip. branchID enforces branch
+	// scope on the pod label. Results are returned in the same order as
 	// the requested metrics.
 	GetMetrics(ctx context.Context, organizationID, cellID string, start, end time.Time, branchID string, metricNames []string, instances, aggregations []string) ([]BranchMetrics, error)
 	// GetLogs returns the log entries for the given timeframe and filters.
 	GetLogs(ctx context.Context, organizationID, cellID string, start, end time.Time, branchID string, filters []LogFilter, limit int, cursor string) (*BranchLogs, error)
 }
 
-// LogFilter is a backend-neutral filter clause produced by the projects handler
-// and translated by each Client implementation into the backend's query language.
+// LogFilter is a transport-neutral filter clause produced by the projects
+// handler and forwarded to the cell, where the clusters service compiles it
+// into a LogsQL predicate.
 type LogFilter struct {
 	// Field one of: "instance" | "level" | "process" | "body"
 	Field string

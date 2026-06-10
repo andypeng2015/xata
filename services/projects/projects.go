@@ -166,19 +166,11 @@ func (s *ProjectsService) RegisterHTTPHandlers(o *o11y.O, router *echo.Group) er
 	// require auth for all routes
 	group := router.Group("", capi.AuthMiddleware(s.authConn), openfeature.Middleware())
 
-	// SigNoz-backed metrics client. Serves requests whose time range pre-dates
-	// the per-cell VM retention window, or when forced via the backend header.
-	signozMetricsClient, err := metrics.NewSigNozClient(s.config.SigNozAPIUrl, s.config.SignozAPIKey, s.config.ClustersNamespace)
-	if err != nil {
-		return fmt.Errorf("failed to create metrics client: %w", err)
-	}
-
 	cellsConn := cells.New(s.store)
 
-	// Per-cell metrics client routes to clusters gRPC. Serves requests whose
-	// time range is within the VM retention window, or when forced via the
-	// backend header.
-	cellsMetricsClient := metrics.NewCellsClient(cellsConn)
+	// Metrics client routes branch metric/log queries to the
+	// VictoriaMetrics/VictoriaLogs backend via clusters gRPC.
+	metricsClient := metrics.NewCellsClient(cellsConn)
 
 	spec.RegisterHandlers(group,
 		api.NewAPIHandler(
@@ -186,8 +178,7 @@ func (s *ProjectsService) RegisterHTTPHandlers(o *o11y.O, router *echo.Group) er
 			s.store,
 			cellsConn,
 			s.config.GatewayHostPort,
-			signozMetricsClient,
-			cellsMetricsClient,
+			metricsClient,
 			s.scheduler,
 			s.analytics,
 			&postgrescfg.DefaultPostgresConfigProvider{},

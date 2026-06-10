@@ -62,8 +62,7 @@ func NewLogsQuerier(backend LogsBackend, namespace string) *LogsQuerier {
 	return &LogsQuerier{backend: backend, namespace: namespace}
 }
 
-// schemaLevelToSeverities is the user-facing → CNPG/Postgres severity mapping
-// preserved from the SigNoz client so historical queries stay shaped the same.
+// schemaLevelToSeverities is the user-facing → CNPG/Postgres severity mapping.
 var schemaLevelToSeverities = map[string][]string{
 	"debug":   {"DEBUG", "DEBUG1", "DEBUG2", "DEBUG3", "DEBUG4", "DEBUG5"},
 	"info":    {"INFO", "LOG", "NOTICE"},
@@ -160,7 +159,6 @@ func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeBeforeNa
 	// The postgres container streams output from CNPG's instance manager,
 	// which mixes its own logs (logger="instance-manager"), barman lines
 	// (logger="backup") and actual postgres records (logger="postgres").
-	// Match SigNoz behaviour and only surface the latter.
 	b.WriteString(` AND logger:in ("postgres","pgaudit")`)
 	fmt.Fprintf(&b, ` AND branch_id:=%q`, branchID)
 	if resumeBeforeNanos > 0 {
