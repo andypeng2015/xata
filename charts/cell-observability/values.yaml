@@ -86,6 +86,10 @@ vmagent:
           - source_labels: [__meta_kubernetes_pod_label_cnpg_io_podRole]
             regex: instance
             action: keep
+          # Skip instances that aren't Ready
+          - source_labels: [__meta_kubernetes_pod_ready]
+            regex: "true"
+            action: keep
           # role:pod SD emits one target per (container, port). The postgres
           # container declares postgresql/metrics/status ports plus there are
           # init containers; without this filter all of them collapse onto
