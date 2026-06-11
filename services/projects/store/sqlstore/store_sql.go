@@ -90,7 +90,7 @@ func (s *sqlProjectStore) Close(ctx context.Context) error {
 }
 
 func (s *sqlProjectStore) ListRegions(ctx context.Context, organizationID string) ([]store.Region, error) {
-	res, err := s.sql.QueryContext(ctx, "SELECT id, organization_id, public_access, backups_enabled, hostport, created_at FROM regions WHERE organization_id = $1 OR organization_id IS NULL ORDER BY id", organizationID)
+	res, err := s.sql.QueryContext(ctx, "SELECT id, organization_id, public_access, backups_enabled, provider, hostport, created_at FROM regions WHERE organization_id = $1 OR organization_id IS NULL ORDER BY id", organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (s *sqlProjectStore) ListRegions(ctx context.Context, organizationID string
 	regions := []store.Region{}
 	for res.Next() {
 		var region store.Region
-		err := res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.GatewayHostPort, &region.CreatedAt)
+		err := res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.Provider, &region.GatewayHostPort, &region.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -112,7 +112,7 @@ func (s *sqlProjectStore) ListRegions(ctx context.Context, organizationID string
 
 // ListAllRegions returns a list of all existing regions
 func (s *sqlProjectStore) ListAllRegions(ctx context.Context) ([]store.Region, error) {
-	res, err := s.sql.QueryContext(ctx, "SELECT id, organization_id, public_access, backups_enabled, hostport, created_at FROM regions ORDER BY id")
+	res, err := s.sql.QueryContext(ctx, "SELECT id, organization_id, public_access, backups_enabled, provider, hostport, created_at FROM regions ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (s *sqlProjectStore) ListAllRegions(ctx context.Context) ([]store.Region, e
 	regions := []store.Region{}
 	for res.Next() {
 		var region store.Region
-		err := res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.GatewayHostPort, &region.CreatedAt)
+		err := res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.Provider, &region.GatewayHostPort, &region.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -130,11 +130,15 @@ func (s *sqlProjectStore) ListAllRegions(ctx context.Context) ([]store.Region, e
 }
 
 func (s *sqlProjectStore) CreateRegion(ctx context.Context, regionID string, flags store.RegionFlags, hostport string) (*store.Region, error) {
+	provider, err := store.ParseProvider(string(flags.Provider))
+	if err != nil {
+		return nil, err
+	}
 	res := s.sql.QueryRowContext(ctx,
-		"INSERT INTO regions (id, public_access, backups_enabled, hostport) VALUES ($1, $2, $3, $4) RETURNING id, organization_id, public_access, backups_enabled, hostport, created_at",
-		regionID, flags.PublicAccess, flags.BackupsEnabled, hostport)
+		"INSERT INTO regions (id, public_access, backups_enabled, provider, hostport) VALUES ($1, $2, $3, $4, $5) RETURNING id, organization_id, public_access, backups_enabled, provider, hostport, created_at",
+		regionID, flags.PublicAccess, flags.BackupsEnabled, provider, hostport)
 	var region store.Region
-	err := res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.GatewayHostPort, &region.CreatedAt)
+	err = res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.Provider, &region.GatewayHostPort, &region.CreatedAt)
 	if err != nil {
 		// region already exists in this organization (regions_pkey constraint)
 		if IsConstraintError(err, UniqueRegionsConstraint) {
@@ -148,15 +152,20 @@ func (s *sqlProjectStore) CreateRegion(ctx context.Context, regionID string, fla
 }
 
 func (s *sqlProjectStore) CreateOrganizationRegion(ctx context.Context, organizationID string, regionID string, flags store.RegionFlags, hostport string) (*store.Region, error) {
+	provider, err := store.ParseProvider(string(flags.Provider))
+	if err != nil {
+		return nil, err
+	}
 	res := s.sql.QueryRowContext(ctx,
-		"INSERT INTO regions (id, public_access, backups_enabled, organization_id, hostport) VALUES ($1, $2, $3, $4, $5) RETURNING id, organization_id, public_access, backups_enabled, hostport, created_at",
+		"INSERT INTO regions (id, public_access, backups_enabled, provider, organization_id, hostport) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, organization_id, public_access, backups_enabled, provider, hostport, created_at",
 		regionID,
 		flags.PublicAccess,
 		flags.BackupsEnabled,
+		provider,
 		organizationID,
 		hostport)
 	var region store.Region
-	err := res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.GatewayHostPort, &region.CreatedAt)
+	err = res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.Provider, &region.GatewayHostPort, &region.CreatedAt)
 	if err != nil {
 		// region already exists in this organization (regions_pkey constraint)
 		if IsConstraintError(err, UniqueRegionsConstraint) {
@@ -182,9 +191,9 @@ func (s *sqlProjectStore) DeleteRegion(ctx context.Context, regionID string) err
 }
 
 func (s *sqlProjectStore) GetRegion(ctx context.Context, organizationID string, regionID string) (*store.Region, error) {
-	res := s.sql.QueryRowContext(ctx, "SELECT id, organization_id, public_access, backups_enabled, hostport, created_at FROM regions WHERE id = $1 AND (organization_id = $2 OR organization_id IS NULL)", regionID, organizationID)
+	res := s.sql.QueryRowContext(ctx, "SELECT id, organization_id, public_access, backups_enabled, provider, hostport, created_at FROM regions WHERE id = $1 AND (organization_id = $2 OR organization_id IS NULL)", regionID, organizationID)
 	var region store.Region
-	err := res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.GatewayHostPort, &region.CreatedAt)
+	err := res.Scan(&region.ID, &region.OrganizationID, &region.PublicAccess, &region.BackupsEnabled, &region.Provider, &region.GatewayHostPort, &region.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, store.ErrRegionNotFound{ID: regionID}

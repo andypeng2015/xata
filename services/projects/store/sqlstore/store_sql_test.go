@@ -1047,7 +1047,7 @@ func noopProvisionFunc(b *store.Branch) error {
 func createRegionAndCell(t testing.TB, sqlStore *sqlProjectStore, regionID, cellID string) (*store.Region, *store.Cell) {
 	ctx := context.Background()
 
-	region, err := sqlStore.CreateRegion(ctx, regionID, store.RegionFlags{PublicAccess: true, BackupsEnabled: true}, "")
+	region, err := sqlStore.CreateRegion(ctx, regionID, store.RegionFlags{PublicAccess: true, BackupsEnabled: true, Provider: store.ProviderAWS}, "")
 	if err != nil {
 		t.Fatalf("failed to create region: %s", err)
 	}

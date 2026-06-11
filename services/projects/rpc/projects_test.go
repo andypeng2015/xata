@@ -31,16 +31,18 @@ func TestCreateRegion(t *testing.T) {
 				PublicAccess:   true,
 				BackupsEnabled: true,
 				Hostport:       "us-west-1.example.com",
+				Provider:       "aws",
 			},
 			expectedFlags: store.RegionFlags{
 				PublicAccess:   true,
 				BackupsEnabled: true,
+				Provider:       store.ProviderAWS,
 			},
 			setupMock: func(mockStore *mocks.ProjectsStore) {
 				mockStore.EXPECT().CreateRegion(
 					mock.Anything,
 					"us-west-1",
-					store.RegionFlags{PublicAccess: true, BackupsEnabled: true},
+					store.RegionFlags{PublicAccess: true, BackupsEnabled: true, Provider: store.ProviderAWS},
 					"us-west-1.example.com",
 				).Return(&store.Region{}, nil)
 			},
@@ -52,17 +54,42 @@ func TestCreateRegion(t *testing.T) {
 				PublicAccess:   false,
 				BackupsEnabled: false,
 				Hostport:       "eu-central-1.example.com",
+				Provider:       "aws",
 			},
 			expectedFlags: store.RegionFlags{
 				PublicAccess:   false,
 				BackupsEnabled: false,
+				Provider:       store.ProviderAWS,
 			},
 			setupMock: func(mockStore *mocks.ProjectsStore) {
 				mockStore.EXPECT().CreateRegion(
 					mock.Anything,
 					"eu-central-1",
-					store.RegionFlags{PublicAccess: false, BackupsEnabled: false},
+					store.RegionFlags{PublicAccess: false, BackupsEnabled: false, Provider: store.ProviderAWS},
 					"eu-central-1.example.com",
+				).Return(&store.Region{}, nil)
+			},
+		},
+		{
+			name: "create region with explicit provider",
+			request: &projectsv1.CreateRegionRequest{
+				Id:             "europe-west4",
+				PublicAccess:   true,
+				BackupsEnabled: true,
+				Hostport:       "europe-west4.example.com",
+				Provider:       "gcp",
+			},
+			expectedFlags: store.RegionFlags{
+				PublicAccess:   true,
+				BackupsEnabled: true,
+				Provider:       store.ProviderGCP,
+			},
+			setupMock: func(mockStore *mocks.ProjectsStore) {
+				mockStore.EXPECT().CreateRegion(
+					mock.Anything,
+					"europe-west4",
+					store.RegionFlags{PublicAccess: true, BackupsEnabled: true, Provider: store.ProviderGCP},
+					"europe-west4.example.com",
 				).Return(&store.Region{}, nil)
 			},
 		},
@@ -74,17 +101,19 @@ func TestCreateRegion(t *testing.T) {
 				BackupsEnabled: false,
 				Hostport:       "ap-south-1.example.com",
 				OrganizationId: new("org-123"),
+				Provider:       "aws",
 			},
 			expectedFlags: store.RegionFlags{
 				PublicAccess:   true,
 				BackupsEnabled: false,
+				Provider:       store.ProviderAWS,
 			},
 			setupMock: func(mockStore *mocks.ProjectsStore) {
 				mockStore.EXPECT().CreateOrganizationRegion(
 					mock.Anything,
 					"org-123",
 					"ap-south-1",
-					store.RegionFlags{PublicAccess: true, BackupsEnabled: false},
+					store.RegionFlags{PublicAccess: true, BackupsEnabled: false, Provider: store.ProviderAWS},
 					"ap-south-1.example.com",
 				).Return(&store.Region{}, nil)
 			},
@@ -106,6 +135,26 @@ func TestCreateRegion(t *testing.T) {
 	}
 }
 
+func TestCreateRegionInvalidProvider(t *testing.T) {
+	for name, provider := range map[string]string{
+		"unknown provider": "azure",
+		"empty provider":   "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			mockStore := mocks.NewProjectsStore(t)
+			service := NewProjectsService(mockStore, nil)
+
+			_, err := service.CreateRegion(context.Background(), &projectsv1.CreateRegionRequest{
+				Id:       "us-west-1",
+				Provider: provider,
+			})
+
+			require.Error(t, err)
+			require.ErrorContains(t, err, "unknown provider")
+		})
+	}
+}
+
 func TestListRegions(t *testing.T) {
 	mockStore := mocks.NewProjectsStore(t)
 
@@ -114,12 +163,14 @@ func TestListRegions(t *testing.T) {
 			ID:             "us-east-1",
 			PublicAccess:   true,
 			BackupsEnabled: true,
+			Provider:       store.ProviderAWS,
 			OrganizationID: nil,
 		},
 		{
 			ID:             "eu-west-1",
 			PublicAccess:   false,
 			BackupsEnabled: false,
+			Provider:       store.ProviderGCP,
 			OrganizationID: new("org-123"),
 		},
 	}
@@ -138,12 +189,14 @@ func TestListRegions(t *testing.T) {
 	require.Equal(t, "us-east-1", resp.Regions[0].Id)
 	require.Equal(t, true, resp.Regions[0].PublicAccess)
 	require.Equal(t, true, resp.Regions[0].BackupsEnabled)
+	require.Equal(t, "aws", resp.Regions[0].Provider)
 	require.Nil(t, resp.Regions[0].OrganizationId)
 
 	// Verify second region
 	require.Equal(t, "eu-west-1", resp.Regions[1].Id)
 	require.Equal(t, false, resp.Regions[1].PublicAccess)
 	require.Equal(t, false, resp.Regions[1].BackupsEnabled)
+	require.Equal(t, "gcp", resp.Regions[1].Provider)
 	require.Equal(t, "org-123", *resp.Regions[1].OrganizationId)
 }
 

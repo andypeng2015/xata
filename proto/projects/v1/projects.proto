@@ -45,6 +45,8 @@ message Region {
   optional string organization_id = 3; // if set, the region will be available only for this organization
 
   bool backups_enabled = 4; // true if backups are enabled for branches created in this region
+
+  string provider = 5; // cloud provider the region runs on (aws, gcp or custom)
 }
 
 // CreateRegionRequest is the request object for CreateRegion
@@ -54,6 +56,7 @@ message CreateRegionRequest {
   string hostport = 4; // host:port of the region SQL gateway (ie us-east-1.xata.tech)
   optional string organization_id = 3; // if set, the region will be available only for this organization
   bool backups_enabled = 5; // true if backups should be enabled for branches created in this region
+  string provider = 6; // cloud provider the region runs on, must be one of: aws, gcp, custom
 }
 
 // CreateRegionResponse is the response object for CreateRegion

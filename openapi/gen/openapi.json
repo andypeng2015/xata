@@ -1593,6 +1593,15 @@
                             "description": "Whether backups are enabled for branches created in this region",
                             "type": "boolean"
                           },
+                          "provider": {
+                            "description": "Cloud provider the region runs on",
+                            "type": "string",
+                            "enum": [
+                              "aws",
+                              "gcp",
+                              "custom"
+                            ]
+                          },
                           "organizationId": {
                             "description": "Organization that owns this region, if set the region is only available to this organization",
                             "type": "string",
@@ -1603,6 +1612,7 @@
                           "id",
                           "publicAccess",
                           "backupsEnabled",
+                          "provider",
                           "organizationId"
                         ]
                       }

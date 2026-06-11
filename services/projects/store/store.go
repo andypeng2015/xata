@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -180,12 +181,33 @@ type IPFiltering struct {
 	CIDRs []CIDREntry `json:"cidrs"`
 }
 
+// Provider is the cloud provider a region runs on
+type Provider string
+
+const (
+	ProviderAWS    Provider = "aws"
+	ProviderGCP    Provider = "gcp"
+	ProviderCustom Provider = "custom"
+)
+
+// ParseProvider validates a provider name
+func ParseProvider(s string) (Provider, error) {
+	switch Provider(s) {
+	case ProviderAWS, ProviderGCP, ProviderCustom:
+		return Provider(s), nil
+	default:
+		return "", fmt.Errorf("unknown provider %q, must be one of: %s, %s, %s", s, ProviderAWS, ProviderGCP, ProviderCustom)
+	}
+}
+
 // RegionFlags contains configuration flags for a region
 type RegionFlags struct {
 	// PublicAccess indicates if the region has SQL access from outside the data plane (e.g. from the frontend app)
 	PublicAccess bool `json:"publicAccess"`
 	// BackupsEnabled indicates if backups are enabled for branches created in this region
 	BackupsEnabled bool `json:"backupsEnabled"`
+	// Provider is the cloud provider the region runs on
+	Provider Provider `json:"provider"`
 }
 
 type Region struct {
@@ -194,6 +216,8 @@ type Region struct {
 	PublicAccess bool `json:"publicAccess"`
 	// BackupsEnabled indicates if backups are enabled for branches created in this region
 	BackupsEnabled bool `json:"backupsEnabled"`
+	// Provider is the cloud provider the region runs on
+	Provider Provider `json:"provider"`
 
 	// GatewayHostPort is the host of the gateway service in the region, used to build connection strings
 	GatewayHostPort string `json:"-"`

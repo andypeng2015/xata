@@ -109,6 +109,7 @@ type Region struct {
 	PublicAccess   bool                   `protobuf:"varint,2,opt,name=public_access,json=publicAccess,proto3" json:"public_access,omitempty"`            // true if the region has public access (over the Internet) to SQL
 	OrganizationId *string                `protobuf:"bytes,3,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"` // if set, the region will be available only for this organization
 	BackupsEnabled bool                   `protobuf:"varint,4,opt,name=backups_enabled,json=backupsEnabled,proto3" json:"backups_enabled,omitempty"`      // true if backups are enabled for branches created in this region
+	Provider       string                 `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider,omitempty"`                                         // cloud provider the region runs on (aws, gcp or custom)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -171,6 +172,13 @@ func (x *Region) GetBackupsEnabled() bool {
 	return false
 }
 
+func (x *Region) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
 // CreateRegionRequest is the request object for CreateRegion
 type CreateRegionRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -179,6 +187,7 @@ type CreateRegionRequest struct {
 	Hostport       string                 `protobuf:"bytes,4,opt,name=hostport,proto3" json:"hostport,omitempty"`                                         // host:port of the region SQL gateway (ie us-east-1.xata.tech)
 	OrganizationId *string                `protobuf:"bytes,3,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"` // if set, the region will be available only for this organization
 	BackupsEnabled bool                   `protobuf:"varint,5,opt,name=backups_enabled,json=backupsEnabled,proto3" json:"backups_enabled,omitempty"`      // true if backups should be enabled for branches created in this region
+	Provider       string                 `protobuf:"bytes,6,opt,name=provider,proto3" json:"provider,omitempty"`                                         // cloud provider the region runs on, must be one of: aws, gcp, custom
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -246,6 +255,13 @@ func (x *CreateRegionRequest) GetBackupsEnabled() bool {
 		return x.BackupsEnabled
 	}
 	return false
+}
+
+func (x *CreateRegionRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
 }
 
 // CreateRegionResponse is the response object for CreateRegion
@@ -947,19 +963,21 @@ const file_projects_v1_projects_proto_rawDesc = "" +
 	"\x1aprojects/v1/projects.proto\x12\vprojects.v1\"\x14\n" +
 	"\x12ListRegionsRequest\"D\n" +
 	"\x13ListRegionsResponse\x12-\n" +
-	"\aregions\x18\x01 \x03(\v2\x13.projects.v1.RegionR\aregions\"\xa8\x01\n" +
+	"\aregions\x18\x01 \x03(\v2\x13.projects.v1.RegionR\aregions\"\xc4\x01\n" +
 	"\x06Region\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12#\n" +
 	"\rpublic_access\x18\x02 \x01(\bR\fpublicAccess\x12,\n" +
 	"\x0forganization_id\x18\x03 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12'\n" +
-	"\x0fbackups_enabled\x18\x04 \x01(\bR\x0ebackupsEnabledB\x12\n" +
-	"\x10_organization_id\"\xd1\x01\n" +
+	"\x0fbackups_enabled\x18\x04 \x01(\bR\x0ebackupsEnabled\x12\x1a\n" +
+	"\bprovider\x18\x05 \x01(\tR\bproviderB\x12\n" +
+	"\x10_organization_id\"\xed\x01\n" +
 	"\x13CreateRegionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12#\n" +
 	"\rpublic_access\x18\x02 \x01(\bR\fpublicAccess\x12\x1a\n" +
 	"\bhostport\x18\x04 \x01(\tR\bhostport\x12,\n" +
 	"\x0forganization_id\x18\x03 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12'\n" +
-	"\x0fbackups_enabled\x18\x05 \x01(\bR\x0ebackupsEnabledB\x12\n" +
+	"\x0fbackups_enabled\x18\x05 \x01(\bR\x0ebackupsEnabled\x12\x1a\n" +
+	"\bprovider\x18\x06 \x01(\tR\bproviderB\x12\n" +
 	"\x10_organization_id\"\x16\n" +
 	"\x14CreateRegionResponse\"\x12\n" +
 	"\x10ListCellsRequest\"<\n" +

@@ -78,8 +78,8 @@ func TestListRegions(t *testing.T) {
 
 	// Test list regions
 	regions := []store.Region{
-		{ID: "us-east-1", OrganizationID: new("org-id"), PublicAccess: false},
-		{ID: "us-west-2", PublicAccess: true},
+		{ID: "us-east-1", OrganizationID: new("org-id"), PublicAccess: false, Provider: store.ProviderAWS},
+		{ID: "us-west-2", PublicAccess: true, Provider: store.ProviderGCP},
 	}
 	mockStore.EXPECT().ListRegions(mock.Anything, apitest.TestOrganization).Return(regions, nil)
 
@@ -96,10 +96,12 @@ func TestListRegions(t *testing.T) {
 	assert.Len(t, res.Regions, 2)
 	assert.Equal(t, "us-east-1", res.Regions[0].ID)
 	assert.Equal(t, false, res.Regions[0].PublicAccess)
+	assert.Equal(t, store.ProviderAWS, res.Regions[0].Provider)
 	assert.Equal(t, new("org-id"), res.Regions[0].OrganizationID) // org-id is set
 
 	assert.Equal(t, "us-west-2", res.Regions[1].ID)
 	assert.Equal(t, true, res.Regions[1].PublicAccess)
+	assert.Equal(t, store.ProviderGCP, res.Regions[1].Provider)
 	assert.Nil(t, res.Regions[1].OrganizationID) // no org-id
 
 	mockStore.AssertExpectations(t)

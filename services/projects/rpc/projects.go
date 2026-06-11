@@ -11,6 +11,8 @@ import (
 	"xata/services/projects/store"
 
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Ensure clusters implements GRPCService interface.
@@ -41,10 +43,14 @@ func (p *ProjectsService) CreateCell(ctx context.Context, input *projectsv1.Crea
 
 // CreateRegion implements projectsv1.ProjectsServiceServer.
 func (p *ProjectsService) CreateRegion(ctx context.Context, input *projectsv1.CreateRegionRequest) (*projectsv1.CreateRegionResponse, error) {
-	var err error
+	provider, err := store.ParseProvider(input.GetProvider())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 	flags := store.RegionFlags{
 		PublicAccess:   input.GetPublicAccess(),
 		BackupsEnabled: input.GetBackupsEnabled(),
+		Provider:       provider,
 	}
 	if input.OrganizationId != nil {
 		_, err = p.store.CreateOrganizationRegion(ctx, input.GetOrganizationId(), input.GetId(), flags, input.GetHostport())
@@ -88,6 +94,7 @@ func (p *ProjectsService) ListRegions(ctx context.Context, _ *projectsv1.ListReg
 			PublicAccess:   region.PublicAccess,
 			OrganizationId: region.OrganizationID,
 			BackupsEnabled: region.BackupsEnabled,
+			Provider:       string(region.Provider),
 		})
 	}
 	return response, nil

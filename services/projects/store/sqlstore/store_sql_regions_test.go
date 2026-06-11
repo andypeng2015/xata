@@ -30,12 +30,13 @@ func TestSQLStoreRegions(t *testing.T) {
 	require.Empty(t, regions)
 
 	// region available to everyone
-	region, err := sqlStore.CreateRegion(ctx, testRegionID, store.RegionFlags{PublicAccess: true, BackupsEnabled: true}, "custom.domain.tld:1234")
+	region, err := sqlStore.CreateRegion(ctx, testRegionID, store.RegionFlags{PublicAccess: true, BackupsEnabled: true, Provider: store.ProviderAWS}, "custom.domain.tld:1234")
 	require.NoError(t, err)
 	require.Equal(t, testRegionID, region.ID)
 	require.Equal(t, (*string)(nil), region.OrganizationID)
 	require.Equal(t, true, region.PublicAccess)
 	require.Equal(t, true, region.BackupsEnabled)
+	require.Equal(t, store.ProviderAWS, region.Provider)
 	require.Equal(t, "custom.domain.tld:1234", region.GatewayHostPort)
 
 	gotRegion, err := sqlStore.GetRegion(ctx, testOrganizationID, testRegionID)
@@ -47,12 +48,13 @@ func TestSQLStoreRegions(t *testing.T) {
 	require.ElementsMatch(t, regions, []store.Region{*region})
 
 	// region available to organization only
-	orgRegion, err := sqlStore.CreateOrganizationRegion(ctx, testOrganizationID, testOrganizationRegionID, store.RegionFlags{PublicAccess: false, BackupsEnabled: true}, "")
+	orgRegion, err := sqlStore.CreateOrganizationRegion(ctx, testOrganizationID, testOrganizationRegionID, store.RegionFlags{PublicAccess: false, BackupsEnabled: true, Provider: store.ProviderCustom}, "")
 	require.NoError(t, err)
 	require.Equal(t, testOrganizationRegionID, orgRegion.ID)
 	require.Equal(t, &testOrganizationID, orgRegion.OrganizationID)
 	require.Equal(t, false, orgRegion.PublicAccess)
 	require.Equal(t, true, orgRegion.BackupsEnabled)
+	require.Equal(t, store.ProviderCustom, orgRegion.Provider)
 
 	regions, err = sqlStore.ListRegions(ctx, testOrganizationID)
 	require.NoError(t, err)
@@ -63,18 +65,33 @@ func TestSQLStoreRegions(t *testing.T) {
 	require.ElementsMatch(t, regions, []store.Region{*region})
 
 	// Test creating region with backups disabled
-	regionNoBackups, err := sqlStore.CreateRegion(ctx, "no-backups-region", store.RegionFlags{PublicAccess: false, BackupsEnabled: false}, "")
+	regionNoBackups, err := sqlStore.CreateRegion(ctx, "no-backups-region", store.RegionFlags{PublicAccess: false, BackupsEnabled: false, Provider: store.ProviderAWS}, "")
 	require.NoError(t, err)
 	require.Equal(t, "no-backups-region", regionNoBackups.ID)
 	require.Equal(t, false, regionNoBackups.PublicAccess)
 	require.Equal(t, false, regionNoBackups.BackupsEnabled)
 
+	// Test creating region with a different provider
+	gcpRegion, err := sqlStore.CreateRegion(ctx, "gcp-region", store.RegionFlags{PublicAccess: true, BackupsEnabled: true, Provider: store.ProviderGCP}, "")
+	require.NoError(t, err)
+	require.Equal(t, store.ProviderGCP, gcpRegion.Provider)
+
+	// invalid provider is rejected
+	_, err = sqlStore.CreateRegion(ctx, "invalid-provider-region", store.RegionFlags{Provider: "azure"}, "")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "unknown provider")
+
+	// provider is required
+	_, err = sqlStore.CreateRegion(ctx, "missing-provider-region", store.RegionFlags{}, "")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "unknown provider")
+
 	// duplicate region cannot be created
-	_, err = sqlStore.CreateRegion(ctx, testRegionID, store.RegionFlags{PublicAccess: true, BackupsEnabled: true}, "")
+	_, err = sqlStore.CreateRegion(ctx, testRegionID, store.RegionFlags{PublicAccess: true, BackupsEnabled: true, Provider: store.ProviderAWS}, "")
 	require.Error(t, err)
 	require.ErrorAs(t, err, &store.ErrRegionAlreadyExists{})
 
-	_, err = sqlStore.CreateOrganizationRegion(ctx, "other", testOrganizationRegionID, store.RegionFlags{PublicAccess: false, BackupsEnabled: true}, "")
+	_, err = sqlStore.CreateOrganizationRegion(ctx, "other", testOrganizationRegionID, store.RegionFlags{PublicAccess: false, BackupsEnabled: true, Provider: store.ProviderAWS}, "")
 	require.Error(t, err)
 	require.ErrorAs(t, err, &store.ErrRegionAlreadyExists{})
 
@@ -235,7 +252,7 @@ func TestPrimaryCellUniqueness(t *testing.T) {
 	testGRPCURL := "grpc://localhost:50051"
 
 	// Create a public region
-	region, err := sqlStore.CreateRegion(ctx, testRegionID, store.RegionFlags{PublicAccess: true, BackupsEnabled: true}, testGRPCURL)
+	region, err := sqlStore.CreateRegion(ctx, testRegionID, store.RegionFlags{PublicAccess: true, BackupsEnabled: true, Provider: store.ProviderAWS}, testGRPCURL)
 	require.NoError(t, err)
 	require.Equal(t, testRegionID, region.ID)
 
@@ -424,10 +441,10 @@ func TestGetPrimaryCell(t *testing.T) {
 			// Setup regions
 			for _, region := range tc.setupRegions {
 				if region.OrganizationID != "" {
-					_, err := sqlStore.CreateOrganizationRegion(ctx, region.OrganizationID, region.ID, store.RegionFlags{PublicAccess: region.PublicAccess, BackupsEnabled: true}, testGRPCURL)
+					_, err := sqlStore.CreateOrganizationRegion(ctx, region.OrganizationID, region.ID, store.RegionFlags{PublicAccess: region.PublicAccess, BackupsEnabled: true, Provider: store.ProviderAWS}, testGRPCURL)
 					require.NoError(t, err)
 				} else {
-					_, err := sqlStore.CreateRegion(ctx, region.ID, store.RegionFlags{PublicAccess: region.PublicAccess, BackupsEnabled: true}, testGRPCURL)
+					_, err := sqlStore.CreateRegion(ctx, region.ID, store.RegionFlags{PublicAccess: region.PublicAccess, BackupsEnabled: true, Provider: store.ProviderAWS}, testGRPCURL)
 					require.NoError(t, err)
 				}
 			}

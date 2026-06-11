@@ -1,0 +1,15 @@
+{
+  "operations": [
+    {
+      "add_column": {
+        "table": "regions",
+        "up": "'aws'",
+        "column": {
+          "name": "provider",
+          "type": "text",
+          "nullable": false
+        }
+      }
+    }
+  ]
+}

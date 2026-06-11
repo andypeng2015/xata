@@ -74,7 +74,7 @@ func (s *ProjectsService) Setup(ctx context.Context) error {
 	// initialize main region and cell
 	if s.config.DefaultRegion != "" {
 		// create the default region (if it doesn't exist)
-		_, err = s.store.CreateRegion(ctx, s.config.DefaultRegion, store.RegionFlags{PublicAccess: true, BackupsEnabled: true}, s.config.GatewayHostPort)
+		_, err = s.store.CreateRegion(ctx, s.config.DefaultRegion, store.RegionFlags{PublicAccess: true, BackupsEnabled: true, Provider: store.ProviderCustom}, s.config.GatewayHostPort)
 		if err != nil && !errors.As(err, &store.ErrRegionAlreadyExists{}) {
 			return err
 		}
