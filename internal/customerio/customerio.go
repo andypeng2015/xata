@@ -175,6 +175,10 @@ func (c *Client) customerMessages(ctx context.Context, email string, since time.
 	var response customerMessagesResponse
 	requestURL := c.appAPIURL + "/customers/" + url.PathEscape(email) + "/messages?" + query.Encode()
 	if err := c.getJSON(ctx, requestURL, &response); err != nil {
+		// In case we have not yet created the customer.io "person" in customer.io yet
+		if isAppAPIStatus(err, http.StatusNotFound) {
+			return &customerMessagesResponse{}, nil
+		}
 		return nil, fmt.Errorf("list customer messages: %w", err)
 	}
 	return &response, nil
@@ -253,11 +257,17 @@ func (c *Client) waitAppAPILimiter(ctx context.Context) error {
 }
 
 func shouldRetryAppAPIRequest(err error) bool {
+	return isAppAPIStatus(err, http.StatusTooManyRequests) || isAppAPIServerError(err)
+}
+
+func isAppAPIStatus(err error, statusCode int) bool {
 	var appErr appAPIError
-	if !errors.As(err, &appErr) {
-		return false
-	}
-	return appErr.statusCode == http.StatusTooManyRequests || appErr.statusCode >= http.StatusInternalServerError
+	return errors.As(err, &appErr) && appErr.statusCode == statusCode
+}
+
+func isAppAPIServerError(err error) bool {
+	var appErr appAPIError
+	return errors.As(err, &appErr) && appErr.statusCode >= http.StatusInternalServerError
 }
 
 type appAPIBackOff struct {

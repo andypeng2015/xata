@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"xata/internal/customerio/mocks"
 
@@ -119,6 +120,64 @@ func TestNewClient(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHasRecentTransactionalMessage(t *testing.T) {
+	tests := map[string]struct {
+		responses []*http.Response
+		want      bool
+		wantErr   string
+	}{
+		"GET /customers/{email}/messages 404 means no recent messages": {
+			responses: []*http.Response{
+				newAppAPIResponse(http.StatusOK, `{"messages":[{"id":42,"trigger_name":"billing_trial_expires_soon_v3"}]}`, ""),
+				newAppAPIResponse(http.StatusNotFound, `{"errors":[{"detail":"not found"}]}`, ""),
+			},
+		},
+		"matching transactional message is recent": {
+			responses: []*http.Response{
+				newAppAPIResponse(http.StatusOK, `{"messages":[{"id":42,"trigger_name":"billing_trial_expires_soon_v3"}]}`, ""),
+				newAppAPIResponse(http.StatusOK, `{"messages":[{"id":"msg-1","transactional_message_id":42}]}`, ""),
+			},
+			want: true,
+		},
+		"GET /transactional 404 is fatal": {
+			responses: []*http.Response{
+				newAppAPIResponse(http.StatusNotFound, `{"errors":[{"detail":"not found"}]}`, ""),
+			},
+			wantErr: "list transactional messages: customer.io app api status 404",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			doer := &responseDoer{responses: tt.responses}
+			client := &Client{httpClient: doer, apiKey: "test-api-key", appAPIURL: "https://example.com"}
+
+			got, err := client.HasRecentTransactionalMessage(context.Background(), "customer@example.com", "billing_trial_expires_soon_v3", time.Unix(123, 0))
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.want, got)
+			require.Equal(t, len(tt.responses), doer.calls)
+		})
+	}
+}
+
+func TestCustomerMessages(t *testing.T) {
+	doer := &responseDoer{responses: []*http.Response{
+		newAppAPIResponse(http.StatusNotFound, `{"errors":[{"detail":"not found"}]}`, ""),
+	}}
+	client := &Client{httpClient: doer, apiKey: "test-api-key", appAPIURL: "https://example.com"}
+
+	got, err := client.customerMessages(context.Background(), "customer@example.com", time.Unix(123, 0), 100)
+
+	require.NoError(t, err)
+	require.Empty(t, got.Messages)
+	require.Equal(t, 1, doer.calls)
 }
 
 func TestGetJSON(t *testing.T) {
