@@ -1184,6 +1184,8 @@ github.com/xataio/xata-cnpg v1.28.1-0.20260603183239-9606b933123f h1:LsG4i876AVH
 github.com/xataio/xata-cnpg v1.28.1-0.20260603183239-9606b933123f/go.mod h1:ZQkCJLBgG6xXFDoGcBfOWBAU3WVqaRvGOld06SCKPwc=
 github.com/xataio/xata-cnpg v1.28.1-0.20260608134313-df83b7a10164 h1:g1HBUgDl4sfFp/sSaF9fYTdwEy22n8SguWwS/OcvwIw=
 github.com/xataio/xata-cnpg v1.28.1-0.20260608134313-df83b7a10164/go.mod h1:CugLIt044hW5PSzFwwWiippp6yWthu9BwJedIdoVEa4=
+github.com/xataio/xata-cnpg v1.28.1-0.20260610133336-5aabd96c3a91 h1:zMLsp18jtB7no+5BnupbV8kpAv8RGqlnzUs5THZ19V0=
+github.com/xataio/xata-cnpg v1.28.1-0.20260610133336-5aabd96c3a91/go.mod h1:CugLIt044hW5PSzFwwWiippp6yWthu9BwJedIdoVEa4=
 github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb h1:zGWFAtiMcyryUHoUjUJX0/lt1H2+i2Ka2n+D3DImSNo=
 github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=
 github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 h1:EzJWgHovont7NscjpAxXsDA8S8BMYve8Y5+7cuRE7R0=
