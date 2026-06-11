@@ -69,6 +69,9 @@ type MajorVersion struct {
 	Versions  []string `yaml:"versions"`  // ["16.3", "16.4"] or ["17.5", "17.6"]
 	Latest    string   `yaml:"latest"`    // "16.4" or "17.6"
 	Supported bool     `yaml:"supported"` // true/false
+	// ShowOnlyLatest hides all minors except Latest by default; the hidden
+	// minors remain available behind the legacyPgVersions feature flag
+	ShowOnlyLatest bool `yaml:"show_only_latest,omitempty"`
 }
 
 // ImageVersion represents a PostgreSQL image information (offering, major,
@@ -488,4 +491,43 @@ func GetAllImageNames() []string {
 
 	sort.Strings(allImageNames)
 	return allImageNames
+}
+
+// HiddenImageNames returns the image names that are hidden by default: minors
+// of a major version marked show_only_latest that are not the latest minor.
+// These images stay valid but require the legacyPgVersions feature flag to be
+// listed or used.
+func HiddenImageNames() []string {
+	seen := make(map[string]bool)
+	var hidden []string
+
+	for _, source := range postgresVersions.Sources {
+		lastSlashIndex := strings.LastIndex(source.Source, "/")
+		var imageName string
+		if lastSlashIndex == -1 {
+			imageName = source.Source
+		} else {
+			imageName = source.Source[lastSlashIndex+1:]
+		}
+		imageName = getDisplayName(imageName)
+
+		for _, major := range source.MajorVersions {
+			if !major.Supported || !major.ShowOnlyLatest {
+				continue
+			}
+			for _, version := range major.Versions {
+				if version == major.Latest {
+					continue
+				}
+				imageWithTag := fmt.Sprintf("%s:%s", imageName, version)
+				if !seen[imageWithTag] {
+					seen[imageWithTag] = true
+					hidden = append(hidden, imageWithTag)
+				}
+			}
+		}
+	}
+
+	sort.Strings(hidden)
+	return hidden
 }

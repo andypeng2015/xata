@@ -170,6 +170,19 @@ func (s *handler) ListImages(c echo.Context, organizationID spec.OrganizationID,
 			images = filtered
 		}
 
+		// Filter out older minors hidden by default if the feature flag is not enabled
+		legacyEnabled := s.feat.BoolValue(c.Request().Context(), flags.LegacyPgVersions)
+		if !legacyEnabled {
+			hidden := postgresversions.HiddenImageNames()
+			filtered := make([]string, 0, len(images))
+			for _, img := range images {
+				if !slices.Contains(hidden, img) {
+					filtered = append(filtered, img)
+				}
+			}
+			images = filtered
+		}
+
 		imagesResp := make([]spec.Image, len(images))
 		for i, it := range images {
 			version := s.imageProvider.ExtractVersionFromImageName(it)
@@ -1023,6 +1036,11 @@ func (s *handler) validateImage(ctx context.Context, organizationID spec.Organiz
 
 	// Reject analytics images if the feature flag is not enabled
 	if strings.HasPrefix(image, "analytics:") && !s.feat.BoolValue(ctx, flags.AnalyticsImages) {
+		return "", fmt.Errorf("image %s is not available", image)
+	}
+
+	// Reject older minors hidden by default if the feature flag is not enabled
+	if slices.Contains(postgresversions.HiddenImageNames(), image) && !s.feat.BoolValue(ctx, flags.LegacyPgVersions) {
 		return "", fmt.Errorf("image %s is not available", image)
 	}
 

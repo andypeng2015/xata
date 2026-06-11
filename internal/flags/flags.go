@@ -36,6 +36,12 @@ var (
 		Name:           "analyticsImages",
 		DefaultEnabled: false,
 	}
+	// LegacyPgVersions flag to enable older PostgreSQL minor versions that
+	// are hidden by default (see show_only_latest in versions.yaml)
+	LegacyPgVersions = openfeature.FeatureFlag{
+		Name:           "legacyPgVersions",
+		DefaultEnabled: false,
+	}
 	UseClusterPool = openfeature.FeatureFlag{
 		Name:           "useClusterPool",
 		DefaultEnabled: false,

@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestYAMLLoading(t *testing.T) {
@@ -201,6 +203,44 @@ func TestVersionsYAMLConsistency(t *testing.T) {
 	// Test ValidateVersion with invalid version
 	if err := ValidateVersion("99.99"); err == nil {
 		t.Error("ValidateVersion should return error for invalid version")
+	}
+}
+
+func TestHiddenImageNames(t *testing.T) {
+	hidden := HiddenImageNames()
+	hiddenSet := make(map[string]bool, len(hidden))
+	for _, name := range hidden {
+		hiddenSet[name] = true
+	}
+
+	// Hidden images must still be valid images
+	allImageNames := GetAllImageNames()
+	for _, name := range hidden {
+		require.Contains(t, allImageNames, name, "hidden image %s not found in GetAllImageNames()", name)
+	}
+
+	// For every show_only_latest major, all minors except the latest must be
+	// hidden; everything else must be visible
+	for _, source := range GetSources() {
+		imageName := getDisplayName(source.Source[strings.LastIndex(source.Source, "/")+1:])
+		for majorName, major := range source.MajorVersions {
+			for _, version := range major.Versions {
+				name := imageName + ":" + version
+				wantHidden := major.Supported && major.ShowOnlyLatest && version != major.Latest
+				require.Equal(t, wantHidden, hiddenSet[name],
+					"HiddenImageNames(): image %s (major %s) hidden", name, majorName)
+			}
+		}
+	}
+
+	// Guard the current default-visibility policy: only the latest minor of
+	// PG 14, 15 and 16 is visible by default, all 17 and 18 minors are visible
+	for _, source := range GetSources() {
+		for majorName, major := range source.MajorVersions {
+			wantShowOnlyLatest := majorName == "14" || majorName == "15" || majorName == "16"
+			require.Equal(t, wantShowOnlyLatest, major.ShowOnlyLatest,
+				"source %s major %s: show_only_latest", source.Source, majorName)
+		}
 	}
 }
 

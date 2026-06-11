@@ -1,5 +1,9 @@
 # PostgreSQL versions available in container registry
 # This file is automatically updated by the postgres-images build workflow
+#
+# show_only_latest hides all minors of a major except `latest` by default;
+# hidden minors remain available behind the legacyPgVersions feature flag.
+# The update workflow must preserve this field.
 
 last_updated: "2026-05-20T03:10:59Z"
 updated_by: workflow
@@ -12,16 +16,19 @@ sources:
         versions: ["14.20", "14.22", "14.23"]
         latest: "14.23"
         supported: true
+        show_only_latest: true
       "15":
         # PostgreSQL 15.x versions
         versions: ["15.15", "15.17", "15.18"]
         latest: "15.18"
         supported: true
+        show_only_latest: true
       "16":
         # PostgreSQL 16.x versions
         versions: ["16.11", "16.13", "16.14"]
         latest: "16.14"
         supported: true
+        show_only_latest: true
       "17":
         # PostgreSQL 17.x versions - current major version
         versions: ["17.5", "17.6", "17.7", "17.9", "17.10"]
@@ -47,6 +54,7 @@ sources:
         versions: ["16.11", "16.13", "16.14"]
         latest: "16.14"
         supported: true
+        show_only_latest: true
   - source: ghcr.io/xataio/postgres-images/xata-analytics
     package_url: https://github.com/xataio/postgres-images/pkgs/container/postgres-images%2Fxata-analytics
     major_versions:

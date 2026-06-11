@@ -649,6 +649,19 @@ func TestAuthDisabledOrg(t *testing.T) {
 	assert.NoError(t, handler.DeleteGithubRepository(c, noWriteAccessOrgID, "test", "branch"))
 }
 
+// hiddenPostgresImage returns an older minor of the postgres offering that is
+// hidden by default (show_only_latest in versions.yaml)
+func hiddenPostgresImage(t *testing.T) string {
+	t.Helper()
+	for _, img := range postgresversions.HiddenImageNames() {
+		if strings.HasPrefix(img, "postgres:") {
+			return img
+		}
+	}
+	t.Fatal("versions.yaml has no hidden older postgres minors")
+	return ""
+}
+
 func TestCreateBranch(t *testing.T) {
 	mockStore := mocks.NewProjectsStore(t)
 	mockClusters := protomocks.NewClustersServiceClient(t)
@@ -705,6 +718,8 @@ func TestCreateBranch(t *testing.T) {
 
 	correctDescription := "description"
 	invalidDescription := "-description"
+
+	hiddenImage := hiddenPostgresImage(t)
 
 	createBranchTests := []struct {
 		name             string
@@ -1772,6 +1787,30 @@ func TestCreateBranch(t *testing.T) {
 				BranchName: "analytics-branch",
 				Param:      "configuration",
 				Message:    "invalid image: image analytics:17.7 is not available",
+			},
+		},
+		{
+			name:      "rejects hidden older minor image when feature flag is disabled",
+			projectID: "project_id",
+			branch:    branch,
+			jsonBody: map[string]any{
+				"name": "legacy-branch",
+				"mode": "custom",
+				"configuration": map[string]any{
+					"image":        hiddenImage,
+					"replicas":     0,
+					"region":       configuration.Region,
+					"instanceType": configuration.InstanceType,
+				},
+			},
+			setupMocks: func(capturedRequest **clustersv1.CreatePostgresClusterRequest) {
+				// No mocks needed - validateImage fails before any store calls
+			},
+			wantError: true,
+			expectedError: ErrorInvalidParam{
+				BranchName: "legacy-branch",
+				Param:      "configuration",
+				Message:    "invalid image: image " + hiddenImage + " is not available",
 			},
 		},
 	}
@@ -6086,6 +6125,10 @@ func TestListInstanceTypes(t *testing.T) {
 }
 
 func TestListImages(t *testing.T) {
+	hiddenImage := hiddenPostgresImage(t)
+	hiddenVersion := postgresversions.ExtractVersionFromImageName(hiddenImage)
+	hiddenMajor := postgresversions.GetMajorForVersion(hiddenVersion)
+
 	listImagesTests := []struct {
 		name           string
 		organizationID string
@@ -6325,6 +6368,49 @@ func TestListImages(t *testing.T) {
 				{MajorVersion: "17", FullVersion: "17.7", Name: "postgres:17.7"},
 			},
 		},
+		{
+			name:           "filters out hidden older minors when flag is disabled",
+			organizationID: apitest.TestOrganization,
+			params:         spec.ListImagesParams{},
+			featureFlags:   nil, // LegacyPgVersions flag defaults to false
+			setupMocks: func(mockStore *mocks.ProjectsStore, mockImageProvider *postgresversionsmocks.ImageProvider) {
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{
+					"postgres:17.7",
+					hiddenImage,
+				}).Once()
+				// Only the visible image should be processed
+				mockImageProvider.EXPECT().ExtractVersionFromImageName("postgres:17.7").Return("17.7").Once()
+				mockImageProvider.EXPECT().GetMajorForVersion("17.7").Return("17").Once()
+			},
+			wantError: false,
+			expectedImages: []spec.Image{
+				{MajorVersion: "17", FullVersion: "17.7", Name: "postgres:17.7"},
+			},
+		},
+		{
+			name:           "includes hidden older minors when flag is enabled",
+			organizationID: apitest.TestOrganization,
+			params:         spec.ListImagesParams{},
+			featureFlags: map[openfeature.FeatureFlag]bool{
+				flags.LegacyPgVersions: true,
+			},
+			setupMocks: func(mockStore *mocks.ProjectsStore, mockImageProvider *postgresversionsmocks.ImageProvider) {
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{
+					"postgres:17.7",
+					hiddenImage,
+				}).Once()
+				// All images should be processed
+				mockImageProvider.EXPECT().ExtractVersionFromImageName("postgres:17.7").Return("17.7").Once()
+				mockImageProvider.EXPECT().GetMajorForVersion("17.7").Return("17").Once()
+				mockImageProvider.EXPECT().ExtractVersionFromImageName(hiddenImage).Return(hiddenVersion).Once()
+				mockImageProvider.EXPECT().GetMajorForVersion(hiddenVersion).Return(hiddenMajor).Once()
+			},
+			wantError: false,
+			expectedImages: []spec.Image{
+				{MajorVersion: "17", FullVersion: "17.7", Name: "postgres:17.7"},
+				{MajorVersion: hiddenMajor, FullVersion: hiddenVersion, Name: hiddenImage},
+			},
+		},
 	}
 
 	for _, tt := range listImagesTests {
@@ -6372,6 +6458,33 @@ func TestListImages(t *testing.T) {
 			mockImageProvider.AssertExpectations(t)
 		})
 	}
+}
+
+func TestValidateImageHiddenMinors(t *testing.T) {
+	hiddenImage := hiddenPostgresImage(t)
+
+	t.Run("rejected when flag is disabled", func(t *testing.T) {
+		s := &handler{
+			feat:          openfeaturetest.NewClient(nil),
+			imageProvider: postgresversionsmocks.NewImageProvider(t),
+		}
+		_, err := s.validateImage(context.Background(), apitest.TestOrganization, hiddenImage)
+		require.EqualError(t, err, fmt.Sprintf("image %s is not available", hiddenImage))
+	})
+
+	t.Run("allowed when flag is enabled", func(t *testing.T) {
+		expectedURL := postgresversions.BuildImageURL(hiddenImage)
+		mockImageProvider := postgresversionsmocks.NewImageProvider(t)
+		mockImageProvider.EXPECT().GetAllImageNames().Return([]string{hiddenImage}).Once()
+		mockImageProvider.EXPECT().BuildImageURL(hiddenImage).Return(expectedURL).Once()
+		s := &handler{
+			feat:          openfeaturetest.NewClient(map[openfeature.FeatureFlag]bool{flags.LegacyPgVersions: true}),
+			imageProvider: mockImageProvider,
+		}
+		imageURL, err := s.validateImage(context.Background(), apitest.TestOrganization, hiddenImage)
+		require.NoError(t, err)
+		require.Equal(t, expectedURL, imageURL)
+	})
 }
 
 func TestListExtensions(t *testing.T) {
