@@ -1927,7 +1927,7 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 							{Name: "xatautils.privileged_role", Value: "xata"},
 							{Name: "xatautils.privileged_role_allowed_configs", Value: "auth_delay.*, auto_explain.*, log_lock_waits, log_min_duration_statement, log_min_messages, log_replication_commands, log_statement, log_temp_files, pg_net.batch_size, pg_net.ttl, pg_stat_statements.*, pgaudit.log, pgaudit.log_catalog, pgaudit.log_client, pgaudit.log_level, pgaudit.log_relation, pgaudit.log_rows, pgaudit.log_statement, pgaudit.log_statement_once, pgaudit.role, pgrst.*, plan_filter.*, safeupdate.enabled, session_replication_role, track_io_timing, wal_compression"},
 							{Name: "xatautils.reserved_memberships", Value: "xata_superuser, pg_read_server_files, pg_write_server_files, pg_execute_server_program"},
-							{Name: "xatautils.reserved_roles", Value: "cnpg_pooler_pgbouncer"},
+							{Name: "xatautils.reserved_roles", Value: "cnpg_pooler_pgbouncer, postgres, streaming_replica, xata_superuser"},
 						},
 						SharedPreloadLibraries: []string{
 							"xatautils",
@@ -1983,7 +1983,7 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 					"xatautils.privileged_role":                 "xata",
 					"xatautils.privileged_role_allowed_configs": "auth_delay.*, auto_explain.*, log_lock_waits, log_min_duration_statement, log_min_messages, log_replication_commands, log_statement, log_temp_files, pg_net.batch_size, pg_net.ttl, pg_stat_statements.*, pgaudit.log, pgaudit.log_catalog, pgaudit.log_client, pgaudit.log_level, pgaudit.log_relation, pgaudit.log_rows, pgaudit.log_statement, pgaudit.log_statement_once, pgaudit.role, pgrst.*, plan_filter.*, safeupdate.enabled, session_replication_role, track_io_timing, wal_compression",
 					"xatautils.reserved_memberships":            "xata_superuser, pg_read_server_files, pg_write_server_files, pg_execute_server_program",
-					"xatautils.reserved_roles":                  "cnpg_pooler_pgbouncer",
+					"xatautils.reserved_roles":                  "cnpg_pooler_pgbouncer, postgres, streaming_replica, xata_superuser",
 				},
 				PreloadLibraries: []string{
 					"xatautils",
@@ -2081,7 +2081,7 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 							{Name: "xatautils.privileged_role", Value: "xata"},
 							{Name: "xatautils.privileged_role_allowed_configs", Value: "auth_delay.*, auto_explain.*, log_lock_waits, log_min_duration_statement, log_min_messages, log_replication_commands, log_statement, log_temp_files, pg_net.batch_size, pg_net.ttl, pg_stat_statements.*, pgaudit.log, pgaudit.log_catalog, pgaudit.log_client, pgaudit.log_level, pgaudit.log_relation, pgaudit.log_rows, pgaudit.log_statement, pgaudit.log_statement_once, pgaudit.role, pgrst.*, plan_filter.*, safeupdate.enabled, session_replication_role, track_io_timing, wal_compression"},
 							{Name: "xatautils.reserved_memberships", Value: "xata_superuser, pg_read_server_files, pg_write_server_files, pg_execute_server_program"},
-							{Name: "xatautils.reserved_roles", Value: "cnpg_pooler_pgbouncer"},
+							{Name: "xatautils.reserved_roles", Value: "cnpg_pooler_pgbouncer, postgres, streaming_replica, xata_superuser"},
 						},
 						SharedPreloadLibraries: []string{
 							"xatautils",
