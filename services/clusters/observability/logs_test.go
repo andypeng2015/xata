@@ -308,3 +308,65 @@ func TestExpandLevels(t *testing.T) {
 	require.Contains(t, joined, "WARNING")
 	require.NotContains(t, joined, "INFO")
 }
+
+func TestRedactPassword(t *testing.T) {
+	tests := map[string]struct {
+		in   string
+		want string
+	}{
+		"alter role password": {
+			in:   `statement: ALTER ROLE "xata" LOGIN PASSWORD 'aSR20yzeuGek'`,
+			want: `statement: ALTER ROLE "xata" LOGIN PASSWORD <REDACTED>`,
+		},
+		"create role encrypted password": {
+			in:   `statement: CREATE ROLE r LOGIN ENCRYPTED PASSWORD 'topsecret'`,
+			want: `statement: CREATE ROLE r LOGIN ENCRYPTED PASSWORD <REDACTED>`,
+		},
+		"trailing clauses are dropped with the secret": {
+			in:   `ALTER ROLE "postgres" WITH PASSWORD 'j21BPewd' VALID UNTIL 'infinity'`,
+			want: `ALTER ROLE "postgres" WITH PASSWORD <REDACTED>`,
+		},
+		"statement split across lines": {
+			in:   "statement: ALTER ROLE \"xata\" LOGIN\nPASSWORD 'topsecret'",
+			want: "statement: ALTER ROLE \"xata\" LOGIN\nPASSWORD <REDACTED>",
+		},
+		"user mapping options password": {
+			in:   `CREATE USER MAPPING FOR xata SERVER s OPTIONS (user 'u', password 'topsecret')`,
+			want: `CREATE USER MAPPING FOR xata SERVER s OPTIONS (user 'u', password <REDACTED>`,
+		},
+		"password substring in role name is preserved": {
+			in:   `CREATE ROLE password_admin LOGIN PASSWORD 'topsecret'`,
+			want: `CREATE ROLE password_admin LOGIN PASSWORD <REDACTED>`,
+		},
+		"non-role statement mentioning password is unchanged": {
+			in:   `statement: SELECT * FROM notes WHERE body = 'my password is secret'`,
+			want: `statement: SELECT * FROM notes WHERE body = 'my password is secret'`,
+		},
+		"role set without password is unchanged": {
+			in:   `statement: ALTER ROLE postgres SET log_statement = 'all'`,
+			want: `statement: ALTER ROLE postgres SET log_statement = 'all'`,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := redactPassword(tc.in)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestQuery_RedactsManagedCredentialFromCNPGRecord(t *testing.T) {
+	const secret = "vODquEQTYRrviVSRacwf"
+	backend := &fakeLogsBackend{rows: []LogRow{{
+		Timestamp: time.Unix(1730000000, 0),
+		Pod:       "br-1-1",
+		Severity:  "LOG",
+		Message:   `{"logger":"postgres","record":{"message":"statement: ALTER ROLE \"xata\" LOGIN PASSWORD '` + secret + `'"}}`,
+	}}}
+	q := NewLogsQuerier(backend, "xata-clusters")
+	res, err := q.Query(context.Background(), "br-1", time.Unix(0, 0), time.Now(), nil, 10, "")
+	require.NoError(t, err)
+	require.Len(t, res.Entries, 1)
+	require.NotContains(t, res.Entries[0].Message, secret, "managed credential must never reach the customer")
+	require.Contains(t, res.Entries[0].Message, "PASSWORD <REDACTED>")
+}

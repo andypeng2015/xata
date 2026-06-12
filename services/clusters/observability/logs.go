@@ -131,6 +131,7 @@ func (q *LogsQuerier) Query(ctx context.Context, branchID string, start, end tim
 	page := pagination.New(maxLogPageBytes)
 	for _, r := range rows {
 		message, logger := unwrapCNPGBody(r.Message)
+		message = redactPassword(message)
 		message = pagination.Truncate(message, logTruncationMarker, maxLogMessageBytes)
 		if !page.Add(len(message)) {
 			break
@@ -311,6 +312,23 @@ func renderPgAuditRecord(audit map[string]any, body string) string {
 	}
 
 	return "AUDIT: " + strings.TrimRight(buf.String(), "\n")
+}
+
+// rolePassword matches a CREATE/ALTER ROLE|USER|GROUP or USER MAPPING
+// statement up to its `password` keyword, capturing everything before the
+// secret. Native Postgres logging does not redact passwords, so CNPG's
+// managed-role sync (`ALTER ROLE ... PASSWORD '...'`, run as superuser) can
+// otherwise reach the customer through the always-on postgres logger. The `s`
+// flag matters: Vector reassembles multi-line records, so the statement and its
+// password may span newlines in one message.
+var rolePassword = regexp.MustCompile(`(?is)((?:create|alter)\s+(?:role|user|group)\b.*?\bpassword\b).*`)
+
+// redactPassword mirrors pgaudit: it truncates a role/user-mapping statement at
+// the `password` keyword and appends a redaction token, rather than parsing out
+// the literal. The command-type guard avoids redacting unrelated lines that
+// merely mention "password".
+func redactPassword(s string) string {
+	return rolePassword.ReplaceAllString(s, "$1 <REDACTED>")
 }
 
 // encodeCursor / decodeCursor turn a timestamp into an opaque string for
