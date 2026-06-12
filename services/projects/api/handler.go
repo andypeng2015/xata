@@ -1868,12 +1868,6 @@ func (s *handler) BranchLogs(c echo.Context, organizationID spec.OrganizationID,
 			return err
 		}
 
-		// pgaudit shares the logs stream; when the flag is off, restrict the
-		// logger so its audit records are excluded.
-		if !s.feat.BoolValue(c.Request().Context(), flags.PgAuditLogs) {
-			userFilters = append(userFilters, metrics.LogFilter{Field: "logger", Op: "in", Values: []string{"postgres"}})
-		}
-
 		branch, err := s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID)
 		if err != nil {
 			return err

@@ -54,9 +54,5 @@ var (
 		Name:           "usePgBackRest",
 		DefaultEnabled: false,
 	}
-	PgAuditLogs = openfeature.FeatureFlag{
-		Name:           "pgAuditLogs",
-		DefaultEnabled: false,
-	}
 	// WARNING: Feature Flags should have positive names. Avoid disabled suffix in future
 )
