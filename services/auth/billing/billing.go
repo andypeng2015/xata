@@ -7,7 +7,11 @@ import (
 
 //go:generate go run github.com/vektra/mockery/v3 --output billingmock --outpkg billingmock --with-expecter --name Client
 
-const TrialCreditExpiryDays = 15
+const (
+	TrialCreditExpiryDays      = 15
+	CreditStatusActive         = "active"
+	CreditStatusPendingPayment = "pending_payment"
+)
 
 type Subscription struct {
 	ID string
@@ -17,12 +21,25 @@ type Credit struct {
 	ID                    string
 	Amount                float64
 	MaximumInitialBalance float64
+	EffectiveDate         time.Time
 	ExpiryDate            time.Time
+	Status                string
 }
 
 func (c *Credit) IsExpired() bool {
 	// The orb client uses a zero time to indicate no expiry
 	return !c.ExpiryDate.IsZero() && time.Now().After(c.ExpiryDate)
+}
+
+type PaymentMethodCard struct {
+	Brand       string
+	Last4       string
+	ExpiryMonth int
+	ExpiryYear  int
+}
+
+type PaymentMethod struct {
+	Card PaymentMethodCard
 }
 
 type Customer struct {
@@ -34,6 +51,7 @@ type Customer struct {
 	PaymentProviderID     string
 	Subscriptions         []Subscription
 	Credits               []Credit
+	DefaultPaymentMethod  *PaymentMethod
 	HasValidPaymentMethod bool
 }
 
@@ -72,7 +90,29 @@ type Invoice struct {
 	DueDate        time.Time
 	IssuedAt       time.Time
 	PaidAt         time.Time
+	InvoicePDF     *string
 	AutoCollection InvoiceAutoCollection
+}
+
+type InvoiceListOptions struct {
+	Cursor string
+	Limit  int
+}
+
+type InvoicesPage struct {
+	Data       []Invoice
+	HasMore    bool
+	NextCursor *string
+}
+
+type UpcomingInvoice struct {
+	CreatedAt        time.Time
+	AmountDue        float64
+	Currency         string
+	TargetDate       time.Time
+	Subtotal         float64
+	Total            float64
+	HostedInvoiceURL *string
 }
 
 type OrbCustomerMetadata struct {
@@ -113,6 +153,13 @@ type Client interface {
 	FetchCustomer(ctx context.Context, customerID string) (*Customer, error)
 	// FetchCustomerByExternalID retrieves a customer record by the external customer ID.
 	FetchCustomerByExternalID(ctx context.Context, externalCustomerID string) (*Customer, error)
+	// FetchBillingCustomerWithDefaultPaymentMethod retrieves a customer with their default payment method details.
+	FetchBillingCustomerWithDefaultPaymentMethod(ctx context.Context, externalCustomerID string) (*Customer, error)
+	UpdateOrbCustomerEmail(ctx context.Context, externalCustomerID, email string) (*Customer, error)
+	ListInvoices(ctx context.Context, externalCustomerID string, opts InvoiceListOptions) (*InvoicesPage, error)
+	// FetchUpcomingInvoice fetches the next invoice for the customer's active subscription.
+	// Customers are expected to have at most one active subscription.
+	FetchUpcomingInvoice(ctx context.Context, externalCustomerID string) (*UpcomingInvoice, error)
 	// ListCustomersCreatedAfter retrieves customer records created at or after the given time.
 	ListCustomersCreatedAfter(ctx context.Context, createdAfter time.Time) ([]*Customer, error)
 	// FetchStripeCustomer retrieves a Stripe customer by their Stripe customer ID.
@@ -163,6 +210,22 @@ func (n *NoopBilling) FetchCustomer(ctx context.Context, externalCustomerID stri
 }
 
 func (n *NoopBilling) FetchCustomerByExternalID(_ context.Context, _ string) (*Customer, error) {
+	return nil, nil
+}
+
+func (n *NoopBilling) FetchBillingCustomerWithDefaultPaymentMethod(_ context.Context, _ string) (*Customer, error) {
+	return nil, nil
+}
+
+func (n *NoopBilling) UpdateOrbCustomerEmail(_ context.Context, _, _ string) (*Customer, error) {
+	return nil, nil
+}
+
+func (n *NoopBilling) ListInvoices(_ context.Context, _ string, _ InvoiceListOptions) (*InvoicesPage, error) {
+	return nil, nil
+}
+
+func (n *NoopBilling) FetchUpcomingInvoice(_ context.Context, _ string) (*UpcomingInvoice, error) {
 	return nil, nil
 }
 
