@@ -617,6 +617,140 @@ paths:
       tags:
         - Billing
       x-excluded: true
+  '/organizations/{organizationID}/billing/customer':
+    get:
+      operationId: getBillingCustomer
+      summary: Get billing customer details
+      description: Retrieves billing customer details for the specified organization.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIDParam'
+      responses:
+        '200':
+          description: Billing customer details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingCustomerResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/SimpleError'
+        5XX:
+          description: Unexpected Error
+      security:
+        - xata:
+            - 'org:read'
+      tags:
+        - Billing
+      x-excluded: true
+    patch:
+      operationId: updateBillingCustomer
+      summary: Update billing customer details
+      description: Updates billing customer details for the specified organization.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIDParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBillingCustomerRequest'
+      responses:
+        '200':
+          description: Billing customer updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingCustomerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/SimpleError'
+        5XX:
+          description: Unexpected Error
+      security:
+        - xata:
+            - 'org:write'
+      tags:
+        - Billing
+      x-excluded: true
+  '/organizations/{organizationID}/billing/invoices':
+    get:
+      operationId: getBillingInvoices
+      summary: List billing invoices
+      description: Retrieves billing invoices for the specified organization.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIDParam'
+        - name: cursor
+          in: query
+          description: Pagination cursor from a previous response
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Number of invoices to fetch
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+            minimum: 1
+      responses:
+        '200':
+          description: Billing invoices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingInvoicesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/SimpleError'
+        5XX:
+          description: Unexpected Error
+      security:
+        - xata:
+            - 'org:read'
+      tags:
+        - Billing
+      x-excluded: true
+  '/organizations/{organizationID}/billing/invoices/upcoming':
+    get:
+      operationId: getBillingUpcomingInvoice
+      summary: Get upcoming billing invoice
+      description: Retrieves the upcoming billing invoice for the specified organization's active subscription. Organizations are expected to have at most one active subscription.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIDParam'
+      responses:
+        '200':
+          description: Upcoming billing invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingUpcomingInvoiceResponse'
+        '401':
+          $ref: '#/components/responses/AuthError'
+        '403':
+          $ref: '#/components/responses/AuthError'
+        '404':
+          $ref: '#/components/responses/SimpleError'
+        5XX:
+          description: Unexpected Error
+      security:
+        - xata:
+            - 'org:read'
+      tags:
+        - Billing
+      x-excluded: true
   /marketplace/register:
     post:
       operationId: registerMarketplace
@@ -939,6 +1073,233 @@ components:
         - created_at
         - expires_at
         - status
+    BillingCustomerResponse:
+      type: object
+      properties:
+        billing_email:
+          type: string
+          format: email
+        has_payment_method:
+          description: True when the customer has a valid Stripe default card payment method.
+          type: boolean
+        default_payment_method:
+          description: 'The Stripe default card payment method, when one is configured and retrievable.'
+          allOf:
+            - $ref: '#/components/schemas/BillingPaymentMethod'
+          nullable: true
+        credits:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillingCredit'
+        credit_details:
+          $ref: '#/components/schemas/BillingCreditDetails'
+      required:
+        - billing_email
+        - has_payment_method
+        - default_payment_method
+        - credits
+        - credit_details
+    BillingPaymentMethod:
+      type: object
+      properties:
+        card:
+          $ref: '#/components/schemas/BillingPaymentMethodCard'
+      required:
+        - card
+    BillingPaymentMethodCard:
+      type: object
+      properties:
+        brand:
+          type: string
+        last4:
+          type: string
+        expiry_month:
+          type: integer
+        expiry_year:
+          type: integer
+      required:
+        - brand
+        - last4
+        - expiry_month
+        - expiry_year
+    BillingCredit:
+      type: object
+      properties:
+        id:
+          type: string
+        balance:
+          description: Remaining credit balance.
+          type: number
+          format: double
+        effective_date:
+          description: Date when the credit becomes usable.
+          type: string
+          format: date-time
+        expiry_date:
+          description: 'Date when the credit expires, or null for credits that do not expire.'
+          type: string
+          format: date-time
+          nullable: true
+        maximum_initial_balance:
+          description: Initial credit balance before any usage.
+          type: number
+          format: double
+        status:
+          type: string
+          enum:
+            - active
+            - pending_payment
+      required:
+        - id
+        - balance
+        - effective_date
+        - expiry_date
+        - maximum_initial_balance
+        - status
+    BillingCreditDetails:
+      type: object
+      properties:
+        total_lifetime_credits:
+          type: number
+          format: double
+        last_expiry:
+          type: string
+          format: date-time
+          nullable: true
+        last_expiry_with_balance:
+          type: string
+          format: date-time
+          nullable: true
+        active_credits:
+          description: 'Credits with active status, a reached effective date, positive balance, and no past expiry.'
+          type: array
+          items:
+            $ref: '#/components/schemas/BillingCredit'
+        last_active_credit_expiry:
+          type: string
+          format: date-time
+          nullable: true
+        total_active_credits:
+          type: number
+          format: double
+        days_until_last_active_credit_expiry:
+          description: 'Days until the last active credit expiry, or null when there is no future active credit expiry.'
+          type: integer
+          nullable: true
+        days_until_last_expiry_with_balance:
+          description: 'Days until the last positive-balance credit expiry, or null when there is no future positive-balance credit expiry.'
+          type: integer
+          nullable: true
+      required:
+        - total_lifetime_credits
+        - last_expiry
+        - last_expiry_with_balance
+        - active_credits
+        - last_active_credit_expiry
+        - total_active_credits
+        - days_until_last_active_credit_expiry
+        - days_until_last_expiry_with_balance
+    UpdateBillingCustomerRequest:
+      type: object
+      properties:
+        billing_email:
+          type: string
+          format: email
+      required:
+        - billing_email
+    BillingInvoicesResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillingInvoice'
+        pagination_metadata:
+          $ref: '#/components/schemas/PaginationMetadata'
+      required:
+        - data
+        - pagination_metadata
+    BillingInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+        invoice_number:
+          type: string
+        amount_due:
+          description: Decimal amount due.
+          type: number
+          format: double
+        currency:
+          type: string
+        invoice_date:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - draft
+            - issued
+            - paid
+            - void
+            - synced
+        invoice_pdf:
+          type: string
+          nullable: true
+      required:
+        - id
+        - invoice_number
+        - amount_due
+        - currency
+        - invoice_date
+        - status
+        - invoice_pdf
+    PaginationMetadata:
+      type: object
+      properties:
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+        - has_more
+        - next_cursor
+    BillingUpcomingInvoiceResponse:
+      type: object
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        amount_due:
+          description: Decimal amount due.
+          type: number
+          format: double
+        currency:
+          type: string
+        target_date:
+          type: string
+          format: date-time
+        subtotal:
+          description: Decimal subtotal.
+          type: number
+          format: double
+        total:
+          description: Decimal total.
+          type: number
+          format: double
+        hosted_invoice_url:
+          type: string
+          format: uri
+          nullable: true
+      required:
+        - created_at
+        - amount_due
+        - currency
+        - target_date
+        - subtotal
+        - total
+        - hosted_invoice_url
     BillingCheckoutSessionResponse:
       type: object
       properties:

@@ -13,6 +13,21 @@ const (
 	XataScopes = "xata.Scopes"
 )
 
+// Defines values for BillingCreditStatus.
+const (
+	Active         BillingCreditStatus = "active"
+	PendingPayment BillingCreditStatus = "pending_payment"
+)
+
+// Defines values for BillingInvoiceStatus.
+const (
+	Draft  BillingInvoiceStatus = "draft"
+	Issued BillingInvoiceStatus = "issued"
+	Paid   BillingInvoiceStatus = "paid"
+	Synced BillingInvoiceStatus = "synced"
+	Void   BillingInvoiceStatus = "void"
+)
+
 // Defines values for MarketplaceRegisterRequestMarketplace.
 const (
 	Aws MarketplaceRegisterRequestMarketplace = "aws"
@@ -83,10 +98,110 @@ type BillingCheckoutSessionResponse struct {
 	Url string `json:"url"`
 }
 
+// BillingCredit defines model for BillingCredit.
+type BillingCredit struct {
+	// Balance Remaining credit balance.
+	Balance float64 `json:"balance"`
+
+	// EffectiveDate Date when the credit becomes usable.
+	EffectiveDate time.Time `json:"effective_date"`
+
+	// ExpiryDate Date when the credit expires, or null for credits that do not expire.
+	ExpiryDate *time.Time `json:"expiry_date"`
+	Id         string     `json:"id"`
+
+	// MaximumInitialBalance Initial credit balance before any usage.
+	MaximumInitialBalance float64             `json:"maximum_initial_balance"`
+	Status                BillingCreditStatus `json:"status"`
+}
+
+// BillingCreditStatus defines model for BillingCredit.Status.
+type BillingCreditStatus string
+
+// BillingCreditDetails defines model for BillingCreditDetails.
+type BillingCreditDetails struct {
+	// ActiveCredits Credits with active status, a reached effective date, positive balance, and no past expiry.
+	ActiveCredits []BillingCredit `json:"active_credits"`
+
+	// DaysUntilLastActiveCreditExpiry Days until the last active credit expiry, or null when there is no future active credit expiry.
+	DaysUntilLastActiveCreditExpiry *int `json:"days_until_last_active_credit_expiry"`
+
+	// DaysUntilLastExpiryWithBalance Days until the last positive-balance credit expiry, or null when there is no future positive-balance credit expiry.
+	DaysUntilLastExpiryWithBalance *int       `json:"days_until_last_expiry_with_balance"`
+	LastActiveCreditExpiry         *time.Time `json:"last_active_credit_expiry"`
+	LastExpiry                     *time.Time `json:"last_expiry"`
+	LastExpiryWithBalance          *time.Time `json:"last_expiry_with_balance"`
+	TotalActiveCredits             float64    `json:"total_active_credits"`
+	TotalLifetimeCredits           float64    `json:"total_lifetime_credits"`
+}
+
+// BillingCustomerResponse defines model for BillingCustomerResponse.
+type BillingCustomerResponse struct {
+	BillingEmail  openapi_types.Email  `json:"billing_email"`
+	CreditDetails BillingCreditDetails `json:"credit_details"`
+	Credits       []BillingCredit      `json:"credits"`
+
+	// DefaultPaymentMethod The Stripe default card payment method, when one is configured and retrievable.
+	DefaultPaymentMethod *BillingPaymentMethod `json:"default_payment_method"`
+
+	// HasPaymentMethod True when the customer has a valid Stripe default card payment method.
+	HasPaymentMethod bool `json:"has_payment_method"`
+}
+
+// BillingInvoice defines model for BillingInvoice.
+type BillingInvoice struct {
+	// AmountDue Decimal amount due.
+	AmountDue     float64              `json:"amount_due"`
+	Currency      string               `json:"currency"`
+	Id            string               `json:"id"`
+	InvoiceDate   time.Time            `json:"invoice_date"`
+	InvoiceNumber string               `json:"invoice_number"`
+	InvoicePdf    *string              `json:"invoice_pdf"`
+	Status        BillingInvoiceStatus `json:"status"`
+}
+
+// BillingInvoiceStatus defines model for BillingInvoice.Status.
+type BillingInvoiceStatus string
+
+// BillingInvoicesResponse defines model for BillingInvoicesResponse.
+type BillingInvoicesResponse struct {
+	Data               []BillingInvoice   `json:"data"`
+	PaginationMetadata PaginationMetadata `json:"pagination_metadata"`
+}
+
+// BillingPaymentMethod defines model for BillingPaymentMethod.
+type BillingPaymentMethod struct {
+	Card BillingPaymentMethodCard `json:"card"`
+}
+
+// BillingPaymentMethodCard defines model for BillingPaymentMethodCard.
+type BillingPaymentMethodCard struct {
+	Brand       string `json:"brand"`
+	ExpiryMonth int    `json:"expiry_month"`
+	ExpiryYear  int    `json:"expiry_year"`
+	Last4       string `json:"last4"`
+}
+
 // BillingPaymentMethodSessionResponse defines model for BillingPaymentMethodSessionResponse.
 type BillingPaymentMethodSessionResponse struct {
 	// Url Stripe payment method session URL
 	Url string `json:"url"`
+}
+
+// BillingUpcomingInvoiceResponse defines model for BillingUpcomingInvoiceResponse.
+type BillingUpcomingInvoiceResponse struct {
+	// AmountDue Decimal amount due.
+	AmountDue        float64   `json:"amount_due"`
+	CreatedAt        time.Time `json:"created_at"`
+	Currency         string    `json:"currency"`
+	HostedInvoiceUrl *string   `json:"hosted_invoice_url"`
+
+	// Subtotal Decimal subtotal.
+	Subtotal   float64   `json:"subtotal"`
+	TargetDate time.Time `json:"target_date"`
+
+	// Total Decimal total.
+	Total float64 `json:"total"`
 }
 
 // CreateAPIKeyRequest defines model for CreateAPIKeyRequest.
@@ -261,6 +376,17 @@ type OrganizationStatusStatus string
 // OrganizationStatusUsageTier Usage tier of the organization. t1 is the default for new organizations, t2 is assigned when a valid payment method is on file.
 type OrganizationStatusUsageTier string
 
+// PaginationMetadata defines model for PaginationMetadata.
+type PaginationMetadata struct {
+	HasMore    bool    `json:"has_more"`
+	NextCursor *string `json:"next_cursor"`
+}
+
+// UpdateBillingCustomerRequest defines model for UpdateBillingCustomerRequest.
+type UpdateBillingCustomerRequest struct {
+	BillingEmail openapi_types.Email `json:"billing_email"`
+}
+
 // User User information including email, full name, and profile image
 type User struct {
 	// Email Email address associated with the user account
@@ -341,6 +467,15 @@ type DeleteOrganizationAPIKeysJSONBody struct {
 	Ids []string `json:"ids"`
 }
 
+// GetBillingInvoicesParams defines parameters for GetBillingInvoices.
+type GetBillingInvoicesParams struct {
+	// Cursor Pagination cursor from a previous response
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Number of invoices to fetch
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListOrganizationInvitationsParams defines parameters for ListOrganizationInvitations.
 type ListOrganizationInvitationsParams struct {
 	// Status Filter invitations by status
@@ -388,6 +523,9 @@ type DeleteOrganizationAPIKeysJSONRequestBody DeleteOrganizationAPIKeysJSONBody
 
 // CreateOrganizationAPIKeyJSONRequestBody defines body for CreateOrganizationAPIKey for application/json ContentType.
 type CreateOrganizationAPIKeyJSONRequestBody = CreateAPIKeyRequest
+
+// UpdateBillingCustomerJSONRequestBody defines body for UpdateBillingCustomer for application/json ContentType.
+type UpdateBillingCustomerJSONRequestBody = UpdateBillingCustomerRequest
 
 // CreateOrganizationInvitationJSONRequestBody defines body for CreateOrganizationInvitation for application/json ContentType.
 type CreateOrganizationInvitationJSONRequestBody = CreateOrganizationInvitationRequest

@@ -171,6 +171,30 @@ func (s *publicHandler) CreateBillingPaymentMethodSession(ctx echo.Context, orga
 	})
 }
 
+func (s *publicHandler) GetBillingCustomer(ctx echo.Context, organizationID spec.OrganizationIDParam) error {
+	return s.withOrganizationAccess(ctx, organizationID, func() error {
+		return echo.ErrNotImplemented
+	})
+}
+
+func (s *publicHandler) UpdateBillingCustomer(ctx echo.Context, organizationID spec.OrganizationIDParam) error {
+	return s.withOrganizationAccess(ctx, organizationID, func() error {
+		return echo.ErrNotImplemented
+	})
+}
+
+func (s *publicHandler) GetBillingInvoices(ctx echo.Context, organizationID spec.OrganizationIDParam, params spec.GetBillingInvoicesParams) error {
+	return s.withOrganizationAccess(ctx, organizationID, func() error {
+		return echo.ErrNotImplemented
+	})
+}
+
+func (s *publicHandler) GetBillingUpcomingInvoice(ctx echo.Context, organizationID spec.OrganizationIDParam) error {
+	return s.withOrganizationAccess(ctx, organizationID, func() error {
+		return echo.ErrNotImplemented
+	})
+}
+
 // Create a new organization
 // (POST /organizations)
 func (s *publicHandler) CreateOrganization(ctx echo.Context) error {

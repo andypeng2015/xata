@@ -36,6 +36,12 @@ func GetScopes(method, path string) []string {
 			return []string{"org:read"}
 		case "/organizations/:organizationID/api-keys":
 			return []string{"keys:read"}
+		case "/organizations/:organizationID/billing/customer":
+			return []string{"org:read"}
+		case "/organizations/:organizationID/billing/invoices":
+			return []string{"org:read"}
+		case "/organizations/:organizationID/billing/invoices/upcoming":
+			return []string{"org:read"}
 		case "/organizations/:organizationID/extensions":
 			return []string{"org:read"}
 		case "/organizations/:organizationID/githubapp/installations":
@@ -81,6 +87,8 @@ func GetScopes(method, path string) []string {
 		}
 	case "PATCH":
 		switch path {
+		case "/organizations/:organizationID/billing/customer":
+			return []string{"org:write"}
 		case "/organizations/:organizationID/projects/:projectID":
 			return []string{"project:write"}
 		case "/organizations/:organizationID/projects/:projectID/branches/:branchID":

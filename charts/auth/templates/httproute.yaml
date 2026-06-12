@@ -41,6 +41,6 @@ spec:
             value: /marketplace
         - path:
             type: RegularExpression
-            value: "^/organizations(/*)$|^/organizations/([^/]+)(/api-keys|/members.*|/invitations.*|/deletion-request|/membership-limits|/billing/(checkout-session|payment-method-session))?$"
+            value: "^/organizations(/*)$|^/organizations/([^/]+)(/api-keys|/members.*|/invitations.*|/deletion-request|/membership-limits|/billing/(checkout-session|payment-method-session|customer|invoices(/upcoming)?))?$"
       timeouts:
         request: 60s
